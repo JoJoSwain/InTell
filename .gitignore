@@ -1,0 +1,274 @@
+﻿# ═══════════════════════════════════════════════════════════
+# ReplacePlace - Root .gitignore
+# Multi-Developer Team Configuration
+# ═══════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════
+# 🚨 CRITICAL: NEVER COMMIT THESE! (API Keys & Secrets)
+# ═══════════════════════════════════════════════════════════
+
+# Google Services Configuration (Contains Firebase & Google Maps API Keys!)
+**/google-services.json
+**/GoogleService-Info.plist
+App.js/google-services.json
+App.js/android/app/google-services.json
+
+# Firebase Configuration
+firebase-config.js
+firebaseConfig.js
+.firebaserc
+
+# Environment Variables
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env*.local
+**/.env
+**/.env.local
+
+# API Keys & Secrets
+**/config.js
+**/constants/config.js
+App.js/src/constants/config.js
+secrets.js
+api-keys.js
+
+# Keystores & Certificates (Android/iOS signing)
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+debug.keystore
+release.keystore
+**/debug.keystore
+App.js/android/app/debug.keystore
+
+# ═══════════════════════════════════════════════════════════
+# Node & Package Managers
+# ═══════════════════════════════════════════════════════════
+
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+package-lock.json.backup
+yarn.lock
+
+# ═══════════════════════════════════════════════════════════
+# React Native / Expo
+# ═══════════════════════════════════════════════════════════
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+**/expo-env.d.ts
+
+# Metro bundler
+.metro-health-check*
+metro-cache/
+
+# ═══════════════════════════════════════════════════════════
+# Android (Generated Build Files)
+# ═══════════════════════════════════════════════════════════
+
+# Build outputs
+App.js/android/app/build/
+App.js/android/build/
+App.js/android/.gradle/
+**/android/app/build/
+**/android/build/
+**/android/.gradle/
+
+# Android local configuration
+**/android/local.properties
+local.properties
+
+# Generated assets
+**/android/app/src/main/assets/
+**/android/app/src/main/res/drawable-*/
+**/android/app/src/main/res/raw/
+
+# Android Studio
+*.iml
+.idea/
+.gradle/
+
+# APK & AAB files
+*.apk
+*.aab
+
+# Gradle wrapper (optional - some teams prefer to commit this)
+# App.js/android/gradle/
+# App.js/android/gradlew
+# App.js/android/gradlew.bat
+
+# ═══════════════════════════════════════════════════════════
+# iOS (Future Use)
+# ═══════════════════════════════════════════════════════════
+
+App.js/ios/
+**/ios/Pods/
+**/ios/*.xcodeproj
+**/ios/*.xcworkspace
+Podfile.lock
+
+# ═══════════════════════════════════════════════════════════
+# TypeScript / JavaScript
+# ═══════════════════════════════════════════════════════════
+
+*.tsbuildinfo
+.kotlin/
+*.orig.*
+
+# ═══════════════════════════════════════════════════════════
+# Logs & Debug
+# ═══════════════════════════════════════════════════════════
+
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.log
+logs/
+*.log.*
+
+# ═══════════════════════════════════════════════════════════
+# Testing & Coverage
+# ═══════════════════════════════════════════════════════════
+
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+
+# ═══════════════════════════════════════════════════════════
+# IDE / Editors
+# ═══════════════════════════════════════════════════════════
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Cursor AI
+.cursor/
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+
+# WebStorm
+.idea/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+
+# ═══════════════════════════════════════════════════════════
+# Operating System Files
+# ═══════════════════════════════════════════════════════════
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ═══════════════════════════════════════════════════════════
+# Project Specific
+# ═══════════════════════════════════════════════════════════
+
+# Test/Example Projects
+EmulatorTest/
+
+# Backup Files
+*.BACKUP.*
+*.backup
+App.BACKUP.js
+**/App.BACKUP.js
+
+# Temporary Files
+*.tmp
+*.temp
+*.swp
+
+# Local Scripts (may contain system-specific paths)
+start-app.bat
+*.bat
+
+# Firebase Rules (keep source, ignore compiled if any)
+# firestore.rules - KEEP in repo (team needs these!)
+# storage.rules - KEEP in repo
+
+# ═══════════════════════════════════════════════════════════
+# Keep These Important Files (Override above rules)
+# ═══════════════════════════════════════════════════════════
+
+# Documentation - Always commit
+!README.md
+!CONTRIBUTING.md
+!LICENSE
+!**/*.md
+
+# Essential Config Files (structure only, no secrets)
+!App.js/android/app/build.gradle
+!App.js/android/build.gradle
+!App.js/android/settings.gradle
+!App.js/android/gradle.properties
+!App.js/android/app/src/main/AndroidManifest.xml
+!App.js/android/app/proguard-rules.pro
+
+# Firebase rules (team needs these!)
+!App.js/firestore.rules
+!App.js/storage.rules
+!App.js/firestore-dev.rules
+
+# Package files
+!package.json
+!package-lock.json
+
+# ═══════════════════════════════════════════════════════════
+# Archive Folder (Historical Documentation)
+# ═══════════════════════════════════════════════════════════
+
+# Keep archive for project history reference
+# _ Archive/
+
+# ═══════════════════════════════════════════════════════════
+# TEAM NOTE: Files You Must Create Locally
+# ═══════════════════════════════════════════════════════════
+# After cloning, each developer must:
+# 1. Get google-services.json from Firebase Console
+# 2. Create src/constants/config.js with API keys
+# 3. Set up local.properties for Android SDK path
+# 
+# See: README.md and TEAM_SETUP.md for detailed instructions
+# ═══════════════════════════════════════════════════════════

@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own data
+      allow read: if isSignedIn() && isOwner(userId);
+      // Users can write their own data
+      allow write: if isSignedIn() && isOwner(userId);
+    }
+    
+    // User progress collection
+    match /userProgress/{userId} {
+      // Users can read their own progress
+      allow read: if isSignedIn() && isOwner(userId);
+      // Users can write their own progress
+      allow write: if isSignedIn() && isOwner(userId);
+    }
+    
+    // Locations collection (story locations)
+    match /locations/{locationId} {
+      // Anyone can read locations (even unauthenticated users for demo)
+      allow read: if true;
+      // Only authenticated users can write (for now, admins only in production)
+      allow write: if isSignedIn();
+    }
+    
+    // Story segments collection
+    match /storySegments/{segmentId} {
+      // Anyone can read story segments
+      allow read: if true;
+      // Only authenticated users can write (for now, admins only in production)
+      allow write: if isSignedIn();
+    }
+    
+    // Geofences collection (if we add them later)
+    match /geofences/{geofenceId} {
+      // Anyone can read geofences
+      allow read: if true;
+      // Only authenticated users can write
+      allow write: if isSignedIn();
+    }
+  }
+}
