@@ -18,7 +18,7 @@ tools/landcover NLCD → H3 grid (M4)
 docs/           PRODUCT_SPEC … BUILD_PLAN + ADRs
 ```
 
-Legacy prototypes (`App.js/`, and the PR #1 `apps/intell` list/browse spike on another branch) are **not** the v2 product surface.
+Legacy prototypes (`_ Archive/legacy-firebase-prototype`, and the PR #1 `apps/intell` list/browse spike on another branch) are **not** the v2 product surface.
 
 ## Quick start
 
