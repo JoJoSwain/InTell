@@ -158,7 +158,8 @@ test-results/
 *.code-workspace
 
 # Cursor AI
-.cursor/
+.cursor/*
+!.cursor/rules/
 
 # Android Studio / IntelliJ
 *.iml
