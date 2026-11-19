@@ -3,7 +3,7 @@
 **Audience:** Jordan (“JoJo”) Swain, Replaceplace founding team  
 **Status:** Design synthesis from the v2 spec set — recommended build target  
 **Date:** 2026-11-19  
-**Authority:** `docs/specs/` — PRODUCT → DATA_MODEL → AUDIO → TECH on conflict  
+**Authority:** `docs/` — PRODUCT → DATA_MODEL → AUDIO → TECH on conflict  
 **Supersedes (where conflict):** v0 demo architecture (`intell-architecture.md`), pre-coding product description browse/list IA  
 
 ---
@@ -249,6 +249,6 @@ Per TECH_SPEC §9: visits, fragments heard, depth (branch/leaf share), 6-month d
 | --- | --- |
 | Path | `docs/intell-v2-architecture.md` (Project Library) |
 | Companion | `docs/intell-v2-gap-and-decisions.md` |
-| Specs | `docs/specs/*.md` (and repo `docs/` once copied) |
+| Specs | `docs/*.md` (PRODUCT, DATA_MODEL, AUDIO, TECH, etc.) |
 | Prior | `docs/intell-architecture.md` (v0 demo — historical) |
 | Revision | 2026-11-19 — first v2 synthesis |

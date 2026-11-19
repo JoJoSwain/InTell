@@ -13,7 +13,8 @@
 | [intell-v2-architecture.md](./intell-v2-architecture.md) | Synthesis for JoJo |
 | [intell-v2-gap-and-decisions.md](./intell-v2-gap-and-decisions.md) | Gap vs v0 + defaults |
 | [adr/](./adr/) | Architecture decision records |
-| [specs/](./specs/) | Canonical copies of the eight specs |
+| [adr/0002-map-provider.md](./adr/0002-map-provider.md) | Map provider ADR (Proposed) |
+| [briefs/](./briefs/) | Milestone task briefs |
 
 Prompt for Cursor (from BUILD_PLAN):
 

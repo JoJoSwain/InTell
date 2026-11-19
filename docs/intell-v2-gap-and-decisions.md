@@ -3,7 +3,7 @@
 **Audience:** JoJo  
 **Date:** 2026-11-19  
 **Companion:** [`intell-v2-architecture.md`](./intell-v2-architecture.md)  
-**Inputs:** `docs/specs/*`, preferences, v0 demo (`apps/intell`, PR #1), prior product description  
+**Inputs:** `docs/*` specs, preferences, v0 demo (`apps/intell`, PR #1), prior product description  
 
 ---
 
