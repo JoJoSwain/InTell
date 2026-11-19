@@ -1,0 +1,10 @@
+{
+  "name": "@intell/landcover-tool",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo \"landcover stub — no lint\"",
+    "typecheck": "echo \"landcover stub — no types\"",
+    "test": "echo \"landcover stub — no tests\""
+  }
+}

@@ -272,3 +272,8 @@ start-app.bat
 # 
 # See: README.md and TEAM_SETUP.md for detailed instructions
 # ═══════════════════════════════════════════════════════════
+
+# Turborepo / Next
+.turbo/
+**/.next/
+!.env.example

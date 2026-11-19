@@ -1,0 +1,17 @@
+{
+  "name": "replaceplace-intell",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "dev:admin": "pnpm --filter @intell/admin dev",
+    "dev:mobile": "pnpm --filter @intell/mobile start"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "typescript": "~5.9.2"
+  }
+}
