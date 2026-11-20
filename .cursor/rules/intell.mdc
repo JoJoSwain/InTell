@@ -1,0 +1,20 @@
+---
+description: InTell project rules. Always read AGENTS.md at the repo root first.
+alwaysApply: true
+---
+
+# InTell: Cursor rules
+
+**Before any task, read `AGENTS.md` at the repo root in full.** It holds the workflow, repo layout, conventions and open decisions. For the mobile app, also read `apps/mobile/AGENTS.md`. If a brief exists in `docs/briefs/` for your task, follow its scope exactly.
+
+The non-negotiables (full text in AGENTS.md §5):
+1. Map home plus Journal, Grow and Settings only. No feeds, search, nearby lists, gamification or push notifications.
+2. No AI-generated text, narration, music or sound.
+3. New fragments only on site (proximity, QR, accessible play); never reveal unrevealed or protected content.
+4. Location never leaves the device; "While Using" permission only.
+5. Play only what's in the current pack manifests; sync deletes everything else.
+6. No secrets or service role key in client code; `device_id` is secret.
+7. Age gate, PII stripping, moderated credits for participation.
+8. Transcripts, accessibility labels, i18n and reduced motion, always.
+
+Plan before coding, list spec ambiguities, one milestone per branch, and keep `pnpm lint && pnpm typecheck && pnpm test` green. Don't build past a *Proposed* ADR (map provider: ADR 0002).

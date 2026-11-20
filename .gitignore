@@ -158,7 +158,8 @@ test-results/
 *.code-workspace
 
 # Cursor AI
-.cursor/
+.cursor/*
+!.cursor/rules/
 
 # Android Studio / IntelliJ
 *.iml
@@ -272,3 +273,8 @@ start-app.bat
 # 
 # See: README.md and TEAM_SETUP.md for detailed instructions
 # ═══════════════════════════════════════════════════════════
+
+# Turborepo / Next
+.turbo/
+**/.next/
+!.env.example
