@@ -1,7 +1,7 @@
 # M2b report — packs, edge functions, jobs, CI
 
 **Branch:** `m2b-packs`  
-**Status:** acceptance + security pass green; **no PR** (awaiting JoJo review)  
+**Status:** acceptance + security pass green; PR [#4](https://github.com/JoJoSwain/InTell/pull/4)  
 **Reviews:** `docs/briefs/M2b-plan-review.md` (plan); `docs/briefs/M2b-report-review.md` (report — S1–S3 / N1–N4 addressed)
 
 ## Commands
@@ -80,7 +80,15 @@ Verified on **Windows** (this machine). CI runs the same check + serve path.
 | Env | Value |
 |---|---|
 | Local (Windows Docker Desktop) | `http://host.docker.internal:54321/functions/v1/run-jobs` (Vault via `pnpm db:setup-local`) |
-| CI | Same default; override with `RUN_JOBS_URL` env on `db:setup-local` if needed (e.g. Kong). Integration tests call `run-jobs` **directly** with the service key (review #10). |
+| CI (GitHub ubuntu-latest) | Same `http://host.docker.internal:54321/functions/v1/run-jobs` used in the `db` job; setup + function wait succeeded with it. Integration invokes `run-jobs` **directly** with the service key (review #10), so pg_net URL is not on the critical path for those tests. |
+
+## CI `db` job fix (PR #4)
+
+| Item | Detail |
+|---|---|
+| **Failing step** | `pnpm test:integration` |
+| **Root cause** | (1) `tools/pack-integration/src/env.ts` hard-coded `shell: "powershell.exe"` → `ENOENT` on Linux runners. (2) `seed-tones/` is gitignored and was not generated in CI, so `db:setup-local` skipped uploads. |
+| **Fix** | Platform shell in `env.ts`; CI runs `pnpm db:seed-media-meta` before setup; `db:setup-local` generates tones if missing and fails hard on upload errors. |
 
 ## Functions serve discovery (review #9)
 

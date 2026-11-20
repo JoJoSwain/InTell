@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export function supabaseEnv(): Record<string, string> {
+  // Windows needs PowerShell for supabase status -o env; Linux CI has no powershell.exe.
   const text = execSync("pnpm exec supabase status -o env", {
     encoding: "utf8",
     cwd: root,
-    shell: "powershell.exe",
+    shell: process.platform === "win32" ? "powershell.exe" : true,
   }) as string;
   const out: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
