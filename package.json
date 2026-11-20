@@ -8,9 +8,13 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "dev:admin": "pnpm --filter @intell/admin dev",
-    "dev:mobile": "pnpm --filter @intell/mobile start"
+    "dev:mobile": "pnpm --filter @intell/mobile start",
+    "db:setup-local": "node tools/db-setup-local.mjs",
+    "db:seed-media-meta": "pnpm --filter @intell/audio-fixtures generate:seed-meta",
+    "db:demo-geometry": "node tools/demo-geometry/generate.mjs"
   },
   "devDependencies": {
+    "supabase": "3.2.0",
     "turbo": "^2.5.4",
     "typescript": "~6.0.3"
   }

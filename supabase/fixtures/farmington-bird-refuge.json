@@ -1,0 +1,298 @@
+{
+  "_about": "Source geometry for the test grove at the Farmington Bird Refuge (George S. and Dolores Doré Eccles Wildlife Education Center, Farmington, UT). Trail points and Frags 1–7 supplied by JoJo on 2026-11-19 from Google Maps. Every coordinate in seed.sql and apps/mobile/e2e/demo-route.gpx derives from this file. Edit here, then regenerate. Coordinates are [lat, lng] (WGS84); GeoJSON/PostGIS use [lng, lat], so the generator must swap them.",
+  "_shape_note": "UNCONFIRMED: the points look like a lollipop: a stem P1 → P2 → P3, then a loop P3 → P4 … P11 → P3. The segment P11 → P1 would cross the trail at P3. Treat the trail path as P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P3,P2,P1 until JoJo confirms.",
+  "site": {
+    "slug": "farmington-bird-refuge",
+    "name": "Farmington Bird Refuge",
+    "region": "wasatch-front"
+  },
+  "grove": {
+    "slug": "demo",
+    "boundary_rule": "ST_Buffer(ST_ConvexHull(all trail points + all fragment points)::geography, 50): a simple polygon covering the buildings, the trail and the marsh inside the loop. No holes."
+  },
+  "trail_points": {
+    "P1": [
+      40.96122185265232,
+      -111.92895569390599
+    ],
+    "P2": [
+      40.961709644084344,
+      -111.92792532593889
+    ],
+    "P3": [
+      40.96135316139348,
+      -111.92681757360702
+    ],
+    "P4": [
+      40.96009704801594,
+      -111.92223165960147
+    ],
+    "P5": [
+      40.95985853959557,
+      -111.92110643094347
+    ],
+    "P6": [
+      40.96014413746622,
+      -111.9206611842482
+    ],
+    "P7": [
+      40.96191983612974,
+      -111.91900317684377
+    ],
+    "P8": [
+      40.962256484828444,
+      -111.91947428480712
+    ],
+    "P9": [
+      40.96274950945259,
+      -111.92196390715493
+    ],
+    "P10": [
+      40.96196295007198,
+      -111.923477720125
+    ],
+    "P11": [
+      40.96147548999153,
+      -111.92433811443586
+    ]
+  },
+  "trail_path": [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "P9",
+    "P10",
+    "P11",
+    "P3",
+    "P2",
+    "P1"
+  ],
+  "fragments": [
+    {
+      "key": "frag1",
+      "name": "Beginning",
+      "tier": "root",
+      "is_ending": false,
+      "at": [
+        40.96121690030455,
+        -111.9289567296216
+      ],
+      "visibility": "marked",
+      "radius_m": 30,
+      "requires": [],
+      "source": "JoJo table"
+    },
+    {
+      "key": "frag2",
+      "name": "Buildings 1",
+      "tier": "branch",
+      "is_ending": false,
+      "at": [
+        40.961160186855395,
+        -111.9284256522191
+      ],
+      "visibility": "marked",
+      "radius_m": 25,
+      "requires": [
+        [
+          "frag1"
+        ]
+      ],
+      "source": "JoJo table",
+      "note": "crossroads anchor"
+    },
+    {
+      "key": "frag3",
+      "name": "Buildings 2",
+      "tier": "branch",
+      "is_ending": false,
+      "at": [
+        40.96201088348705,
+        -111.92832909268199
+      ],
+      "visibility": "marked",
+      "radius_m": 25,
+      "requires": [
+        [
+          "frag1"
+        ]
+      ],
+      "source": "JoJo table"
+    },
+    {
+      "key": "frag4",
+      "name": "Parking Lot 1",
+      "tier": "leaf",
+      "is_ending": false,
+      "at": [
+        40.96167870801638,
+        -111.92839346570048
+      ],
+      "visibility": "marked",
+      "radius_m": 20,
+      "requires": [
+        [
+          "frag2"
+        ]
+      ],
+      "source": "JoJo table",
+      "note": "37 m from frag3 and can compete with it: expect exactly one RADIUS_OVERLAP warning (frag3/frag4)"
+    },
+    {
+      "key": "frag5",
+      "name": "Parking Lot 2",
+      "tier": "leaf",
+      "is_ending": false,
+      "at": [
+        40.96226203944031,
+        -111.92912302657665
+      ],
+      "visibility": "marked",
+      "radius_m": 20,
+      "requires": [
+        [
+          "frag2"
+        ],
+        [
+          "frag3"
+        ]
+      ],
+      "source": "JoJo table",
+      "note": "AND test"
+    },
+    {
+      "key": "frag6",
+      "name": "Ending",
+      "tier": "root",
+      "is_ending": true,
+      "at": [
+        40.96121690030455,
+        -111.9289567296216
+      ],
+      "visibility": "marked",
+      "radius_m": 30,
+      "requires": [
+        [
+          "frag1"
+        ],
+        [
+          "frag2"
+        ],
+        [
+          "frag3"
+        ],
+        [
+          "frag4"
+        ],
+        [
+          "frag5"
+        ]
+      ],
+      "source": "JoJo table",
+      "note": "same point as frag1; never competes with it (frag1 must precede)"
+    },
+    {
+      "key": "frag7",
+      "name": "Pond",
+      "tier": "root",
+      "is_ending": false,
+      "at": [
+        40.96148214619988,
+        -111.92434422906307
+      ],
+      "visibility": "marked",
+      "radius_m": 30,
+      "requires": [
+        [
+          "frag6"
+        ]
+      ],
+      "source": "JoJo table",
+      "note": "gated Root Start"
+    },
+    {
+      "key": "frag8",
+      "name": "Heron Overlook",
+      "tier": "branch",
+      "is_ending": false,
+      "at": [
+        40.96191983612974,
+        -111.91900317684377
+      ],
+      "visibility": "unmarked",
+      "radius_m": 25,
+      "requires": [
+        [
+          "frag7"
+        ]
+      ],
+      "source": "architect (test coverage; trail P7)"
+    },
+    {
+      "key": "frag9",
+      "name": "Hidden Post",
+      "tier": "leaf",
+      "is_ending": false,
+      "at": [
+        40.96274950945259,
+        -111.92196390715493
+      ],
+      "visibility": "protected",
+      "marker_code": "DEMO-001",
+      "radius_m": 20,
+      "requires": [
+        [
+          "frag8"
+        ]
+      ],
+      "source": "architect (test coverage; trail P9)",
+      "note": "QR only; never in the GPX, packs (coords) or logs"
+    },
+    {
+      "key": "frag10",
+      "name": "Two Ways",
+      "tier": "leaf",
+      "is_ending": false,
+      "at": [
+        40.96009704801594,
+        -111.92223165960147
+      ],
+      "visibility": "marked",
+      "radius_m": 20,
+      "requires": [
+        [
+          "frag8",
+          "frag9"
+        ]
+      ],
+      "source": "architect (test coverage; trail P4)",
+      "note": "OR test. Revision 1 normal; revision 2 requires the crossroads outcome (tests the fn_current_revision fallback)"
+    }
+  ],
+  "_fragment_spacing": "Pairs closer than their summed radii: frag1/frag6 (0 m) and frag1/frag2 (45 m) are exempt because one must precede the other; frag3/frag4 (37 m) can compete, so exactly one RADIUS_OVERLAP warning is expected. All other pairs are clear.",
+  "zones": {
+    "ambience_marsh": "same polygon as the grove boundary (profile: marsh)",
+    "music_zone": "the part of the grove boundary east of longitude -111.9235 (between P11 and P10), clipped to the boundary. The walk crosses its edge twice."
+  },
+  "gpx": {
+    "start": [
+      40.96122185265232,
+      -111.93014661
+    ],
+    "_start_note": "about 100 m west of frag1, outside the boundary buffer, so the route enters the grove and the ambience zone",
+    "route": "start → frag1 → frag2 → frag4 → frag3 → frag5 → frag6 (frag1's point) → trail P2 → P3 → frag7 (≈P11) → P10 → chord to P8 (passes ~75 m from frag9) → frag8 (P7) → P6 → P5 → frag10 (P4) → P3 → P2 → P1 → start",
+    "pace": "1.4 m/s: one point per second, 1.4 m apart",
+    "dwell": "at each fragment, stand still (repeat the same point each second) for its revision-1 narration duration_ms (from supabase/seed-media.json) + 5 s, because completion needs the whole fragment (ADR 0003 §3)",
+    "never": "enter frag9's radius (protected; QR only)"
+  },
+  "prerequisite_semantics": "ADR 0003: 'requires' is a list of groups; ALL groups must be satisfied; a group is satisfied when ANY member has been completed (played to the end). [] = revealed from the start.",
+  "crossroads": {
+    "anchor": "frag2",
+    "gates_revision": "frag10 revision 2"
+  }
+}

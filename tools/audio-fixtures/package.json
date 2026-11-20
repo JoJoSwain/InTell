@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "generate": "node generate.mjs",
-    "lint": "node --check generate.mjs",
-    "typecheck": "node --check generate.mjs",
-    "test": "node --check generate.mjs"
+    "generate:seed-meta": "node generate-seed-meta.mjs",
+    "lint": "node --check generate.mjs && node --check generate-seed-meta.mjs",
+    "typecheck": "node --check generate.mjs && node --check generate-seed-meta.mjs",
+    "test": "node --check generate.mjs && node --check generate-seed-meta.mjs"
   }
 }

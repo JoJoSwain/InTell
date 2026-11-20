@@ -20,6 +20,7 @@ Prompt Cursor with:
 - The results are written up in `docs/adr/0001-audio-engine.md`. **If any check fails, build the Expo Module fallback behind the same interface before moving on.**
 
 ## M2 — Database, rights, playability and packs
+Delivered as M2a and M2b; see docs/briefs/M2-database.md.
 **Build:** every migration in DATA_MODEL §1–10; the playability functions; `fn_publish` and its checklist; RLS and buckets; pg_cron jobs; the `build-pack`, `publish`, `unpublish` and `purge-assets` edge functions; `get_pack_index`; seed data with the demo Grove; generated types; zod `GrovePack` and `RegionPack`.
 **Accept when:**
 - RLS tests pass (TECH_SPEC §10)
