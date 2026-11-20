@@ -1,0 +1,12 @@
+{
+  "name": "@intell/audio-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "lint": "node --check generate.mjs",
+    "typecheck": "node --check generate.mjs",
+    "test": "node --check generate.mjs"
+  }
+}
