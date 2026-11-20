@@ -22,7 +22,8 @@
 --   published release .... aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0
 --   draft release ........ aaaaaaaa-bbbb-4ccc-8ddd-0000000000e1
 --
--- Portrait image_assets use deterministic 1×1 PNG placeholder shas (68-byte PNG; not uploaded).
+-- Portrait image_assets use deterministic placeholder shas; tools/seed-media-upload.mjs
+-- uploads the matching 1×1 PNGs to staging-images after db reset.
 
 create or replace function pg_temp.add_prereq_group(
   p_id uuid,

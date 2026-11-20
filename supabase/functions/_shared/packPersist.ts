@@ -33,6 +33,39 @@ export type PackPersistResult =
       releaseId?: string | null;
     };
 
+async function copyPackAssets(
+  client: SupabaseClient,
+  assetShas: string[],
+): Promise<void> {
+  for (const sha of assetShas) {
+    const { data: audio } = await client
+      .from("audio_assets")
+      .select("ext")
+      .eq("sha256", sha)
+      .maybeSingle();
+    if (audio?.ext) {
+      try {
+        await copyStagingToPublic(client, sha, audio.ext as string);
+      } catch (e) {
+        console.error(`copy audio ${sha}: ${e}`);
+      }
+      continue;
+    }
+    const { data: image } = await client
+      .from("image_assets")
+      .select("ext")
+      .eq("sha256", sha)
+      .maybeSingle();
+    if (image?.ext) {
+      try {
+        await copyStagingImageToPublic(client, sha, image.ext as string);
+      } catch (e) {
+        console.error(`copy image ${sha}: ${e}`);
+      }
+    }
+  }
+}
+
 export async function persistPackIfChanged(
   client: SupabaseClient,
   input: PackPersistInput,
@@ -57,6 +90,9 @@ export async function persistPackIfChanged(
     .maybeSingle();
 
   if (latest?.content_sha256 === contentSha) {
+    // Still copy staging → public: first build may have run before seed media
+    // upload finished; a later no-op must heal missing public objects.
+    await copyPackAssets(client, input.assetShas);
     // No-op is still success for go-live (R4): run-jobs marks the job done, then
     // fn_release_go_live runs when no rebuild_pack jobs remain queued/running/failed.
     return { noop: true, contentSha256: contentSha, releaseId };
@@ -115,33 +151,7 @@ export async function persistPackIfChanged(
   const prefix = `packs/${input.scope}/${input.scopeId}`;
   await deletePublicPrefixExcept(client, prefix, new Set([path]));
 
-  for (const sha of input.assetShas) {
-    const { data: audio } = await client
-      .from("audio_assets")
-      .select("ext")
-      .eq("sha256", sha)
-      .maybeSingle();
-    if (audio?.ext) {
-      try {
-        await copyStagingToPublic(client, sha, audio.ext as string);
-      } catch (e) {
-        console.error(`copy audio ${sha}: ${e}`);
-      }
-      continue;
-    }
-    const { data: image } = await client
-      .from("image_assets")
-      .select("ext")
-      .eq("sha256", sha)
-      .maybeSingle();
-    if (image?.ext) {
-      try {
-        await copyStagingImageToPublic(client, sha, image.ext as string);
-      } catch (e) {
-        console.error(`copy image ${sha}: ${e}`);
-      }
-    }
-  }
+  await copyPackAssets(client, input.assetShas);
 
   await client.rpc("fn_enqueue_purge_reconcile", {
     p_reason: "rebuild",
