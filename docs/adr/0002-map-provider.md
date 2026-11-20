@@ -1,7 +1,7 @@
 # ADR 0002: Map provider for the home map
 
 ## Status
-**Proposed**, 2026-11-19. Awaiting a decision from the product owner (JoJo). Until this is Accepted, agents must not add new map features, marker systems or offline tile code (AGENTS.md §7).
+**Accepted: Option B (Google Maps, online)**, 2026-11-20, by the product owner (JoJo) in the M3 design review (ADR 0004). Proposed 2026-11-19.
 
 ## Context
 The specs (TECH_SPEC §1, DESIGN §1.2, DATA_MODEL §12, PRODUCT_SPEC principle 7) assume **MapLibre** with vector tiles, a custom muted style, **offline tile packs per Grove**, and markers drawn as style-driven layers.
@@ -38,12 +38,20 @@ Same client as A, with hosted tiles and style from MapTiler.
 - ✅ Fastest path to a polished, offline-capable MapLibre map.
 - ⚠️ Subscription cost; offline packs likely need a paid plan; vendor dependency.
 
-## Recommendation
+## Recommendation (2026-11-19, not adopted; see Decision)
 **Option A.** The offline requirement and the marker system are central to the experience, and switching is cheapest now, while the map is a single demo screen. If setting up Protomaps would hold up Milestone 5, use **C** to start and move to A later; the client code is identical.
 
 ## Decision
-_To be filled in by the product owner: A / B / C, the date, and any conditions._
+**Option B: Google Maps, online only**, on phones and in the admin. Decided 2026-11-20 by JoJo.
 
-## Consequences (fill in on acceptance)
-- If A or C: a brief for the map rewrite; keep the Google version on branch `preview/m5-google-map-home` for reference; remove `react-native-maps` and the Google key wiring when M5 lands.
-- If B: a docs PR amending the spec sections listed under B; iOS Google Maps setup; a billing account; a custom marker plan.
+Conditions and reasons:
+- **All groves are within phone signal**, so force 1 (offline maps) no longer applies. Listeners with weak signal still have their story, sound and markers from downloaded packs; only the background map needs a connection.
+- **Grove audio is still downloaded before a walk** (DATA_MODEL §12). That's for smooth locked-screen playback and battery, not connectivity.
+- **One map for listeners and staff.** The admin uses the Google Maps JavaScript API, so staff place fragments on the same map listeners see. Polygons are drawn with **Terra Draw** and its Google Maps adapter, because Google's own Drawing Library was discontinued in 2026.
+- **Cost:** the native Maps SDK for Android and iOS is unlimited at no charge. Admin web map loads fall well within the monthly free usage at our staff size. A billing account is still required.
+- **Markers:** locked fragments are now shown (ADR 0004), so marker counts are higher. Use cheap marker views (memoized, `tracksViewChanges` off once drawn) and add clustering only if the 300-marker performance target fails.
+
+## Consequences
+- **Spec changes** (done in the ADR 0004 docs pass): PRODUCT_SPEC principles and FR-10, TECH_SPEC §1 and §3.4 (no tile packs), DESIGN §1.2 (custom map style via a Google cloud map style), AUDIO_SPEC §7 (no tiles budget), DATA_MODEL §0.
+- **M3:** the admin map uses Google Maps with an API key in env (never committed).
+- **M5:** finish the Google home map on top of `preview/m5-google-map-home`; set up the iOS Google Maps SDK and key; add the custom marker plan. MapLibre is not used.

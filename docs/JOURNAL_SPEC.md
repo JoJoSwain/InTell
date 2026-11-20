@@ -1,5 +1,8 @@
 # InTell — Journal Spec (v2)
 
+> **Superseded by ADR 0004 (2026-11-20).** This v2 Journal spec is replaced by the **Chronicle**: characters as the primary navigation (portrait, a summary that grows with each completed fragment, groves, related fragments); replay of fragments completed in situ, per time version (Day/Night), anywhere; related locked fragments with their teasers; no Echo storybook or tree growth bands tied to rings; no field notes (thoughts go to the new Journal). The word "Journal" now means the listener-contribution feature (see the PARTICIPATION_SPEC banner). This file will be rewritten as `CHRONICLE_SPEC.md` before M8. Treat it as background only.
+
+
 The Journal is where you revisit story fragments you've already heard. It's one of the three sub-screens opened from the map's bottom bar.
 
 ---

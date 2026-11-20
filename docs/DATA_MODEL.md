@@ -1,21 +1,22 @@
-# InTell — Data Model & Content Backend (v2)
+# InTell — Data Model & Content Backend (v3)
 
-This is the single source of truth for the database, storage and content packaging. Other docs refer to tables by the names used here.
+This is the single source of truth for the database, storage and content packaging. Other docs refer to tables by the names used here. v3 incorporates ADR 0004 (product realignment, 2026-11-20). **The merged M2 migrations implement v2. The M3 schema realignment PR (`docs/briefs/M3-admin.md`, M3a) brings the database to v3 with new migrations only; merged migrations are never edited.**
 
 **Stack:** Supabase Postgres + PostGIS + pg_cron + pg_net, Supabase Storage, and Edge Functions (Deno). Schema changes go only through `supabase/migrations/*.sql`.
 
-> **Shorthand:** `id uuid pk` means `id uuid primary key default gen_random_uuid()`. `…ts` means `created_at timestamptz not null default now(), updated_at timestamptz not null default now()` plus an `updated_at` trigger. `L10n` means a `jsonb` object keyed by language, e.g. `{"en":"…","es":"…"}`, validated by the zod `L10n` schema. Write full, valid SQL in the migrations.
+> **Shorthand:** `id uuid pk` means `id uuid primary key default gen_random_uuid()`. `…ts` means `created_at timestamptz not null default now(), updated_at timestamptz not null default now()` plus an `updated_at` trigger. `L10n` means a `jsonb` object keyed by language, e.g. `{"en":"…"}`, validated by the zod `L10n` schema. Content is English-only for now; the L10n shape stays so languages can be added without a migration. Write full, valid SQL in the migrations.
 
 ---
 
 ## 0. Design decisions
 
-1. **Three content layers, one asset system.** Narration, sound effects and music are all rows in `audio_assets`, stored content-addressed (by SHA-256), each with its own rights records. A file is publicly reachable only while it is **playable**.
-2. **Places are geometry.** Groves (story areas), ambience zones and music zones are PostGIS polygons that may overlap. Fragments are points. Coordinates live only in Postgres. Devices receive what packs expose, and protected coordinates never leave Postgres.
-3. **The server publishes static packs; devices never query live while exploring.** Publishing builds versioned JSON **packs** (grove, region) into Storage. Devices download packs plus the assets they reference and run everything offline. The database stays the authoring system; packs are the delivery system.
-4. **Rights gate everything.** Contributor consents (people) and asset licenses (files) decide playability. Revoking either triggers a pack rebuild and removes the public file.
-5. **Participation data is owned by an anonymous device.** Seeds, votes and check-ins are keyed by a random `device_id`. Journal and unlock state stay on the phone only.
-6. **Story time is versioned.** Fragments have revisions. Revisions belong to **Rings** (story seasons). Crossroads outcomes become canon that other content (music, revisions) can depend on.
+1. **Replaceplace produces everything that plays.** There are no outside contributors, consents, credits or audio licenses. An asset is publicly reachable only while a current pack references it.
+2. **Places are geometry.** Groves (story places), ambience zones and music zones are PostGIS polygons that may overlap. Fragments are points. Coordinates live in Postgres and in packs (fragment points are public on the map). Marker codes never leave Postgres; packs carry only their sha256.
+3. **The server publishes static packs; devices don't query live while exploring.** Publishing builds versioned JSON **packs** (grove, region) into Storage. Devices download packs plus the assets they reference, so playback is smooth with the screen locked. The base map is online (ADR 0002). The database is the authoring system; packs are the delivery system.
+4. **Releases are the only way content reaches phones.** Staff edit freely; a published **release** writes immutable snapshots that the pack builder reads. Edits to live content are staged until the next release.
+5. **One story world.** Characters and threads are story-wide. Prerequisites can cross groves.
+6. **Story time is versioned, not seasonal.** Fragments have revisions, each a Story Contingency or a Story Correction, with Day and/or Night versions. There are no rings or crossroads.
+7. **Listener data is owned by an anonymous device.** Journal entries and check-ins are keyed by a random `device_id`. Completion, unlock and Chronicle state stay on the phone only.
 
 ---
 
@@ -26,75 +27,41 @@ create extension if not exists pg_cron;
 create extension if not exists pg_net;
 create extension if not exists pgcrypto;
 
-create type staff_role        as enum ('admin','editor','writer','sound','moderator','viewer');
-create type publish_status    as enum ('draft','in_review','approved','published','retired','unpublished');
-create type tier              as enum ('root','branch','leaf');
-create type fragment_visibility as enum ('marked','unmarked','protected');
-create type lang              as enum ('en','es');
-create type rights_status     as enum ('active','revoked','expired');
-create type approval_status   as enum ('pending','active','revoked','expired');
-create type asset_kind        as enum ('narration','sfx_oneshot','sfx_bed','music_stem','voice_cue','writer_note');
-create type asset_source      as enum ('original','commissioned','licensed','public_domain','community_sound');
-create type license_kind      as enum ('owned','work_for_hire','consent_form','cc0','cc_by','commercial','community_sound_grant');
-create type time_window       as enum ('dawn','day','dusk','night');
-create type ring_status       as enum ('planned','planting','writing','released','archived');
-create type seed_kind         as enum ('next','character','noticed','answer','memory','sound');
-create type seed_status       as enum ('planted','read','sprouting','grown','resting','hidden');
-create type crossroads_status as enum ('draft','open','closed','decided','cancelled');
+create type staff_role          as enum ('admin','editor','writer','sound','moderator','viewer');
+create type publish_status      as enum ('draft','in_review','approved','published','retired','unpublished');
+                                -- in_review / approved are unused (no review workflow) and hidden in the admin
+create type tier                as enum ('root','branch','leaf');
+create type fragment_visibility as enum ('standard','physical');
+create type lang                as enum ('en','es');
+create type asset_kind          as enum ('narration','sfx_oneshot','sfx_bed','music_stem','voice_cue','growth_cue');
+create type time_window         as enum ('day','night');
+create type change_kind         as enum ('contingency','correction');
+create type character_prominence as enum ('major','minor');
+create type release_status      as enum ('draft','scheduled','publishing','published','failed','cancelled');
+create type entry_kind          as enum ('next','character','noticed','answer','memory');
+create type entry_status        as enum ('submitted','read','sprouting','grown','resting','hidden');
 ```
+Removed from v2: `rights_status`, `approval_status`, `asset_source`, `license_kind`, `ring_status`, `crossroads_status`, `seed_kind`, `seed_status`; `fragment_visibility` values `marked`/`unmarked`/`protected` (→ `standard`/`physical`); `time_window` values `dawn`/`dusk`; `asset_kind` value `writer_note` (→ `growth_cue` for the "your idea grew" moment).
 
 ---
 
-## 2. Places and permissions
+## 2. Regions
 ```sql
 create table regions (
   id uuid pk, slug text unique not null, name text not null,
   timezone text not null default 'America/Denver',
-  bounds geography(Polygon,4326),                 -- for region pack & landcover export
+  sun_reference geography(Point,4326) not null,    -- sunrise/sunset for Day/Night are computed here
+  bounds geography(Polygon,4326),                  -- for the region pack & landcover export
   pack_version int not null default 0,             -- bumped on every region pack rebuild
   …ts
 );
-
-create table sites (                               -- a host location, e.g. Ogden Nature Center
-  id uuid pk, region_id uuid not null references regions(id),
-  slug text unique not null, name text not null,
-  access_info jsonb not null default '{}',         -- L10n per key: parking, transit, restrooms, terrain, hours, accessibility
-  website_url text, gatherings_url text,
-  …ts
-);
-
-create table site_approvals (
-  id uuid pk, site_id uuid not null references sites(id) on delete cascade,
-  status approval_status not null default 'pending',
-  approved_by text, scope text,                    -- e.g. "audio experience on public trails; markers at 4 posts"
-  allows_speaker_wildlife_sounds boolean not null default false,
-  starts_on date, expires_on date, document_path text,  -- private-docs
-  …ts
-);
 ```
+Regions carry the timezone, the Day/Night sun reference and the shared surroundings and music pack. **Removed in v3:** `sites`, `site_approvals` (their useful fields moved to `groves`).
 
 ---
 
-## 3. Audio assets and rights (shared by all three layers)
+## 3. Media assets
 ```sql
-create table contributors (
-  id uuid pk,
-  display_credit text not null,                    -- exactly how they wish to be credited
-  legal_name text, contact_email text, contact_phone text,   -- PII: editor/admin only
-  community_affiliation text, notes text,
-  …ts
-);
-
-create table consents (                            -- a person's permission (storytellers, narrators, writers, musicians)
-  id uuid pk, contributor_id uuid not null references contributors(id) on delete cascade,
-  status rights_status not null default 'active',
-  channels text[] not null,                        -- subset of {app,web,print,promo,archive,research}
-  license_line text, signed_on date not null, expires_on date,
-  document_path text, community_permission_notes text,
-  revoked_on date, revoked_reason text,
-  …ts
-);
-
 create table audio_assets (
   id uuid pk,
   kind asset_kind not null,
@@ -103,90 +70,87 @@ create table audio_assets (
   bytes int not null, duration_ms int not null,
   channels smallint not null check (channels in (1,2)),
   sample_rate int not null,
-  loudness_lufs numeric(5,2),                      -- measured at upload (client-side meter or edge fn)
+  bitrate_kbps int,                                -- measured at upload; checked against AUDIO_SPEC §6
+  loudness_lufs numeric(5,2), true_peak_dbtp numeric(5,2),  -- measured at upload in the browser
   loop_start_ms int, loop_end_ms int,              -- beds and music stems
-  title text not null, tags text[] not null default '{}',   -- e.g. {'bird','marsh','red-winged blackbird'}
-  source asset_source not null,
+  title text not null, tags text[] not null default '{}',
   staging_path text not null,                      -- staging-audio/{sha256}.{ext}
-  is_public boolean not null default false,        -- true only while playable; mirrors public-media/a/{sha256}.{ext}
+  is_public boolean not null default false,        -- mirrors public-media/a/{sha256}.{ext}; set only by the reconciler
   created_by uuid references auth.users(id),
   …ts
 );
 
-create table asset_rights (                        -- every asset needs ≥1 active right to be playable
-  id uuid pk, asset_id uuid not null references audio_assets(id) on delete cascade,
-  license license_kind not null,
-  contributor_id uuid references contributors(id),
-  consent_id uuid references consents(id),         -- required when license = 'consent_form'
-  seed_id uuid,                                    -- FK added in §7: community_sound_grant from a sound seed
-  attribution text,                                -- shown in credits when required (cc_by etc.)
-  license_doc_path text, expires_on date,
-  status rights_status not null default 'active',
+create table image_assets (                        -- character portraits (and later other artwork)
+  id uuid pk,
+  sha256 text unique not null,
+  ext text not null check (ext in ('webp','png','jpg')),
+  bytes int not null, width int not null, height int not null,
+  title text not null,
+  alt_text jsonb not null default '{}',            -- L10n; required before publish (accessibility)
+  staging_path text not null,                      -- staging-images/{sha256}.{ext}
+  is_public boolean not null default false,        -- mirrors public-media/i/{sha256}.{ext}
+  created_by uuid references auth.users(id),
   …ts
 );
 ```
+**Removed in v3:** `contributors`, `consents`, `asset_rights`, `audio_assets.source`. Day/Night is **not** a property of a file; it's set where a file is used (§4 versions, §5 layers, §6 cues), so one file can be placed under both tags.
 
 ---
 
 ## 4. Story layer
 ```sql
 create table groves (
-  id uuid pk, site_id uuid not null references sites(id),
+  id uuid pk, region_id uuid not null references regions(id),
   slug text not null, name jsonb not null, premise jsonb not null default '{}',   -- L10n
-  access_notes jsonb not null default '{}',
+  access_notes jsonb not null default '{}',        -- L10n per key: parking, transit, restrooms, terrain, hours, accessibility
+  website_url text, gatherings_url text,
+  allows_speaker_wildlife_sounds boolean not null default false,
   boundary geography(Polygon,4326) not null,
-  narrator_growth_cue_id uuid references audio_assets(id),  -- "This part grew from seeds… including you."
+  growth_cue_id uuid references audio_assets(id),  -- "This part grew from ideas listeners shared… including yours."
   status publish_status not null default 'draft',
-  pack_version int not null default 0,             -- bumped on every pack rebuild
+  pack_version int not null default 0,
   published_at timestamptz,
-  …ts, unique (site_id, slug)
+  …ts, unique (region_id, slug)
 );
 create index on groves using gist (boundary);
 
-create table rings (                               -- a story season for a grove
-  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  ring_no int not null, name jsonb not null,       -- e.g. {"en":"Ring 2 · The Long Thaw"}
-  theme_note jsonb not null default '{}',          -- public note from the story team
-  writer_note_asset_id uuid references audio_assets(id),  -- optional spoken note (kind writer_note)
-  status ring_status not null default 'planned',
-  planting_opens_at timestamptz, planting_closes_at timestamptz, released_at timestamptz,
-  …ts, unique (grove_id, ring_no)
+-- Story Notes (staff only, story-wide, never in packs)
+create table threads (
+  id uuid pk, title text not null, notes text, …ts
 );
 
-create table threads (                             -- internal plot threads (story bible)
-  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  title text not null, bible text, …ts
-);
-
-create table characters (
-  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  name text not null, bible text,                  -- internal
-  public_name jsonb not null default '{}',         -- shown in app only once met
-  public_bio jsonb not null default '{}',
+create table characters (                          -- story-wide; can appear in any grove
+  id uuid pk,
+  name text not null, notes text,                  -- internal (Story Notes)
+  public_name jsonb not null default '{}',         -- L10n; shown in the Chronicle only once met
+  public_intro jsonb not null default '{}',        -- L10n; spoiler-free opening of the character card
+  portrait_image_id uuid references image_assets(id),
+  status publish_status not null default 'draft',
   …ts
 );
 
 create table fragments (
   id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  tier tier not null,                               -- weight and priority only (ADR 0003)
-  is_ending boolean not null default false,         -- Root End
-  title jsonb not null,
-  location geography(Point,4326) not null,          -- staff only
-  visibility fragment_visibility not null default 'marked',
-  trigger_radius_m int not null check (trigger_radius_m between 10 and 100),
-  marker_code text unique,                          -- required when protected
-  story_order numeric not null,                     -- canonical narrative order for the Journal Story view
-  gap_hint jsonb not null default '{}',             -- L10n: "A part of the story waits near the old pump house"
-  introduced_in_ring_id uuid references rings(id),
-  status publish_status not null default 'draft',   -- 'retired' hides from map, keeps Journal
+  tier tier not null,                              -- weight and priority only (ADR 0003)
+  is_ending boolean not null default false,        -- Root End
+  title jsonb not null,                            -- shown only once playable
+  teaser jsonb not null default '{}',              -- L10n, required to publish: place cue + story cue
+  location geography(Point,4326) not null,
+  visibility fragment_visibility not null default 'standard',
+  trigger_radius_m numeric(5,2) not null default 10.67
+    check (trigger_radius_m between 4.57 and 10.67),  -- 15–35 ft; admin shows feet; unused for physical
+  marker_code text unique,                         -- required when physical; printed as a QR link
+  story_order numeric not null,                    -- canonical narrative order (Chronicle views)
+  indigeny_earth text, indigeny_world text, indigeny_body text,   -- Story Notes: the Indigeny note
+  status publish_status not null default 'draft',  -- 'retired' hides from the map, keeps the Chronicle
   …ts,
   check (not is_ending or tier = 'root')
 );
 create index on fragments using gist (location);
--- trigger fn_fragment_guard: ST_Covers(grove.boundary, location); protected ⇒ marker_code not null
+-- trigger fn_fragment_guard: ST_Covers(grove.boundary, location); physical ⇒ marker_code not null
 
--- Prerequisites (ADR 0003): revealed ⇔ EVERY group has ≥1 member the device has completed.
--- No groups ⇒ revealed from the start. Layout parent (Journal) = lowest-sort member of lowest-sort group.
+-- Prerequisites (ADR 0003 as amended): unlocked ⇔ EVERY group has ≥1 member the device has completed
+-- for that member's latest contingency. No groups ⇒ unlocked from the start. Members may be in ANY grove.
 create table fragment_prereq_groups (
   id uuid pk, fragment_id uuid not null references fragments(id) on delete cascade,
   sort_order int not null default 0,
@@ -198,44 +162,48 @@ create table fragment_prereq_members (
   sort_order int not null default 0,
   primary key (group_id, requires_fragment_id)
 );
--- trigger fn_prereq_guard: required fragment in the same grove; not itself; no cycles
+-- trigger fn_prereq_guard: not itself; no cycles story-wide (recursive check under one story-wide
+-- advisory lock, so concurrent edits can't create a cycle together). The same-grove rule is removed.
 
-create table fragment_threads    (fragment_id uuid references fragments(id) on delete cascade,
-                                  thread_id uuid references threads(id) on delete cascade,
-                                  primary key (fragment_id, thread_id));
-create table fragment_characters (fragment_id uuid references fragments(id) on delete cascade,
-                                  character_id uuid references characters(id) on delete cascade,
-                                  introduces boolean not null default false,  -- first meeting unlocks the character card
-                                  primary key (fragment_id, character_id));
+create table fragment_threads (
+  fragment_id uuid references fragments(id) on delete cascade,
+  thread_id uuid references threads(id) on delete cascade,
+  primary key (fragment_id, thread_id)
+);
+create table fragment_characters (
+  fragment_id uuid references fragments(id) on delete cascade,
+  character_id uuid references characters(id) on delete cascade,
+  prominence character_prominence not null default 'minor',
+  introduces boolean not null default false,       -- completing this fragment means the listener has "met" them
+  card_line jsonb not null default '{}',           -- L10n; added to the character card when this fragment is completed
+  primary key (fragment_id, character_id)
+);
 
 create table fragment_revisions (
   id uuid pk, fragment_id uuid not null references fragments(id) on delete cascade,
-  revision_no int not null, ring_id uuid references rings(id),
+  revision_no int not null,
+  change_kind change_kind not null,                -- the first revision counts as a contingency (enforced)
   status publish_status not null default 'draft',
-  publish_at timestamptz,                           -- scheduled release (e.g. Listening Day)
-  requires_outcome_option_id uuid,                  -- FK in §7: only playable if this crossroads option won
-  content_note jsonb not null default '{}', change_note jsonb not null default '{}',
-  writer_notes text,
+  release_id uuid,                                 -- the release that published it (FK to releases, §8)
+  change_note text,                                -- internal: why this revision exists
   created_by uuid references auth.users(id),
-  …ts, unique (fragment_id, revision_no)
+  …ts, unique (fragment_id, revision_no),
+  check (revision_no > 1 or change_kind = 'contingency')
 );
+-- A published revision is immutable; any change is a new revision.
 
 create table revision_versions (
   id uuid pk, revision_id uuid not null references fragment_revisions(id) on delete cascade,
-  language lang not null,
+  language lang not null default 'en',
+  time_window time_window not null,                -- Day or Night
   narration_asset_id uuid not null references audio_assets(id),
   transcript text not null, vtt text,
-  …ts, unique (revision_id, language)
-);
-
-create table revision_contributors (
-  revision_id uuid references fragment_revisions(id) on delete cascade,
-  contributor_id uuid references contributors(id) on delete restrict,
-  role text not null check (role in ('writer','narrator','storyteller','musician','translator','sound')),
-  consent_id uuid not null references consents(id),
-  primary key (revision_id, contributor_id, role)
+  …ts, unique (revision_id, language, time_window)
 );
 ```
+**Removed in v3:** `rings`, `revision_contributors`, `fragments.gap_hint` (→ `teaser`), `fragments.introduced_in_ring_id`, `fragment_revisions.ring_id`, `publish_at` (scheduling moved to releases), `requires_outcome_option_id`, `content_note` (public change notes aren't shown), the grove scoping of `threads` and `characters`.
+
+**Contingency number.** For a fragment's current revision, `contingency_revision_no` = the highest `revision_no` ≤ the current one whose `change_kind = 'contingency'`. A device's completion of revision *n* satisfies prerequisites while *n* ≥ `contingency_revision_no`. Corrections carry completion forward; a contingency starts a new requirement.
 
 ---
 
@@ -250,20 +218,19 @@ create table ambience_profiles (                   -- a palette, e.g. "Great Sal
 
 create table ambience_layers (                     -- one sound family within a profile
   id uuid pk, profile_id uuid not null references ambience_profiles(id) on delete cascade,
-  name text not null,                              -- "Red-winged blackbirds", "Reed wind bed"
+  name text not null,
   kind text not null check (kind in ('bed','oneshot')),
+  time_window time_window not null,                -- Day or Night (required)
   gain_db_min numeric(4,1) not null default -18, gain_db_max numeric(4,1) not null default -10,
   pan_min numeric(3,2) not null default -0.8, pan_max numeric(3,2) not null default 0.8,
   pitch_cents_min int not null default -100, pitch_cents_max int not null default 100,
-  mean_interval_s int,                             -- oneshot: mean seconds between events (exponential)
-  min_interval_s int,                              -- oneshot: floor
+  mean_interval_s int, min_interval_s int,
   max_concurrent smallint not null default 2,
-  no_repeat_last smallint not null default 2,      -- avoid repeating the last N assets
-  crossfade_ms int not null default 4000,          -- bed
-  time_windows time_window[] not null default '{dawn,day,dusk,night}',
+  no_repeat_last smallint not null default 2,
+  crossfade_ms int not null default 4000,
   months smallint[] not null default '{1,2,3,4,5,6,7,8,9,10,11,12}',
-  speaker_safe boolean not null default true,      -- false ⇒ only plays on headphones
-  wildlife_call boolean not null default false,    -- true ⇒ never on speaker; muted in nesting months
+  speaker_safe boolean not null default true,
+  wildlife_call boolean not null default false,    -- never on speaker; muted in nesting months
   nesting_mute_months smallint[] not null default '{}',
   …ts,
   check ((kind='oneshot') = (mean_interval_s is not null))
@@ -276,43 +243,34 @@ create table ambience_layer_assets (
   primary key (layer_id, asset_id)
 );
 
-create table ambience_zones (                      -- drawn polygons → profile
+create table ambience_zones (
   id uuid pk, region_id uuid not null references regions(id),
   name text not null, boundary geography(Polygon,4326) not null,
   profile_id uuid not null references ambience_profiles(id),
-  priority int not null default 100,               -- higher wins when overlapping
-  edge_fade_m int not null default 40,
+  priority int not null default 100, edge_fade_m int not null default 40,
   status publish_status not null default 'draft',
   …ts
 );
 create index on ambience_zones using gist (boundary);
 
--- Fallback when no zone applies: land cover → profile
-create table landcover_classes (
-  code smallint primary key,                       -- NLCD codes (11 water, 21–24 developed, 41–43 forest, 52 shrub, 71 grass, 81–82 ag, 90/95 wetland …)
-  name text not null,
-  profile_id uuid references ambience_profiles(id)
-);
-create table landcover_grids (                     -- generated offline by tools/landcover; one file per region
+create table landcover_classes (code smallint primary key, name text not null,
+  profile_id uuid references ambience_profiles(id));
+create table landcover_grids (
   region_id uuid primary key references regions(id),
-  h3_resolution smallint not null default 9,
-  source text not null,                            -- e.g. 'NLCD 2021'
-  file_path text not null,                         -- public-media/landcover/{region}/{version}.bin (h3 → class)
-  version int not null, generated_at timestamptz not null
+  h3_resolution smallint not null default 9, source text not null,
+  file_path text not null, version int not null, generated_at timestamptz not null
 );
 
-create table ui_cues (                             -- short UI voice cues (e.g. Hush "Listen.")
-  id uuid pk,
-  region_id uuid references regions(id),           -- null = global
-  key text not null check (key in ('hush_listen')), -- new keys need a migration that extends the check
-  language lang not null,
+create table ui_cues (
+  id uuid pk, region_id uuid references regions(id),
+  key text not null check (key in ('hush_listen')),
+  language lang not null default 'en',
   asset_id uuid not null references audio_assets(id),
   status publish_status not null default 'draft',
-  …ts,
-  unique nulls not distinct (region_id, key, language)
+  …ts, unique nulls not distinct (region_id, key, language)
 );
--- Included in packs only when published and its asset is playable.
 ```
+Change from v2: `ambience_layers.time_windows time_window[]` → `time_window time_window not null`. A layer that should play day and night is two layers (they can share assets).
 
 ---
 
@@ -327,130 +285,86 @@ create table music_zones (
 );
 create index on music_zones using gist (boundary);
 
-create table music_cues (                          -- a piece of music + when it applies
+create table music_cues (
   id uuid pk, name text not null,
   music_zone_id uuid references music_zones(id) on delete cascade,
   grove_id uuid references groves(id) on delete cascade,   -- grove boundary acts as the zone
+  time_window time_window not null,                -- Day or Night (required)
   priority int not null default 100,
   conditions jsonb not null default '{}',          -- zod MusicCondition (AUDIO_SPEC §4.2)
-  min_dwell_s int not null default 45,
-  crossfade_ms int not null default 6000,
+  min_dwell_s int not null default 45, crossfade_ms int not null default 6000,
   status publish_status not null default 'draft',
   …ts,
-  check (num_nonnulls(music_zone_id, grove_id) = 1)  -- exactly one; pack has zone or useGroveBoundary, never both
+  check (num_nonnulls(music_zone_id, grove_id) = 1)
 );
 
-create table music_cue_stems (                     -- 1..n synchronized stems per cue
+create table music_cue_stems (
   id uuid pk, cue_id uuid not null references music_cues(id) on delete cascade,
   asset_id uuid not null references audio_assets(id),
-  role text not null default 'base',               -- 'base' | 'layer'
-  gain_db numeric(4,1) not null default 0,
-  state_gains jsonb not null default '[]',         -- zod StemRule[]: [{when: MusicCondition, gain_db}]
+  role text not null default 'base', gain_db numeric(4,1) not null default 0,
+  state_gains jsonb not null default '[]',         -- zod StemRule[]
   …ts
 );
 ```
-All stems in a cue must have equal `duration_ms` and loop points (enforced at publish).
+All stems in a cue must have equal `duration_ms` and loop points (enforced at publish). Music conditions no longer reference rings, crossroads or time windows (AUDIO_SPEC §4.2).
 
 ---
 
-## 7. Participation layer (see PARTICIPATION_SPEC)
+## 7. Journal layer (provisional; finalized in the M9 brief, see PARTICIPATION_SPEC banner)
 ```sql
-create table seed_terms (version int primary key, body jsonb not null, effective_at timestamptz not null);
+create table journal_terms (version int primary key, body jsonb not null, effective_at timestamptz not null);
 
-create table questions (                           -- "Questions the Grove is asking"
-  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  ring_id uuid references rings(id),
-  text jsonb not null,
+create table questions (                           -- prompts the story is asking listeners
+  id uuid pk, text jsonb not null,
   anchor_fragment_id uuid references fragments(id), anchor_character_id uuid references characters(id),
-  requires_heard boolean not null default true,     -- visible only after the anchor fragment is heard
+  requires_completed boolean not null default true,   -- visible only after the anchor fragment is completed
   opens_at timestamptz not null, closes_at timestamptz,
   status publish_status not null default 'draft',
   …ts
 );
 
 create table devices (
-  id uuid primary key,                              -- random UUID generated on the phone; a bearer secret
+  id uuid primary key,                             -- random UUID generated on the phone; a bearer secret
   first_seen_at timestamptz not null default now(),
   platform text, app_version text, ui_language lang,
-  attested_at timestamptz, attestation text check (attestation in ('app_attest','play_integrity')),
   age_gate text check (age_gate in ('under_13','13_17','18_plus','adult_for_family'))
 );
 
-create table seeds (
+create table journal_entries (
   id uuid pk,
   device_id uuid not null references devices(id) on delete cascade,
-  client_seed_id uuid not null,
-  grove_id uuid not null references groves(id),
-  ring_id uuid references rings(id),                -- ring open at planting time
-  anchor_fragment_id uuid references fragments(id), -- snapped on device; raw coordinates never sent
-  planted_on_site boolean not null,                 -- true if planted inside the grove
-  kind seed_kind not null,
+  client_entry_id uuid not null,
+  grove_id uuid references groves(id),
+  anchor_fragment_id uuid references fragments(id),   -- snapped on device; raw coordinates never sent
+  written_on_site boolean not null,
+  kind entry_kind not null,
   question_id uuid references questions(id), character_id uuid references characters(id),
   body text check (char_length(body) <= 1500),
-  voice_path text,                                  -- private bucket seeds-voice/{id}.m4a (≤ 90 s)
+  voice_path text,                                 -- private bucket journal-voice/{id}.m4a (≤ 90 s)
   voice_duration_ms int,
   staff_transcript text,
-  credit_name text check (char_length(credit_name) <= 60),
-  credit_status text not null default 'pending' check (credit_status in ('pending','approved','rejected')),
-  may_quote boolean not null default false,         -- words may be quoted (read by a narrator) in an Echo leaf
-  may_use_voice boolean not null default false,     -- 18+ only: the recorded voice itself may be used in the story
-  sound_grant boolean not null default false,       -- kind=sound: license to use the recording in ambience
-  memory_contact text,                              -- kind=memory, optional, encrypted (pgsodium/Vault), purged after 90 d
-  terms_version int not null references seed_terms(version),
-  status seed_status not null default 'planted',
-  flags text[] not null default '{}',               -- pii_stripped, sensitive_culture, real_person, private_story, safety
+  terms_version int not null references journal_terms(version),
+  status entry_status not null default 'submitted',
+  flags text[] not null default '{}',              -- pii_stripped, sensitive_culture, real_person, safety
   themes text[] not null default '{}',
-  planted_at timestamptz not null, body_added_at timestamptz, status_changed_at timestamptz,
+  submitted_at timestamptz not null, status_changed_at timestamptz,
   …ts,
-  unique (device_id, client_seed_id),
+  unique (device_id, client_entry_id),
   check (body is not null or voice_path is not null)
 );
-alter table asset_rights add constraint asset_rights_seed_fk foreign key (seed_id) references seeds(id);
 
-create table seed_links (                          -- lineage: what a seed grew into
-  id uuid pk, seed_id uuid not null references seeds(id) on delete cascade,
+create table entry_links (                         -- lineage: what an entry informed
+  id uuid pk, entry_id uuid not null references journal_entries(id) on delete cascade,
   revision_id uuid references fragment_revisions(id) on delete cascade,
-  asset_id uuid references audio_assets(id) on delete cascade,       -- sound seed promoted into ambience
-  crossroads_option_id uuid,                                          -- FK below
   question_id uuid references questions(id),
-  note text,                                        -- internal: how it was used
-  stage seed_status not null default 'sprouting',   -- sprouting until the target publishes, then grown
+  note text,                                       -- internal: how it was used
+  stage entry_status not null default 'sprouting', -- sprouting until the target publishes, then grown
   …ts,
-  check (num_nonnulls(revision_id, asset_id, crossroads_option_id, question_id) = 1)
+  check (num_nonnulls(revision_id, question_id) = 1)
 );
 
-create table crossroads (
-  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  ring_id uuid not null references rings(id),
-  anchor_fragment_id uuid not null references fragments(id),   -- vote only after hearing it, on site
-  prompt jsonb not null,                            -- "Should Mara cross the dike tonight?"
-  teaser_asset_id uuid references audio_assets(id), -- optional narrated framing
-  vote_radius_m int not null default 75,
-  opens_at timestamptz not null, closes_at timestamptz not null,
-  status crossroads_status not null default 'draft',
-  outcome_option_id uuid,
-  outcome_note jsonb not null default '{}',         -- public canon line, e.g. "Listeners chose: Mara stays."
-  …ts
-);
-create table crossroads_options (
-  id uuid pk, crossroads_id uuid not null references crossroads(id) on delete cascade,
-  label jsonb not null, description jsonb not null default '{}',
-  sort_order int not null default 0, …ts
-);
-alter table crossroads add constraint crossroads_outcome_fk foreign key (outcome_option_id) references crossroads_options(id);
-alter table seed_links add constraint seed_links_option_fk foreign key (crossroads_option_id) references crossroads_options(id);
-alter table fragment_revisions add constraint rev_outcome_fk foreign key (requires_outcome_option_id) references crossroads_options(id);
-
-create table crossroads_votes (
-  crossroads_id uuid references crossroads(id) on delete cascade,
-  device_id uuid references devices(id) on delete cascade,
-  option_id uuid not null references crossroads_options(id),
-  voted_at timestamptz not null default now(),
-  primary key (crossroads_id, device_id)            -- one vote per device
-);
-
-create table gatherings (                          -- in-person story circles (display only; registration on website)
-  id uuid pk, grove_id uuid references groves(id), ring_id uuid references rings(id),
+create table gatherings (                          -- in-person story circles (display only; registration on the website)
+  id uuid pk, grove_id uuid references groves(id),
   title jsonb not null, starts_at timestamptz not null, url text, …ts
 );
 
@@ -463,13 +377,41 @@ create table checkins (
   unique (device_id, client_checkin_id)
 );
 ```
+**Removed in v3:** `seeds` (→ `journal_entries`, without credit names, quote/voice-use permissions, sound grants or memory contact), `seed_links` (→ `entry_links`, without asset or crossroads targets), `seed_terms` (→ `journal_terms`), `crossroads`, `crossroads_options`, `crossroads_votes`, `devices.attested_at` / `attestation`, every `ring_id`. The `journal_entries` table is created in M3a so the schema is coherent, but nothing writes to it until M9.
 
 ---
 
-## 8. Operations tables
+## 8. Releases and operations
 ```sql
+create table releases (                            -- a batch of content published together
+  id uuid pk, name text not null, notes text,
+  status release_status not null default 'draft',
+  publish_at timestamptz,                          -- null = publish now; set ⇒ status 'scheduled'
+  published_at timestamptz, published_by uuid references auth.users(id),
+  last_check jsonb,                                -- the most recent fn_publish_check result
+  created_by uuid references auth.users(id),
+  …ts
+);
+
+create table release_items (                       -- what the release publishes or updates
+  release_id uuid not null references releases(id) on delete cascade,
+  entity text not null check (entity in ('grove','fragment','revision','character','image',
+                                         'ambience_profile','ambience_zone','music_zone','music_cue','ui_cue')),
+  entity_id uuid not null,
+  primary key (release_id, entity, entity_id)
+);
+
+create table published_snapshots (                 -- the live state of each publishable entity; packs read these
+  entity text not null, entity_id uuid not null,
+  release_id uuid not null references releases(id),
+  data jsonb not null,                             -- the entity's publishable fields + its links at publish time
+  published_at timestamptz not null default now(),
+  primary key (entity, entity_id)
+);
+
 create table staff (user_id uuid primary key references auth.users(id) on delete cascade,
-  display_name text not null, role staff_role not null default 'viewer', active boolean not null default true, …ts);
+  display_name text not null, role staff_role not null default 'viewer',
+  active boolean not null default true, invited_by uuid references auth.users(id), …ts);
 
 create table audit_log (id bigint generated always as identity primary key,
   actor uuid references auth.users(id), action text not null, entity text not null, entity_id uuid,
@@ -487,169 +429,161 @@ create index on events (grove_id, occurred_at);
 create table pack_builds (id bigint generated always as identity primary key,
   scope text not null check (scope in ('grove','region')), scope_id uuid not null,
   version int not null, manifest_path text not null, manifest_sha256 text not null,
-  content_sha256 text,                             -- canonical JSON sans packVersion/builtAt; equal ⇒ rebuild no-op
+  content_sha256 text,                             -- canonical JSON sans packVersion/builtAt; equal ⇒ no-op
   asset_hashes text[] not null, bytes_total bigint not null,
+  release_id uuid references releases(id),         -- builds triggered by a release go live together
+  live boolean not null default false,             -- true once every build of its release succeeded
   built_at timestamptz not null default now(), reason text);
 
 create table jobs (                                -- outbox; triggers/functions only insert rows
   id bigint generated always as identity primary key,
-  kind text not null check (kind in ('rebuild_pack','purge_asset')),
-  payload jsonb not null,                          -- ids only, e.g. {grove_id} or {asset_sha}; never coordinates or codes
+  kind text not null check (kind in ('publish_release','rebuild_pack','purge_asset')),
+  payload jsonb not null,                          -- ids only; never coordinates or codes
   status text not null default 'queued',
-  attempts int not null default 0,
-  last_error text,
+  attempts int not null default 0, last_error text,
   run_after timestamptz not null default now(),
   …ts
 );
--- pg_cron every minute → pg_net → `run-jobs` edge function (idempotent, retries/backoff, max 5 attempts).
+-- pg_cron every minute → pg_net → `run-jobs` (idempotent, retries/backoff, max 5 attempts).
 ```
-Region pack rebuilds bump `regions.pack_version` (same role as `groves.pack_version`).
+**What a snapshot holds.** `grove`: name, premise, access notes, links, wildlife-speaker setting, boundary, growth cue. `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, intro, portrait. `image`: sha, ext, alt text. Sound entities (`ambience_profile` with its layers and assets, `ambience_zone`, `music_zone`, `music_cue` with its stems, `ui_cue`): their publishable fields, so M4's sound tools publish through releases too. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
 
 ---
 
 ## 9. Playability rules (SQL functions)
-All are `stable` and `security definer`, owned by `postgres` (the migration owner, which owns the tables), with `search_path = ''` (or an explicit schema list) and fully qualified names. `revoke execute … from public`, then grant only what each function needs. Only `get_pack_index()` is granted to `anon`. No dedicated owner role: a separate role would need `BYPASSRLS`, which we can't reliably grant on Supabase.
+All are `stable` and `security definer`, owned by `postgres`, with `search_path = ''` and fully qualified names. `revoke execute … from public`, then grant only what each function needs (the `110_definer_grants` allowlist test keeps this honest). Only `get_pack_index()` is granted to `anon`.
 
-**Expiry:** `expires_on is null` means the row never expires. An item expires when `expires_on < current_date` in the **region's** time zone (so the expiry job and playability agree).
-
-- **`fn_asset_is_playable(asset_id)`**: at least one `asset_rights` row with `status='active'` and an unexpired `expires_on` (null = never expires). When the right is `consent_form`, its consent must also be active, unexpired and include `'app'`.
-- **`fn_site_ok(site_id)`**: an active, unexpired `site_approvals` row exists.
-- **`fn_revision_is_playable(revision_id)`** requires all of:
-  - the revision is `published` with `publish_at ≤ now()`, and its fragment is neither `unpublished` nor `draft`
-  - the grove is `published` and `fn_site_ok`
-  - every `revision_contributors.consent_id` is active, unexpired and includes `'app'`
-  - every version's `narration_asset_id` is playable
-  - if `requires_outcome_option_id` is set, the crossroads is `decided` with that option as the outcome
+- **`fn_revision_is_playable(revision_id)`**: the revision is `published`; its fragment's snapshot exists with status `published`; its grove's snapshot exists with status `published`; it has at least one version.
 - **`fn_current_revision(fragment_id)`**: the playable revision with the highest `revision_no`.
-- **`fn_cue_is_playable(cue_id)`**: the cue is published, every stem asset is playable, and its zone or grove is published.
-- **`fn_layer_assets_playable(layer_id)`**: the playable subset of a layer's assets.
+- **`fn_contingency_revision_no(fragment_id)`**: per §4.
+- **`fn_cue_is_playable(cue_id)`**: the cue's snapshot is published and its zone or grove is published.
+- **`fn_layer_is_playable(layer_id)`**: the layer's profile snapshot is published.
+
+Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired` and every consent, approval and outcome check.
 
 ---
 
 ## 10. Write paths and triggers
-Publishing is two-phase so storage and the database can't disagree (via the `publish` edge function):
 
-1. **`fn_publish_check(entity, ids[])`** — read-only; returns the checklist result (§11) plus `asset_shas_to_publish[]`.
-2. The edge function copies each staged asset `staging-audio/{sha}` → `public-media/a/{sha}.{ext}` with `Cache-Control: public, max-age=3600`. If any copy fails, it stops and nothing is committed.
-3. **`fn_publish_commit(entity, ids[])`** — in one transaction: re-runs the checks; sets statuses and `is_public`; sets `seed_links.stage='grown'` and `seeds.status='grown'` for linked targets; writes the audit log; **enqueues** `rebuild_pack` jobs.
+**Editing.** Staff edit working rows (`groves`, `fragments`, `characters`, prerequisites, links) at any time under RLS. Editing never changes what phones see. Only publishing a release does.
 
-**Unpublish:** `fn_unpublish_commit(entity, ids[])` (editor/admin via the `unpublish` edge function) sets `status='unpublished'` for `grove` | `fragment` | `revision` | `music_cue` | `ambience_zone` | `music_zone` | `ui_cue`, writes the audit log, and enqueues `rebuild_pack` for affected scopes. No storage ops inline; children are not cascaded. An unpublished grove drops out of `get_pack_index`; unpublished fragments drop out of their pack. The §10 reconciler removes files after the rebuild.
+**Publishing a release** (two-phase, through the `publish` edge function, now or by schedule):
+1. **`fn_publish_check(release_id)`**, read-only: runs the checklist (§11) over everything in the release *plus* the live snapshots it depends on (for example a prerequisite in another grove). Returns `{ok, failures[], asset_shas_to_publish[], image_shas_to_publish[]}` and writes it to `releases.last_check`.
+2. The edge function copies each staged asset to `public-media/a/{sha}.{ext}` (audio) or `public-media/i/{sha}.{ext}` (images), with `Cache-Control: public, max-age=3600`. If any copy fails, it stops and nothing is committed.
+3. **`fn_publish_commit(release_id)`**, in one transaction: re-runs the checks; sets revision statuses and `release_id`; writes a `published_snapshots` row for each grove, fragment and character in the release; sets the release `published`; marks entry links `grown` for published targets; writes the audit log; **enqueues** `rebuild_pack` jobs for every affected scope, tagged with the release id.
+
+**Scheduled releases.** A release with `publish_at` is `scheduled`. pg_cron (every minute) enqueues `publish_release` for releases whose time has come. `run-jobs` calls `publish` as the service role. If the check fails at go-live, the release becomes `failed` with `last_check` explaining why, and nothing goes live.
+
+**Going live together.** Builds tagged with a release are written with `live = false`. When every build for that release has succeeded, they're all set `live = true` in one transaction, and `get_pack_index` only exposes live builds. Phones therefore never see half of a cross-grove release.
+
+**Unpublish.** `fn_unpublish_commit(entity, ids[])` (editor or admin, through the `unpublish` edge function) sets the entity's status and its snapshot status to `unpublished`, writes the audit log and enqueues rebuilds. Unpublishing a revision makes the previous playable revision current. A **warning** lists fragments in any grove whose prerequisites would be stranded. The reconciler removes files after rebuilds.
 
 | Event | Effect |
 |---|---|
-| Publish (check → copy → commit, above) | On commit success: statuses, public flags, grown links, audit; enqueue `rebuild_pack` |
-| Unpublish (`fn_unpublish_commit`) | Status `unpublished`, audit, enqueue `rebuild_pack`; reconciler removes storage after rebuild |
-| `consents` / `asset_rights` / `site_approvals` status leaves `active` (trigger) | Find affected assets, revisions and cues; recompute; enqueue `rebuild_pack` (and a deduped `purge_asset` reconcile). Storage deletes and authoritative `is_public` updates are done by the reconciler after rebuilds. |
-| Crossroads `closes_at` passes (pg_cron every 5 min) | Set `status='closed'` and enqueue `rebuild_pack` (pack carries status so devices stop offering the vote); the moderator confirms the tally → `decided` + `outcome_option_id` → enqueue another `rebuild_pack` (unlocks dependent revisions and cues) |
-| Scheduled `publish_at` passes (pg_cron every 5 min) | Enqueue `rebuild_pack` for groves with newly playable revisions |
-| Daily 02:00 regional time | Expire consents, rights and approvals (fires the trigger); purge `memory_contact` older than 90 days; delete `voice_path` files for seeds `resting` or `hidden` more than 30 days, or `grown` more than 180 days without `may_quote` |
+| Release published (check → copy → commit) | Snapshots, statuses, audit; enqueue `rebuild_pack` per affected scope; go live together |
+| Scheduled release time reached (pg_cron, every minute) | Enqueue `publish_release`; failure ⇒ `failed` + reason |
+| Unpublish | Status `unpublished`, audit, rebuild; reconciler removes storage |
+| Daily 02:00 regional time | Delete `voice_path` files for Journal entries `resting` or `hidden` more than 30 days, or `grown` more than 180 days |
 
-**Pack rebuild / outbox:** Triggers and functions only **insert jobs**; they never call HTTP. `run-jobs` processes **all queued `rebuild_pack` jobs before any `purge_asset` job** in a run. Each successful rebuild enqueues one deduplicated `purge_asset` reconcile (payload is informational). `build-pack` computes canonical JSON **without** `packVersion`/`builtAt`, hashes it as `content_sha256`, and **no-ops** (no write, no version bump) when it matches the latest `pack_builds.content_sha256` for the scope. Otherwise it bumps `groves.pack_version` or `regions.pack_version`, writes the manifest, and inserts a `pack_builds` row.
+**Pack rebuild / outbox:** triggers and functions only **insert jobs**; they never call HTTP. `run-jobs` processes `publish_release` jobs first, then all `rebuild_pack` jobs, then any `purge_asset` job. Each successful rebuild enqueues one deduplicated `purge_asset` reconcile. `build-pack` computes canonical JSON without `packVersion`/`builtAt`, hashes it as `content_sha256`, and no-ops when it equals the latest build's `content_sha256` for the scope.
 
-**Public media reconciler (`purge-assets`):** `public-media/a/` must contain **exactly** the union of `assets[].sha` across the **latest** manifest of every scope listed by `get_pack_index`. Delete every `public-media/a/*` object whose sha is not in that keep-set and set `audio_assets.is_public = false` for them; set `is_public = true` only for shas in the keep-set. Idempotent.
-
-A grove may remain `published` with zero playable revisions after a later revocation. The checklist gates publish only; the pack builder must still emit a valid pack with whatever is playable (possibly none) and must not auto-unpublish. Such a grove **stays** in `get_pack_index` so devices can drop revoked content.
+**Public media reconciler (`purge-assets`):** `public-media/a/` and `public-media/i/` must contain **exactly** the union of asset shas across the **latest live** manifest of every scope listed by `get_pack_index`. Delete everything else and set `is_public = false`; set `is_public = true` only for the keep-set. Idempotent. Superseded manifests are deleted after a new version is live.
 
 ---
 
-## 11. Publish checklist (`fn_publish_check` returns `{ok, failures:[{code, severity:'error'|'warning', message, entity_id}], asset_shas_to_publish[]}`)
-`ok` is true when there are no `error` entries. Warnings do not fail the check. `RADIUS_OVERLAP` and `LOUDNESS` are warnings; every other code is an error.
+## 11. Publish checklist (`fn_publish_check` returns `{ok, failures:[{code, severity:'error'|'warning', message, entity, entity_id}], …}`)
+`ok` is true when there are no `error` entries. Warnings never block.
 
-| Code | Rule |
-|---|---|
-| `NO_TRANSCRIPT` | Every revision version has a non-empty transcript |
-| `NARRATION_RIGHTS` | Narration assets are playable |
-| `CONSENT_APP` | Every revision contributor has consent covering `app` |
-| `SITE_APPROVAL` | The grove's site is approved |
-| `OUTSIDE_GROVE` | The fragment is inside the grove polygon |
-| `PREREQ_UNPUBLISHED` | Every prerequisite group has ≥1 member that is `published` or `retired`, or in the same batch |
-| `EMPTY_PREREQ_GROUP` | Every prerequisite group has at least one member |
-| `NO_START` | The grove has at least one published fragment with no prerequisite groups |
-| `PROTECTED_NO_CODE` | Protected fragments have a `marker_code` |
-| `RADIUS_OVERLAP` (warning) | Two marked or unmarked fragments' radii overlap, unless one must precede the other (ADR 0003 §4) |
-| `STEM_MISMATCH` | Cue stems differ in duration or loop points |
-| `LOUDNESS` (warning) | An asset deviates from its target LUFS by more than ±2 LU (AUDIO_SPEC §6) |
-| `WILDLIFE_SPEAKER` | A layer with `wildlife_call=true` and `speaker_safe=true` is not allowed |
-| `CONDITION_SCHEMA` | Cue `conditions` and `state_gains` validate against zod |
-| `OUTCOME_REF` | `requires_outcome_option_id` belongs to a crossroads in the same grove |
+| Code | Severity | Rule |
+|---|---|---|
+| `NO_VERSION` | error | Every revision has at least one version (Day and/or Night) |
+| `NO_TRANSCRIPT` | error | Every version has a non-empty transcript |
+| `NO_TEASER` | error | Every fragment has a teaser |
+| `OUTSIDE_GROVE` | error | The fragment is inside its grove polygon |
+| `PREREQ_UNPUBLISHED` | error | Every prerequisite group has ≥1 member that is published (in any grove) or in the same release |
+| `EMPTY_PREREQ_GROUP` | error | Every prerequisite group has at least one member |
+| `PHYSICAL_NO_CODE` | error | Physical fragments have a `marker_code` |
+| `NO_ALT_TEXT` | error | Every image in the release has alt text |
+| `STEM_MISMATCH` | error | Cue stems differ in duration or loop points |
+| `WILDLIFE_SPEAKER` | error | A layer with `wildlife_call=true` and `speaker_safe=true` is not allowed |
+| `CONDITION_SCHEMA` | error | Cue `conditions` and `state_gains` validate against zod |
+| `NO_START` | warning | The grove has no fragment that is open from the start (prerequisites only elsewhere) |
+| `PREREQ_ONE_WINDOW` | warning | A prerequisite exists only by day or only by night, so it blocks listeners at the other time |
+| `RADIUS_OVERLAP` | warning | Two standard fragments' circles overlap, unless one must precede the other (ADR 0003 §4) |
+| `LOUDNESS` | warning | An asset is more than ±2 LU from its target (AUDIO_SPEC §6) |
+| `AUDIO_FORMAT` | warning | An asset's format, channels or bitrate differs from AUDIO_SPEC §6 |
+
+Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO_CODE` (→ `PHYSICAL_NO_CODE`), `OUTCOME_REF`.
 
 ---
 
 ## 12. Content packs (the delivery format)
 
 ### 12.1 Grove pack
-`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by the `build-pack` edge function. Manifests use **canonical JSON** (deep-sorted object keys, no insignificant whitespace, UTF-8; arrays in defined order — fragments by `storyOrder` then `id`; revisions by `fragmentId` then `revisionNo`; `requires` groups/members by `sort_order` then id; assets by `sha`; other lists by `id`; coordinates rounded to **6** decimal places). `manifest_sha256` is over those exact bytes. `builtAt` is the latest `updated_at` among rows that fed the pack (deterministic input watermark), and is excluded from `content_sha256` along with `packVersion`. zod `GrovePack`:
+`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by `build-pack` from **published snapshots** and current revisions. Canonical JSON rules are unchanged from v2: deep-sorted keys, no insignificant whitespace, UTF-8; arrays in defined order (fragments by `storyOrder` then `id`; revisions by `fragmentId`; versions by `lang` then `timeWindow`; `requires` groups and members by `sort_order` then id; assets by `sha`; other lists by `id`); coordinates rounded to 6 decimals. `builtAt` is the latest `published_at` among the snapshots and revisions that fed the pack. zod `GrovePack` (schema 2):
 ```ts
 {
-  schema: 1, groveId, packVersion, builtAt,
-  grove: { id, name, premise, accessNotes, boundary: GeoJSON.Polygon, site: {name, accessInfo, websiteUrl, gatheringsUrl},
-           growthCueAssetSha?: string },
-  rings: [{ id, ringNo, name, themeNote, status, plantingOpensAt, plantingClosesAt, releasedAt, writerNoteSha? }],
-  characters: [{ id, publicName, publicBio, introducedByFragmentIds: string[] }],   // public fields only
-  fragments: [{ id, tier, isEnding, requires: string[][],   // AND of OR groups (ADR 0003); unknown ids = never completed
-                title, visibility, storyOrder, gapHint, retired,
-                lat?, lng?, radiusM?,          // omitted when protected
-                markerHash?,                    // sha256(marker_code) when protected
-                threadIds, characterIds }],
-  revisions: [{ id, fragmentId, revisionNo, ringId, publishAt, contentNote, changeNote,
-                versions: [{ lang, assetSha, durationMs, bytes, transcript, vtt? }],
-                credits: [{ display, role, license? }],
-                grownFromSeedCount: number }],  // all playable revisions (older ones for the Journal)
-  currentRevisionByFragment: Record<fragmentId, revisionId>,
-  questions: [{ id, ringId, text, anchorFragmentId?, anchorCharacterId?, requiresHeard, opensAt, closesAt }],
-  crossroads: [{ id, ringId, anchorFragmentId, prompt, teaserSha?, voteRadiusM, opensAt, closesAt, status,
-                 options: [{id, label, description}], outcome?: {optionId, note} }],
-  music: { cues: [{ id, zone?: GeoJSON.Polygon, useGroveBoundary: boolean, priority, conditions, minDwellS, crossfadeMs,
-                    stems: [{ assetSha, role, gainDb, stateGains, loopStartMs, loopEndMs }] }] },
+  schema: 2, groveId, regionId, packVersion, builtAt,
+  grove: { id, name, premise, accessNotes, websiteUrl?, gatheringsUrl?, boundary: GeoJSON.Polygon,
+           allowsSpeakerWildlifeSounds: boolean, growthCueAssetSha?: string },
+  characters: [{ id, publicName, publicIntro, portraitSha?, portraitAlt? }],   // characters linked to this grove's fragments
+  fragments: [{ id, tier, isEnding, requires: string[][],   // AND of OR groups; ids may be in other groves
+                title, teaser, visibility: 'standard'|'physical', storyOrder, retired,
+                lat, lng, radiusM?,                          // radiusM omitted for physical
+                markerHash?,                                 // sha256(marker_code) for physical; never the code
+                threadIds,                                   // ids only (for music conditions)
+                characters: [{ characterId, prominence, introduces, cardLine }] }],
+  revisions: [{ id, fragmentId, revisionNo, changeKind, contingencyRevisionNo,   // current revision only (ADR 0004 §16)
+                versions: [{ lang, timeWindow: 'day'|'night', assetSha, durationMs, bytes, transcript, vtt? }] }],
+  questions: [{ id, text, anchorFragmentId?, anchorCharacterId?, requiresCompleted, opensAt, closesAt }],
+  music: { cues: [{ id, zone?: GeoJSON.Polygon, useGroveBoundary: boolean, timeWindow, priority, conditions,
+                    minDwellS, crossfadeMs, stems: [{ assetSha, role, gainDb, stateGains, loopStartMs, loopEndMs }] }] },
   ambienceZones: [{ id, boundary, profileSlug, priority, edgeFadeM }],   // zones intersecting grove bbox + 1 km
-  ledger: [{ ringId, growers: string[], anonymousCount: number, seedsPlanted: number, seedsGrown: number }],
   gatherings: [{ title, startsAt, url }],
-  assets: [{ sha, ext, bytes, kind }]   // everything this pack references
+  assets: [{ sha, ext, bytes, kind }]   // kind: asset_kind | 'image'
 }
 ```
 
 ### 12.2 Region pack
-`public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack`:
-- `ambienceProfiles` with their layers and asset shas (filtered to playable)
-- `landcover: {gridSha, h3Resolution, classes:[{code, profileSlug}]}`
-- region-wide `ambienceZones` and `musicZones`/cues not tied to a grove
-- `uiCues` (e.g. the "Listen." hush voice cue)
-- `assets`
+`public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack`: `timezone`, `sunReference: {lat, lng}`, `ambienceProfiles` with their layers (each with `timeWindow`) and asset shas, `landcover: {gridSha, h3Resolution, classes} | null`, region-wide `ambienceZones` and `musicZones`/cues not tied to a grove, `uiCues`, `assets`.
 
 ### 12.3 Index
-`get_pack_index()` RPC (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox}]` from the **latest** `pack_builds` row per `(scope, scope_id)`. Grove `name` is `groves.name` (L10n jsonb); region `name` is `{"en": regions.name}`. `bbox` is `[minLng, minLat, maxLng, maxLat]` from `ST_Envelope` of `groves.boundary` / `regions.bounds`. **Groves** appear only when `status = 'published'` and a build exists (including published groves with zero playable revisions). **Regions** appear when a `pack_builds` row exists (regions have no publish status). It's the only live query devices need besides writes.
+`get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists.
 
 ### 12.4 Rules
-- Packs **never** include: protected coordinates, marker codes (only their hashes), contributor PII, seed text or voice, vote counts before a crossroads is decided, or seed credit names not yet `approved`.
-- The ledger's `approved` credit rule applies to **seed** credit names (`seeds.credit_name` with `credit_status = 'approved'`). Revision credits use `contributors.display_credit`, which the contributor chose in their consent; an active consent is the approval for those credits.
-- The device must delete any local asset whose sha isn't in the union of the current manifests (mandatory on sync; this is how revocation reaches phones).
-- Manifest paths are versioned and are never **overwritten**. After a new version is written and indexed, the reconciler **deletes older manifest objects** for that scope (`pack_builds` rows stay as history). Devices already hold their installed manifest locally.
-- Cache headers on upload: audio `a/{sha}.{ext}` → `Cache-Control: public, max-age=3600`; manifests → `public, max-age=60` (revocation reaches shared caches within those bounds). Assets remain content-addressed by sha.
+- Packs **never** include: marker codes (only their hashes), Story Notes (thread titles and notes, character notes, Indigeny notes), Journal entries, internal change notes, or anything from an unpublished release.
+- The device must delete any local asset whose sha isn't in the union of the current manifests (mandatory on sync).
+- Manifest paths are versioned and never overwritten; superseded manifests are deleted once a newer version is live.
+- Cache headers: assets `public, max-age=3600`; manifests `public, max-age=60`.
+
+### 12.5 Staff preview
+The `preview` edge function (staff JWT) returns a **preview manifest** for one draft release: the live grove pack with the release's changes overlaid, and short-lived signed URLs to staged assets. It's never written to `public-media` and never listed in the index. The phone keeps preview content separate from installed packs and discards it when the staff member signs out.
 
 ---
 
 ## 13. Row-level security and storage
 - RLS is on for **every** table. `anon` has no table grants. It may execute `get_pack_index`, read `public-media`, and call the device edge functions.
-- Staff policy helper `has_role(roles staff_role[])`:
+- Staff policy helper `has_role(roles staff_role[])` (active staff only). No two-factor requirement (ADR 0004).
 
 | Role | Can |
 |---|---|
-| `viewer` | Read content, dashboards, seeds (not `memory_contact`) |
-| `moderator` | Viewer + seed status, flags, `credit_status`, crossroads tally confirmation |
-| `writer` | Viewer + draft or in-review revisions, versions, threads, characters, questions, seed themes and links |
+| `viewer` | Read content |
+| `moderator` | Viewer + Journal entry status, flags and themes |
+| `writer` | Viewer + draft revisions and versions, Story Notes (threads, character notes, Indigeny notes), characters (draft), questions, upload audio and images |
 | `sound` | Viewer + audio assets, ambience profiles, layers, zones, music zones, cues, stems |
-| `editor` | Everything above + groves, fragments, rings, crossroads, contributors, consents, rights, approvals, publish |
-| `admin` | Everything, including `staff` and audit export |
+| `editor` | Everything above + groves, fragments, prerequisites, releases, publish and unpublish, audit log (read) |
+| `admin` | Everything, including staff invites and deactivation |
 
-- Column privacy: `contributors.legal_name/contact_*`, `consents.document_path`, `seeds.memory_contact` are readable by editor and admin only (use a security-definer view for others).
 - Buckets:
 
 | Bucket | Read | Write |
 |---|---|---|
-| `public-media` (`a/{sha}.{ext}`, `packs/…`, `landcover/…`, `map-style/…`) | public | service role only (through publish and build functions) |
-| `staging-audio` | writer, sound, editor, admin | writer, sound, editor, admin |
-| `seeds-voice` | moderator, writer, editor, admin | service role (seed upload uses a signed upload URL issued by `plant-seed`) |
-| `private-docs` | editor, admin | editor, admin |
+| `public-media` (`a/{sha}.{ext}`, `i/{sha}.{ext}`, `packs/…`, `landcover/…`) | public | service role only (publish and build functions) |
+| `staging-audio` | writer, sound, editor, admin (+ signed URLs for preview) | writer, sound, editor, admin |
+| `staging-images` | writer, sound, editor, admin (+ signed URLs for preview) | writer, sound, editor, admin |
+| `journal-voice` | moderator, writer, editor, admin | service role (upload via a signed URL issued by the Journal endpoint, M9) |
+
+Removed in v3: `private-docs` (no approval or consent documents) and the PII column policies (no contributor PII). `seeds-voice` → `journal-voice`.
 
 ---
 
@@ -657,27 +591,29 @@ A grove may remain `published` with zero playable revisions after a later revoca
 | Table | Purpose |
 |---|---|
 | `packs (scope, id, version, manifest_json, installed_at)` | Installed manifests |
-| `assets (sha, ext, bytes, local_uri, last_used_at)` | Content-addressed audio cache |
-| `heard (fragment_id, revision_id, first_heard_at, last_heard_at, max_progress, completed_at, heard_on_site, time_window, session_id)` | Unlock state and Journal. Only `completed_at is not null` counts as heard (ADR 0003 §3) |
-| `visits (session_id, grove_id, started_at, ended_at, fragments_heard, seeds_planted, time_window)` | Journal Visits view |
-| `field_notes (id, fragment_id, text, voice_uri, created_at)` | Private notes (JOURNAL_SPEC §5) |
-| `my_seeds (client_seed_id, grove_id, anchor_fragment_id, kind, body, voice_uri, credit_name, status, links_json, planted_at, synced)` | Your seeds and their lineage |
-| `my_votes (crossroads_id, option_id, voted_at, synced)` | |
-| `met_characters (character_id, met_at, fragment_id)` | |
+| `assets (sha, ext, bytes, local_uri, last_used_at)` | Content-addressed audio and image cache |
+| `completions (fragment_id, revision_no, time_window, completed_at, on_site, trigger, session_id)` | Unlock state and Chronicle replay. A row exists only when playback reached the end on site. |
+| `unlocks (fragment_id, unlocked_at)` | Fragments this device has unlocked. Written the first time a fragment's prerequisites are satisfied, and never removed, so an unlocked fragment stays unlocked after a later Story Contingency on one of its prerequisites (ADR 0004 §13). |
+| `progress (fragment_id, revision_no, time_window, max_progress_ms, updated_at)` | Partly played ("started") fragments, display only |
+| `visits (session_id, grove_id, started_at, ended_at, fragments_completed, time_window)` | Visit history |
+| `met_characters (character_id, met_at, fragment_id)` | Chronicle character cards |
+| `my_entries (client_entry_id, grove_id, anchor_fragment_id, kind, body, voice_uri, status, links_json, submitted_at, synced)` | Your Journal entries and their lineage |
+| `preview (release_id, manifest_json, fetched_at)` | Staff preview content, cleared on sign-out |
 | `event_queue`, `checkin_queue`, `kv` | |
 
-Journal export and import: an encrypted JSON file (AES-GCM with a user passphrase) containing `heard`, `visits`, `field_notes`, `my_seeds`, `my_votes`, `met_characters` and `device_id`, for moving to a new phone.
+**Rules computed on the device** (pure functions in `packages/shared`): a fragment's prerequisite member is satisfied if `completions` has a row for it with `revision_no ≥ contingencyRevisionNo`. A fragment is **unlocked** if it has a row in `unlocks`, or if every prerequisite group is satisfied now (then write the `unlocks` row). A fragment is replayable in the Chronicle for time window *w* if `completions` has an on-site row for its **current** revision's contingency epoch with `time_window = w`. Whether listener progress can be backed up is an open question (ADR 0004).
 
 ---
 
 ## 15. Seed data (`supabase/seed.sql`)
-- Region `wasatch-front`; three real sites in `draft` with **TODO placeholder** coordinates.
-- **Test grove at the Farmington Bird Refuge (test content only):** geometry, fragments and prerequisites come from `supabase/fixtures/farmington-bird-refuge.json` (JoJo's test chain, Frags 1–7, plus Frags 8–10 covering unmarked, protected `DEMO-001`, an OR group and an outcome-gated revision)
-  - one published grove; Ring 1 `planting`
-  - 2 characters, 1 open question, 1 open crossroads anchored on a branch
-  - 2 ambience profiles (Marsh, Urban), each with a bed and 2 oneshot layers using CC0 test sounds; a marsh ambience zone over the grove
-  - a music zone with 2 cues (default; `tiers:['branch']`), each with a base and a layer stem
-  - test-tone narration, a demo contributor and consent, an active site approval, `seed_terms` v1
-- A landcover fixture grid for the test grove.
-- `apps/mobile/e2e/demo-route.gpx`, generated from the same fixture: it visits the fragments in an order that satisfies every prerequisite, **dwells at each one for its narration length + 5 s** (completion needs the whole fragment), never enters the protected fragment's radius, and crosses the zone edges.
-- **Never seed real stories or real wildlife recordings without a license.**
+- Region `wasatch-front` (America/Denver, sun reference near Farmington Bay).
+- **Test grove at the Farmington Bird Refuge (test content only):** geometry, fragments and prerequisites from `supabase/fixtures/farmington-bird-refuge.json` (JoJo's test chain, Frags 1–7, plus Frags 8–10). Frag 9 is **physical** (`DEMO-001`). Frag 10 has a revision 2 that is a **Story Contingency**, and Frag 4 has a revision 2 that is a **Story Correction**. At least one fragment is **Day-only** and one has both **Day and Night** versions.
+- **A second small test grove** nearby with two fragments, one requiring a Farmington fragment (a cross-grove prerequisite), so cross-grove unlock and release atomicity are testable.
+- Ogden Nature Center and the Nature Center at Pia Okwai as **draft** groves with clearly marked placeholder geometry.
+- 2 story-wide characters with generated placeholder portraits (with alt text) and card lines; 1 thread; 1 open question.
+- 2 ambience profiles (Marsh, Urban), each with Day and Night layers using generated test tones; a marsh ambience zone over the grove.
+- A music zone with Day and Night cues, each with a base and a layer stem.
+- One published release containing everything above that's published; one draft release for preview tests.
+- `journal_terms` v1. A landcover fixture grid for the test grove.
+- `apps/mobile/e2e/demo-route.gpx`, generated from the same fixture: it visits the fragments in an order that satisfies every prerequisite, dwells at each for its narration length + 5 s, and crosses the zone edges.
+- **Never seed real stories or real wildlife recordings.**

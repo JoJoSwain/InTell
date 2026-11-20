@@ -1,5 +1,7 @@
 # InTell — Revised System Architecture (v2)
 
+> **Historical (v2).** Superseded by ADR 0004 (2026-11-20) and the v3 specs. Kept for context only.
+
 **Audience:** Jordan (“JoJo”) Swain, Replaceplace founding team  
 **Status:** Design synthesis from the v2 spec set — recommended build target  
 **Date:** 2026-11-19  

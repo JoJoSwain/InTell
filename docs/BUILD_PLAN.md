@@ -1,4 +1,6 @@
-# InTell — Build Plan for Cursor (v2)
+# InTell — Build Plan for Cursor (v3)
+
+v3 reflects ADR 0004 (product realignment) and ADR 0002 (Google Maps, online). M2 shipped the v2 schema; M3 begins by realigning it.
 
 Work through the milestones in order, one branch and one PR each. A milestone is done when its acceptance criteria pass and `pnpm lint && pnpm typecheck && pnpm test` is green.
 
@@ -28,54 +30,56 @@ Delivered as M2a and M2b; see docs/briefs/M2-database.md.
 - Revoking the demo consent rebuilds the pack without that revision and the asset 404s
 - Deciding the demo crossroads makes the dependent revision playable
 
-## M3 — Admin: story authoring
-**Build:** auth with roles and MFA for editor and admin; sites and approvals; the Grove editor (polygon, fragment tree, story order, gap hints, validation badges); rings; the story bible; the asset library (upload with sha, loudness and waveform; rights); the revision editor (per-language narration and transcript, credits, scheduling); the publish checklist UI; the audit log; contributors and consents.
-**Accept when:** a Playwright test builds the demo grove from scratch and publishes it; a writer can't publish; the loudness warning shows for an off-target file.
+*(Done, merged as PRs #3 and #4. Consents, approvals, rings and crossroads were later removed by ADR 0004; M3a realigns the schema.)*
+
+## M3 — Schema realignment, hosted admin and story authoring
+Delivered as four PRs; see `docs/briefs/M3-admin.md`.
+**Build:**
+- **M3a, schema realignment:** new migrations bringing the database to DATA_MODEL v3 (groves absorb sites; contributors, consents, rights, approvals, rings and crossroads removed; physical markers; teasers; Indigeny notes; story-wide characters and threads; cross-grove prerequisites; Day/Night versions; Story Contingency and Correction; releases and published snapshots; Journal tables renamed); updated playability, checklist, pack builder (GrovePack schema 2), reconciler (images), jobs (scheduled releases, atomic go-live); rewritten tests and seed
+- **M3b, hosted foundation:** a hosted Supabase staging project and a hosted admin; sign-in (email and password); `invite-staff`; the staff gate; the admin shell; regions; staff management; the audit log viewer; the Playwright harness and CI
+- **M3c, authoring:** the audio and image library (sha, loudness, true peak, format checks, waveform); the Grove editor on Google Maps (Terra Draw polygons or GeoJSON, fragments by map or coordinates, radius in feet, teasers, physical markers with printable QR codes, the cross-grove prerequisite-group editor, validation badges); Story Notes; characters and card lines
+- **M3d, revisions, releases and preview:** the revision editor (Day/Night versions, transcripts, Story Contingency or Correction); releases (checklist, publish now, schedule, history); unpublish with stranded-prerequisite warnings; the `preview` edge function
+**Accept when:** a Playwright test builds a grove from scratch (with a physical marker, a Day-only fragment and a cross-grove prerequisite), publishes it in one release and the pack validates; a writer can't publish (UI and forced call); the loudness and format warnings show for an off-spec file; a scheduled release publishes on time and a broken one fails with its reason; a staged edit doesn't reach the pack until released.
 
 ## M4 — Admin: sound design and the Listening Simulator
-**Build:** ambience profiles, layers and zones with audition; the landcover tool (`tools/landcover`) and grid upload with an H3 overlay; music zones, cues (condition builder), stems (loop-point editor, state-gain rules); the Web Audio `AudioEngine`; the Simulator (AUDIO_SPEC §8) using the shared `ambience.ts`, `music.ts`, `hush.ts`, `trigger.ts` and `unlock.ts`, which are **built and unit-tested in this milestone**.
-**Accept when:** dragging the walker across zone edges blends profiles; toggling "heard" on a branch switches the music stem; speaker mode silences wildlife layers; a GPX replay at 4× works; the shared audio tests (AUDIO_SPEC §9) pass.
+**Build:** ambience profiles, Day/Night layers and zones with audition; the landcover tool (`tools/landcover`) and grid upload with an H3 overlay; music zones, Day/Night cues (condition builder), stems (loop-point editor, state-gain rules); the Web Audio `AudioEngine`; the Simulator (AUDIO_SPEC §8) using the shared `timeWindow.ts`, `ambience.ts`, `music.ts`, `hush.ts`, `trigger.ts` and `unlock.ts`, which are **built and unit-tested in this milestone**.
+**Accept when:** dragging the walker across zone edges blends profiles; switching Day/Night swaps layers and cues; toggling "completed" on a branch switches the music stem; speaker mode silences wildlife layers; a GPX replay at 4× works; the shared audio tests (AUDIO_SPEC §9) pass.
 
-## M5 — Mobile: shell, map and offline packs
-**Build:** tokens, fonts and components; i18n; splash → animation → welcome → location explainer; **the map home** (style, Groves, markers via `unlock.ts`, puck, Marker and Grove sheets, bottom bar with stub sub-screens); the pack index, download (manifest, tiles, assets), sync with mandatory deletion; `register-device`. **Decide the tile provider first.**
-**Accept when:** in airplane mode a downloaded demo Grove renders its map, polygon and Root; a unit test proves revoked assets are deleted on sync; 300 markers pan smoothly on a mid-range Android.
+## M5 — Mobile: shell, map and packs
+**Build (after DESIGN's mobile sections are rewritten with Ashley):** tokens, fonts and components; i18n; splash → animation → welcome → location explainer; **the Google map home** (finish on top of `preview/m5-google-map-home`; iOS SDK and key; groves; 100%/35% markers via `unlock.ts` and `timeWindow.ts`; teaser pop-up; puck; Marker and Grove sheets; Chronicle, center and Journal buttons with stub screens; Settings top right); the pack index, download (manifest and assets), sync with mandatory deletion; `register-device`; staff sign-in and preview mode on the phone.
+**Accept when:** a downloaded demo grove renders its markers at the right opacity by day and by night; a unit test proves assets missing from manifests are deleted on sync; 300 markers pan smoothly on a mid-range Android; a staff device sees a draft release in preview mode and a non-staff device never does.
 
 ## M6 — Mobile: narration, session, proximity and QR
-**Build:** the session state machine; the location service (background during sessions, foreground service on Android); trigger and unlock with reveals (animation, toast, haptic); the playing overlay and afterglow; lock-screen controls; new-revision replay; unmarked fragments; QR universal links → protected fragments; accessible play; the visit record.
-**Accept when:** with the demo GPX on the iOS simulator and an Android emulator, each revealed fragment triggers exactly once in tier order and unrevealed ones never trigger; a new revision replays once; denying location leaves tap-play and QR working; location stops within 5 s of the session ending.
+**Build:** the session state machine; the location service (background during sessions, foreground service on Android); trigger and unlock with Day/Night version selection; Story Contingency resets and Corrections; cross-grove prerequisites; the playing overlay and afterglow; lock-screen controls; physical-marker QR universal links on `LINK_DOMAIN`; the accessible trigger; the one-narration-at-a-time queue; completion records; the visit record. No Play button.
+**Accept when:** with the demo GPX on the iOS simulator and an Android emulator, each unlocked fragment triggers exactly once in tier order and locked ones never trigger; a contingency makes a completed fragment play again and gates new unlocks, while a correction doesn't; a Day-only fragment can't play at night; scanning a locked physical marker shows its teaser; two fragments never play at once (a second trigger queues and plays after the first, never overlapping); narration starts with no tap; denying location leaves physical-marker scanning working and disables proximity and the accessible trigger; the accessible trigger fires on a single fix within 35 ft of the point; location stops within 5 s of the session ending.
 
 ## M7 — Mobile: surroundings, soundtrack and Hush
-**Build:** the AudioDirector that binds the shared logic to the engine; ambience from zones and landcover with time, month and route filters; music cue selection, stems, crossfades and edge fades; ducking; Hush and afterglow; the Settings Audio page (mixer, Hush toggle, chime toggle); credits for music, surroundings and community sounds.
-**Accept when:** on a real device walk of the demo GPX, the profile changes at the zone edge, music switches when a branch plays, Hush occurs after the interval and is cancelled by an arrival, and speaker mode drops wildlife layers; battery is under 12% for 60 minutes with all layers.
+**Build:** the AudioDirector that binds the shared logic to the engine; ambience from zones and landcover with Day/Night, month and route filters; music cue selection (Day/Night), stems, crossfades and edge fades; ducking; Hush and afterglow; the Settings Audio page (mixer, Hush toggle, chime toggle).
+**Accept when:** on a real device walk of the demo GPX, the profile changes at the zone edge, music switches when a branch plays and at sunset, Hush occurs after the interval and is cancelled by an arrival, and speaker mode drops wildlife layers; battery is under 12% for 60 minutes with all layers.
 
-## M8 — Journal
-**Build:** everything in JOURNAL_SPEC: Grove cards with tree thumbnails and status lines; Tree view (`treeLayout.ts`), Story view (`storybook.ts`, gaps, cast, canon), Visits view; Moment (Echo vs on-site replay, transcript, credits, version history, seeds here); field notes (text and voice) with share-as-seed; character cards; encrypted export and import.
-**Accept when:** after the GPX walk, the tree shows heard, revealed and silhouette nodes correctly; the storybook shows the correct gaps with hints and never leaks protected locations; Echo plays narration only off site and the full mix inside the Grove; a revoked revision shows the unavailable state; export → reinstall → import restores the Journal.
+## M8 — Chronicle
+**Build (after `CHRONICLE_SPEC.md` is written):** character cards (portrait, growing summary from card lines, groves, related fragments); completed fragments with replay per completed time version, narration only off site; related locked fragments with teasers; the visit history.
+**Accept when:** after the GPX walk, only fragments completed on site are replayable, and only in the time versions completed; a contingency removes the superseded version from replay until the new one is completed on site; character cards show only what the listener has met; nothing locked shows more than its teaser.
 
-## M9 — Grow: seeds, lineage, questions, Ledger, canon
-**Build:** the Grow screen (PARTICIPATION_SPEC §5); the age gate; seed terms; hold-to-plant on the map and overlay; kind chips; text planting within 7 days; voice upload via a signed URL; the `plant-seed`, `seed-addendum` and `my-seeds` endpoints; lineage statuses; the "Your seed grew" moment (growth motif plus narrator cue) and the private sprout and tree map marks; questions gated by heard; Ledger and canon views; the check-in card. **Admin:** the seed inbox, ring board (create `seed_links`), questions editor, ledger review, Listening Day release, sound-seed promotion to an ambience asset.
-**Accept when:**
-- An E2E plants a voice seed offline → it syncs → an admin links it to a revision and publishes → the app shows Grown → walking to the fragment plays the growth moment exactly once
-- An under-13 device can't plant
-- PII is stripped
-- A promoted sound seed plays in the ambience and the contributor sees "Your sound is part of…"
+## M9 — Journal
+**Build (after the Journal spec is written):** the Journal screen; the age gate; Journal terms; text and voice entries (voice via a signed URL); the `journal-entry` and `my-entries` endpoints; lineage statuses and the "your idea grew" moment; questions gated by completion; the check-in card. **Admin:** the Journal inbox (read, tag, link to revisions) and the questions editor.
+**Accept when:** an E2E submits a voice entry → it syncs → an editor links it to a revision and publishes a release → the app shows Grown → walking to the fragment plays the growth moment exactly once; an under-13 device can't submit; PII is stripped.
 
-## M10 — Crossroads and attestation
-**Build:** `attest`; the `vote` and `my-votes` endpoints; fork markers and the Fork sheet with place-gating (heard anchor, within radius, open); hidden tallies; the admin Crossroads builder with close → confirm → decided; dependent revisions and music cues unlocking; canon blocks.
-**Accept when:** a vote is refused off site, before hearing the anchor, or without attestation; a vote can be changed until close; after deciding, the dependent revision plays and the music `outcome` cue activates in the Simulator and on device.
+## M10 — *(removed)*
+Crossroads and attestation were removed by ADR 0004. The number is kept so later milestones keep their names.
 
 ## M11 — Analytics and dashboard
-**Build:** the event queue and `ingest-events`; every event in TECH_SPEC §8; dashboard views and pages (TECH_SPEC §9) with CSV; `delete-device-data`.
-**Accept when:** dashboard numbers match a fixture dataset, including the ownership-return comparison; delete removes every server row and voice file for the device.
+**Build:** the event queue and `ingest-events`; every event in TECH_SPEC §8; dashboard views and pages (TECH_SPEC §9) with CSV; `delete-device-data`; `export-archive`.
+**Accept when:** dashboard numbers match a fixture dataset, including the contribution-return comparison; delete removes every server row and voice file for the device.
 
 ## M12 — Hardening, accessibility and field test
-**Build:** Sentry scrubbing; the accessibility checklist (DESIGN §6); privacy policy and seed terms (from counsel); store assets; the final brand animation; Spanish strings if approved; a field-test script per Grove.
-**Accept when:** field tests at the demo site and one real Grove pass on iOS and Android (phone in pocket: triggers, reveals, music, Hush, a seed planted by voice); TestFlight and Play internal builds are distributed.
+**Build:** Sentry scrubbing; the accessibility checklist (DESIGN §6); privacy policy and Journal terms (from counsel); store assets; the final brand animation; a field-test script per Grove (day and night).
+**Accept when:** field tests at the demo site and one real Grove pass on iOS and Android, by day and by night (phone in pocket: triggers, unlocks, a physical-marker scan, music, Hush, a voice Journal entry); TestFlight and Play internal builds are distributed.
 
 ---
 
 ## Definition of done (every PR)
 - Strict types; pure logic in `packages/shared` with tests
 - No location, free text or audio in telemetry; no new data-collecting SDKs
-- Strings in i18n; accessibility labels; reduced motion respected
+- Strings in i18n; accessibility labels and alt text; reduced motion respected; distances in feet and miles
 - Docs updated when behavior changes

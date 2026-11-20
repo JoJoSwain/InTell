@@ -4,6 +4,13 @@
 **Date:** 2026-11-19
 **Deciders:** JoJo (product owner), architect (Claude)
 **Amends:** PRODUCT_SPEC §1 and FR-1/FR-2, DATA_MODEL §4, §11, §12.1, §14 and §15, JOURNAL_SPEC §3, AUDIO_SPEC §4.2
+**Amended by:** ADR 0004 (2026-11-20):
+- **Prerequisites may cross groves** (one story world). The same-grove guard is removed; the cycle check and its lock are story-wide.
+- **Completion is per Story Contingency.** A prerequisite member is satisfied only if the device completed a revision at or after that fragment's latest contingency revision. Corrections carry completion forward. This replaces §3's "a later revision doesn't undo it". Fragments already revealed stay revealed.
+- **Completing either time version** (Day or Night) of a fragment satisfies prerequisites.
+- **`protected` is now `physical`**, and physical fragments are shown on the map; `unmarked` is removed. §5's note about protected coordinates no longer applies.
+- **Crossroads are removed**, so nothing anchors votes; questions anchor on completion.
+- **Revocation** (§6) no longer exists as a rights process; the same reasoning applies to unpublishing.
 
 ## Context
 The v2 specs model a Grove's story as a strict tree. Every Branch has one Root parent, every Leaf has one Branch parent, Roots are always visible, and a child is revealed when its parent is heard to 80%. JoJo's test chain (the Farmington Bird Refuge table, 2026-11-19) and his intent for the product need things a tree can't express:
