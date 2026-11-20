@@ -2,6 +2,9 @@
 begin;
 select plan(4);
 
+-- Guard requires service_role or editor/admin (S2).
+select set_config('request.jwt.claim.role', 'service_role', true);
+
 insert into public.fragment_revisions (
   id, fragment_id, revision_no, ring_id, status, content_note, change_note
 ) values (

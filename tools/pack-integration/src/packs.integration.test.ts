@@ -198,8 +198,10 @@ describe("M2b pack integration", () => {
     const pub = await fetch(
       `${url}/storage/v1/object/public/public-media/a/${DEMO.frag4AssetSha}.wav`,
     );
-    // Storage may return 404 or 400 for a missing public object
-    expect([400, 404]).toContain(pub.status);
+    // N4: not 2xx and body says not found (local Storage often 400 "Object not found")
+    expect(pub.ok).toBe(false);
+    const pubBody = await pub.text();
+    expect(pubBody.toLowerCase()).toMatch(/not found|object not found/);
 
     // R2: every stored grove manifest free of revoked revision id / transcript
     const { data: files } = await svc.storage
@@ -275,6 +277,35 @@ describe("M2b pack integration", () => {
     delete bodyA.builtAt;
     const h1 = digest(canonicalJson(bodyA));
     expect(h1).toBe(before.contentSha);
+  }, 60_000);
+
+  it("forged service_role JWT is rejected by internal functions (S3)", async () => {
+    const header = Buffer.from(
+      JSON.stringify({ alg: "none", typ: "JWT" }),
+    ).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        role: "service_role",
+        iss: "supabase",
+        ref: "forged",
+      }),
+    ).toString("base64url");
+    const forged = `${header}.${payload}.fakesig`;
+
+    for (const name of ["build-pack", "purge-assets", "run-jobs"] as const) {
+      const body =
+        name === "build-pack"
+          ? { grove_id: DEMO.groveId, reason: "forged" }
+          : {};
+      const res = await invoke(name, body, forged);
+      expect(
+        [401, 403].includes(res.status),
+        `${name} got ${res.status}, expected 401 or 403`,
+      ).toBe(true);
+    }
+
+    const ok = await invoke("run-jobs", {});
+    expect(ok.status).toBe(200);
   }, 60_000);
 
   it("writer cannot publish; editor can call publish endpoint auth", async () => {

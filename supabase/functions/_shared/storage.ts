@@ -47,36 +47,45 @@ export async function uploadManifest(
   return { path, manifestSha256, bytes: bytes.byteLength };
 }
 
+/** List all object names under a prefix, paginating until exhausted (N3). */
+export async function listAllNames(
+  client: SupabaseClient,
+  prefix: string,
+  pageSize = 1000,
+): Promise<string[]> {
+  const names: string[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await client.storage.from("public-media").list(prefix, {
+      limit: pageSize,
+      offset,
+    });
+    if (error) throw new Error(`list ${prefix}: ${error.message}`);
+    const batch = data ?? [];
+    for (const item of batch) {
+      if (item.name) names.push(item.name);
+    }
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+  return names;
+}
+
 export async function deletePublicPrefixExcept(
   client: SupabaseClient,
   prefix: string,
   keepPaths: Set<string>,
 ): Promise<string[]> {
   const deleted: string[] = [];
-  const { data: list, error } = await client.storage.from("public-media").list(prefix, {
-    limit: 1000,
-  });
-  if (error) throw new Error(`list ${prefix}: ${error.message}`);
-  for (const item of list ?? []) {
-    if (!item.name) continue;
-    const full = `${prefix}/${item.name}`;
+  const names = await listAllNames(client, prefix);
+  for (const name of names) {
+    const full = `${prefix}/${name}`;
     if (keepPaths.has(full)) continue;
     const { error: rm } = await client.storage.from("public-media").remove([full]);
     if (rm) throw new Error(`remove ${full}: ${rm.message}`);
     deleted.push(full);
   }
   return deleted;
-}
-
-export async function listPublicAudioShas(client: SupabaseClient): Promise<string[]> {
-  const { data, error } = await client.storage.from("public-media").list("a", { limit: 10000 });
-  if (error) throw new Error(`list a/: ${error.message}`);
-  const shas: string[] = [];
-  for (const obj of data ?? []) {
-    const m = /^([a-f0-9]{64})\./i.exec(obj.name ?? "");
-    if (m) shas.push(m[1].toLowerCase());
-  }
-  return shas;
 }
 
 function mimeForExt(ext: string): string {

@@ -1,17 +1,69 @@
 # M2b report — packs, edge functions, jobs, CI
 
 **Branch:** `m2b-packs`  
-**Status:** acceptance green; **no PR** (awaiting JoJo review of this report)  
-**Review:** `docs/briefs/M2b-plan-review.md` (wins on conflicts)
+**Status:** acceptance + security pass green; **no PR** (awaiting JoJo review)  
+**Reviews:** `docs/briefs/M2b-plan-review.md` (plan); `docs/briefs/M2b-report-review.md` (report — S1–S3 / N1–N4 addressed)
 
 ## Commands
 
 | Command | Result |
 |---|---|
 | `pnpm db:setup-local` | PASS (reset + Vault + seed-media upload + edge sync) |
-| `pnpm exec supabase test db` | PASS — **20 files / 82 tests** |
-| `pnpm test:integration` | PASS — **9/9** (with `supabase functions serve --no-verify-jwt`) |
+| `pnpm exec supabase test db` | PASS — **23 files / 97 tests** |
+| `pnpm test:integration` | PASS — **10/10** with `supabase functions serve` (**JWT verification on**) |
 | `pnpm lint && pnpm typecheck && pnpm test` | PASS |
+
+## Security pass (report review)
+
+### S1–S3 / N1–N4
+
+| ID | Fix |
+|---|---|
+| **S1** | New migration: `fn_pack_geog_geojson` → `service_role` only; protected `fragment_point` → `null`. pgTAP `101_pack_geog_guards.test.sql`. |
+| **S2** | `fn_require_editor_or_service()`; guards on `fn_publish_commit` / `fn_unpublish_commit`; `fn_enqueue_purge_reconcile` → `service_role` only. pgTAP `102_publish_unpublish_role_guards.test.sql`. |
+| **S3** | `[functions.*] verify_jwt = true` in `config.toml`; removed `--no-verify-jwt` from CI; `requireServiceRole` constant-time compares bearer to `SUPABASE_SERVICE_ROLE_KEY`. Integration: forged token → 401. |
+| **N1** | CI reads `$SERVICE_ROLE_KEY` from `supabase status -o env` (no hardcoded key). |
+| **N2** | `110_definer_grants.test.sql` allowlist (below). |
+| **N3** | `listAllNames` paginates Storage lists; removed unused `listPublicAudioShas` / `void publicShas`. |
+| **N4** | Integration asserts non-2xx + body “not found”; TECH_SPEC §3.4 notes devices treat 400/404 alike. |
+
+### N2 allowlist (security definer, executable by `anon` and/or `authenticated`)
+
+```
+fn_asset_is_playable(p_asset_id uuid, p_timezone text)
+fn_cue_is_playable(p_cue_id uuid)
+fn_current_revision(p_fragment_id uuid)
+fn_date_unexpired(p_expires_on date, p_timezone text)
+fn_enqueue_purge_asset(p_asset_sha text)
+fn_enqueue_rebuild_pack(p_grove_id uuid, p_region_id uuid)
+fn_layer_assets_playable(p_layer_id uuid)
+fn_must_precede(p_earlier uuid, p_later uuid)
+fn_publish_check(p_entity text, p_ids uuid[])
+fn_publish_commit(p_entity text, p_ids uuid[])
+fn_region_today(p_timezone text)
+fn_require_editor_or_service()
+fn_revision_is_playable(p_revision_id uuid)
+fn_site_ok(p_site_id uuid)
+fn_unpublish_commit(p_entity text, p_ids uuid[])
+get_pack_index()
+has_role(roles staff_role[])
+```
+
+`fn_is_editor_or_admin` stays (security **invoker**, not on this list). `fn_pack_geog_geojson` is service_role-only (not on this list).
+
+### Forged-token / direct-RPC results
+
+```
+forged build-pack -> 401
+forged purge-assets -> 401
+forged run-jobs -> 401
+real service run-jobs -> 200
+```
+
+```
+101_pack_geog_guards.test.sql ............... ok
+102_publish_unpublish_role_guards.test.sql .. ok
+```
 
 ## Import-map checks (review §10 #4 / plan §2)
 
@@ -32,17 +84,18 @@ Verified on **Windows** (this machine). CI runs the same check + serve path.
 
 ## Functions serve discovery (review #9)
 
-`supabase start` alone does **not** serve `supabase/functions/*` on CLI 3.2.0 here. CI and local integration use a parallel `pnpm exec supabase functions serve --no-verify-jwt`.
+`supabase start` alone does **not** serve `supabase/functions/*` on CLI 3.2.0 here. CI and local integration use a parallel `pnpm exec supabase functions serve` with **JWT verification on** (`verify_jwt = true` in `config.toml`).
 
 ## Integration cases
 
 1. **Publish / build demo grove** → `GrovePack` validates; asset URLs resolve; frag9 has no coords / no `markerCode`.
-2. **Revoke Demo Storyteller consent (R5)** → frag4 revision gone; frag4 asset public URL 400/404; **R2:** every stored grove manifest free of frag4 id / transcript.
+2. **Revoke Demo Storyteller consent (R5)** → frag4 revision gone; frag4 asset public URL missing (non-2xx + “not found”); **R2:** every stored grove manifest free of frag4 id / transcript.
 3. **Decide crossroads** → frag10 rev2 present.
 4. **`publish_at`** → future excluded; past included after rebuild.
 5. **No-op rebuild (R4)** → `content_sha256` equal; version unchanged.
 6. **Auth** → writer publish 403; editor not 403.
 7. **Region pack** → validates; `landcover: null`; assets in keep-set path.
+8. **Forged service_role JWT (S3)** → 401 on `build-pack` / `purge-assets` / `run-jobs`; real service key → 200.
 
 ### Consecutive demo grove `content_sha256`
 
@@ -62,6 +115,7 @@ Both consecutive builds reported the same content hash (second was noop, no vers
 
 - `20261120060845_m2b_pack_index_unpublish.sql` — `get_pack_index`, `fn_unpublish_commit`, `fn_enqueue_purge_reconcile`, `fn_pack_geog_geojson`, `fn_is_editor_or_admin`
 - `20261120060846_m2b_pack_builds_content_sha.sql` — `pack_builds.content_sha256`
+- `20261120063146_m2b_security_definer_guards.sql` — S1/S2 guards (service_role geog; editor/service publish/unpublish; purge reconcile service_role-only)
 
 ## Seed (R5)
 
@@ -76,4 +130,4 @@ Second contributor **Demo Storyteller** + consent attached only to frag4 revisio
 ## Open questions
 
 1. Confirm CI `RUN_JOBS_URL` once the `db` job runs on GitHub (host.docker.internal vs Kong).
-2. Whether `fn_is_editor_or_admin` should stay long-term or admin M3 should call `has_role` with a typed RPC client.
+2. Whether `fn_is_editor_or_admin` should stay long-term or admin M3 should call `has_role` with a typed RPC client. (**Answer from report review:** keep it.)
