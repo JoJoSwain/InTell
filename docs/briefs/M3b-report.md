@@ -93,8 +93,8 @@ From `apps/admin/README.md`:
    - Disable sign-ups; anonymous sign-ins off; MFA off.
    - Minimum password length **10**.
    - Leaked-password protection, session timeouts and backups: **not on Free** — turn on when staging upgrades to Pro, before real content.
-   - Site URL: production admin URL (`https://intell-admin.vercel.app`).
-   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob for this project (`https://intell-admin-*.vercel.app/**`, adjusted to the exact pattern Vercel shows for the team).
+   - Site URL: production admin URL (`https://intell-admin.replaceplace.com`).
+   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob for this project (`https://intell-admin-*-replaceplace.vercel.app/**`, adjusted to the exact pattern Vercel shows for the team).
    - SMTP (provider-agnostic): either a dedicated sending mailbox (e.g. `no-reply@replaceplace.com`) on `smtp.gmail.com` port 465 with an app password, or the Workspace SMTP relay (`smtp-relay.gmail.com`). Configure values only in the dashboard.
 6. **Bootstrap the first admin (A4)** — no service-key script:
    1. Supabase dashboard → **Authentication → Users → Invite user** (yourself).
@@ -152,7 +152,7 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 ## 9. Open questions / JoJo follow-ups
 
 1. Staging dashboard: Auth redirect URLs (A3), paste email templates (R3), first-admin Create user + SQL (A4), `db push`, `functions deploy`. SMTP already done (2026-11-20).
-2. Exact Vercel preview hostname glob from the dashboard (README keeps `https://intell-admin-*.vercel.app/**` as expected form).
+2. Exact Vercel preview hostname glob from the dashboard (README keeps `https://intell-admin-*-replaceplace.vercel.app/**` as expected form).
 3. Optional: confirm Functions region `cle1` in the Vercel UI.
 
 ---

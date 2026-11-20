@@ -88,3 +88,38 @@ Today `/auth/callback` does `new URL(next, origin)`. With `next=https://evil.exa
 - Which nits were fixed and which were deferred
 
 **Then stop for verification. Do not start M3c.**
+
+---
+
+## Verification (2026-11-20, head `7b33a12`)
+
+**Verified. M3b is complete, and PR #8 may merge.**
+
+- **R1:** done.
+  - `/auth/confirm` accepts only `invite` and `recovery`, runs `verifyOtp` server-side, sets the session cookies on the redirect and sends failures to sign-in with the link message.
+  - Both templates are committed and wired in `config.toml`.
+  - `/auth/callback` is deleted, and password reset now works from any device.
+  - Set password handles a missing session.
+  - Re-invite resends to an unconfirmed address; a confirmed address gets a 409 that the Staff page shows.
+  - Playwright follows the real Mailpit emails: invite, recovery, reused link and re-invite.
+- **R2:** done. `sanitizeNext` has unit and e2e coverage. `/auth/confirm` also pins every redirect to the request's own host, so even a URL-parser trick can't leave the site.
+- **R3:** done. The bootstrap uses Create new user with Auto Confirm, and the template-paste step is in place.
+- **N1–N3:** fixed (`20261121120003_m3b_review_nits.sql`; Active and Inactive labels).
+
+**Architect correction, committed with this verification:** the production admin is **`https://intell-admin.replaceplace.com`**, a custom domain on the `intell-admin` Vercel project. `intell-admin.vercel.app` belongs to someone else; Vercel's default for our project is `intell-admin-ashy.vercel.app`. In `apps/admin/README.md` and `M3b-report.md`, updated:
+- the Site URL
+- the Redirect URLs, restoring the `-replaceplace` preview glob that the fix commit had reverted
+- the Maps key note
+- the Vercel domain step
+
+**Staging state (JoJo, 2026-11-20), already matching the README:**
+- custom SMTP through the Workspace mailbox
+- SPF, DKIM (authenticating) and DMARC (`p=none`) on replaceplace.com
+- CNAME `intell-admin` pointing to Vercel, with the domain valid
+- the Google Maps admin key restricted to the new domain and localhost
+- Site URL and the three redirect URLs set
+- public sign-ups off, minimum password length 10
+
+**Note for M3c:** maps won't load on preview deployments because of the key's website restriction. Test map work locally or on production.
+
+**Next:** JoJo merges PR #8. Then the staging go-live steps: `db push`, `functions deploy`, paste the templates, Vercel env vars, bootstrap the first admin, smoke test. After that, the M3c plan.
