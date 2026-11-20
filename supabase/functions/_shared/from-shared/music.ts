@@ -8,16 +8,6 @@ export const MusicCondition = z
     heardAll: z.array(z.string().uuid()).optional(),
     heardAny: z.array(z.string().uuid()).optional(),
     notHeard: z.array(z.string().uuid()).optional(),
-    ringIds: z.array(z.string().uuid()).optional(),
-    outcome: z
-      .object({
-        crossroadsId: z.string().uuid(),
-        optionId: z.string().uuid(),
-      })
-      .optional(),
-    timeWindows: z
-      .array(z.enum(["dawn", "day", "dusk", "night"]))
-      .optional(),
     narrationPlaying: z.boolean().optional(),
   })
   .strict();

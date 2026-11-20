@@ -8,6 +8,7 @@ const Body = z
   .object({
     grove_id: z.string().uuid().optional(),
     region_id: z.string().uuid().optional(),
+    release_id: z.string().uuid().optional(),
     reason: z.string().optional(),
   })
   .refine((b) => !!(b.grove_id || b.region_id), {
@@ -29,10 +30,14 @@ Deno.serve(async (req) => {
   const client = serviceClient();
   const results: unknown[] = [];
   if (body.grove_id) {
-    results.push(await buildGrovePack(client, body.grove_id, body.reason));
+    results.push(
+      await buildGrovePack(client, body.grove_id, body.reason, body.release_id),
+    );
   }
   if (body.region_id) {
-    results.push(await buildRegionPack(client, body.region_id, body.reason));
+    results.push(
+      await buildRegionPack(client, body.region_id, body.reason, body.release_id),
+    );
   }
   return json({ ok: true, results });
 });
