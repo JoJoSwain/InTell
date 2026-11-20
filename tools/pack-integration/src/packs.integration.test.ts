@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { describe, expect, it, beforeAll } from "vitest";
 import { GrovePack, RegionPack, canonicalJson } from "@intell/shared";
@@ -34,30 +35,41 @@ async function invoke(
   });
 }
 
-async function runJobs(): Promise<void> {
-  const res = await invoke("run-jobs", {});
-  expect(res.status).toBe(200);
-  // drain a few times for rebuild then purge
-  for (let i = 0; i < 5; i++) {
-    await invoke("run-jobs", {});
+async function queuedJobCount(): Promise<number> {
+  const { count, error } = await svc
+    .from("jobs")
+    .select("*", { count: "exact", head: true })
+    .in("status", ["queued", "running"]);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+async function drainJobs(maxRounds = 25): Promise<void> {
+  for (let i = 0; i < maxRounds; i++) {
+    const pending = await queuedJobCount();
+    if (pending === 0) break;
+    const res = await invoke("run-jobs", {});
+    expect(res.status).toBe(200);
   }
 }
 
-async function fetchLatestGrovePack(): Promise<{
+async function fetchLiveGrovePack(groveId: string = DEMO.groveId): Promise<{
   pack: unknown;
   version: number;
   path: string;
   contentSha: string | null;
+  releaseId: string | null;
 }> {
   const { data: build, error } = await svc
     .from("pack_builds")
     .select("*")
     .eq("scope", "grove")
-    .eq("scope_id", DEMO.groveId)
+    .eq("scope_id", groveId)
+    .eq("live", true)
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error || !build) throw new Error(`no grove pack: ${error?.message}`);
+  if (error || !build) throw new Error(`no live grove pack: ${error?.message}`);
   const { data: blob, error: dl } = await svc.storage
     .from("public-media")
     .download(build.manifest_path);
@@ -68,11 +80,58 @@ async function fetchLatestGrovePack(): Promise<{
     version: build.version,
     path: build.manifest_path,
     contentSha: build.content_sha256,
+    releaseId: build.release_id,
   };
 }
 
+async function fetchLiveRegionPack(): Promise<{
+  pack: unknown;
+  version: number;
+}> {
+  const { data: build, error } = await svc
+    .from("pack_builds")
+    .select("*")
+    .eq("scope", "region")
+    .eq("scope_id", DEMO.regionId)
+    .eq("live", true)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !build) throw new Error(`no live region pack: ${error?.message}`);
+  const { data: blob, error: dl } = await svc.storage
+    .from("public-media")
+    .download(build.manifest_path);
+  if (dl || !blob) throw new Error(dl?.message ?? "download failed");
+  return { pack: JSON.parse(await blob!.text()), version: build.version };
+}
+
+async function indexGroveVersion(groveId: string): Promise<number | null> {
+  const { data, error } = await anon.rpc("get_pack_index");
+  if (error) throw new Error(error.message);
+  const rows = data as { scope: string; id: string; version: number }[];
+  const row = rows.find((r) => r.scope === "grove" && r.id === groveId);
+  return row?.version ?? null;
+}
+
+async function copyReleaseItems(fromReleaseId: string, toReleaseId: string): Promise<void> {
+  const { data, error } = await svc
+    .from("release_items")
+    .select("entity, entity_id")
+    .eq("release_id", fromReleaseId);
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("no release_items to copy");
+  const { error: ins } = await svc.from("release_items").insert(
+    data.map((row) => ({
+      release_id: toReleaseId,
+      entity: row.entity,
+      entity_id: row.entity_id,
+    })),
+  );
+  if (ins) throw new Error(ins.message);
+}
+
 async function ensureEditor(): Promise<{ client: SupabaseClient; jwt: string }> {
-  const email = `m2b-editor-${Date.now()}@test.local`;
+  const email = `m3a-editor-${Date.now()}@test.local`;
   const password = "test-password-editor-1";
   const { data: created, error } = await svc.auth.admin.createUser({
     email,
@@ -82,13 +141,12 @@ async function ensureEditor(): Promise<{ client: SupabaseClient; jwt: string }> 
   if (error || !created.user) throw new Error(error?.message ?? "createUser");
   const { error: staffErr } = await svc.from("staff").insert({
     user_id: created.user.id,
-    display_name: "M2b Editor",
+    display_name: "M3a Editor",
     role: "editor",
     active: true,
   });
   if (staffErr) throw new Error(`staff insert: ${staffErr.message}`);
 
-  // Sign in with a fresh anon client so we don't mutate the service client's session
   const authClient = createClient(url!, anonKey!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -111,175 +169,167 @@ async function ensureEditor(): Promise<{ client: SupabaseClient; jwt: string }> 
   return { client, jwt };
 }
 
-describe("M2b pack integration", () => {
-  beforeAll(async () => {
-    // Build demo grove + region packs from seeded published content
-    const g = await invoke("build-pack", { grove_id: DEMO.groveId, reason: "integration" });
-    const body = await g.json();
-    if (!g.ok) throw new Error(`build grove: ${JSON.stringify(body)}`);
-    const r = await invoke("build-pack", {
-      region_id: DEMO.regionId,
-      reason: "integration",
-    });
-    if (!r.ok) throw new Error(`build region: ${await r.text()}`);
-    await runJobs();
-  }, 120_000);
+async function waitForPublishedSeed(timeoutMs = 180_000): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    await drainJobs();
+    const { data: rel } = await svc
+      .from("releases")
+      .select("status")
+      .eq("id", DEMO.publishedReleaseId)
+      .single();
+    if (rel?.status === "published") {
+      const { data: live } = await svc
+        .from("pack_builds")
+        .select("id")
+        .eq("scope", "grove")
+        .eq("scope_id", DEMO.groveId)
+        .eq("live", true)
+        .limit(1)
+        .maybeSingle();
+      if (live) return;
+    }
+    if (rel?.status === "publishing") {
+      await invoke("build-pack", {
+        grove_id: DEMO.groveId,
+        release_id: DEMO.publishedReleaseId,
+        reason: "integration-bootstrap",
+      });
+      await invoke("build-pack", {
+        grove_id: DEMO.secondGroveId,
+        release_id: DEMO.publishedReleaseId,
+        reason: "integration-bootstrap",
+      });
+      await invoke("build-pack", {
+        region_id: DEMO.regionId,
+        release_id: DEMO.publishedReleaseId,
+        reason: "integration-bootstrap",
+      });
+      await invoke("run-jobs", {});
+    }
+  }
+  const { data: rel } = await svc
+    .from("releases")
+    .select("status")
+    .eq("id", DEMO.publishedReleaseId)
+    .single();
+  throw new Error(
+    `seed release ${DEMO.publishedReleaseId} not ready (status=${rel?.status}); run db reset and supabase functions serve`,
+  );
+}
 
-  it("demo grove pack validates and has no forbidden fields", async () => {
-    const { pack } = await fetchLatestGrovePack();
+describe.sequential("M3a pack integration", () => {
+  beforeAll(async () => {
+    await waitForPublishedSeed();
+  }, 240_000);
+
+  it("demo grove pack validates (schema 2) and omits forbidden fields", async () => {
+    const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    const frag9 = parsed.fragments.find(
-      (f) => f.id === "aaaaaaaa-bbbb-4ccc-8ddd-000000000038",
-    );
-    expect(frag9?.visibility).toBe("protected");
-    expect(frag9?.lat).toBeUndefined();
-    expect(frag9?.lng).toBeUndefined();
-    expect(JSON.stringify(pack)).not.toMatch(/DEMO-001|markerCode|marker_code/);
+    expect(parsed.schema).toBe(2);
+    const frag9 = parsed.fragments.find((f) => f.id === DEMO.frag9Id);
+    expect(frag9?.visibility).toBe("physical");
+    expect(frag9?.lat).toBeDefined();
+    expect(frag9?.lng).toBeDefined();
+    expect(frag9?.radiusM).toBeUndefined();
+    expect(frag9?.markerHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(pack)).not.toMatch(/DEMO-001|markerCode|marker_code/i);
+    expect(JSON.stringify(pack)).not.toMatch(/storyNotes|writer_notes/i);
   });
 
   it("asset URLs resolve for pack assets", async () => {
-    const { pack } = await fetchLatestGrovePack();
+    const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    for (const a of parsed.assets.slice(0, 5)) {
-      const path = `a/${a.sha}.${a.ext}`;
+    for (const a of parsed.assets.slice(0, 8)) {
+      const prefix = a.kind === "image" ? "i" : "a";
+      const path = `${prefix}/${a.sha}.${a.ext}`;
       const { data, error } = await anon.storage.from("public-media").download(path);
       expect(error, path).toBeNull();
       expect(data).toBeTruthy();
     }
   });
 
-  it("region pack validates (landcover nullable)", async () => {
-    const { data: build } = await svc
-      .from("pack_builds")
-      .select("*")
-      .eq("scope", "region")
-      .eq("scope_id", DEMO.regionId)
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    expect(build).toBeTruthy();
-    const { data: blob } = await svc.storage
-      .from("public-media")
-      .download(build!.manifest_path);
-    const pack = JSON.parse(await blob!.text());
+  it("region pack validates (schema 2, landcover nullable)", async () => {
+    const { pack } = await fetchLiveRegionPack();
     const parsed = RegionPack.parse(pack);
+    expect(parsed.schema).toBe(2);
     expect(parsed.landcover).toBeNull();
   });
 
-  it("get_pack_index lists published grove for anon", async () => {
+  it("get_pack_index lists only live groves", async () => {
     const { data, error } = await anon.rpc("get_pack_index");
     expect(error).toBeNull();
-    const rows = data as { scope: string; id: string }[];
-    expect(rows.some((r) => r.scope === "grove" && r.id === DEMO.groveId)).toBe(
+    const rows = data as { scope: string; id: string; version: number }[];
+    expect(rows.some((r) => r.scope === "grove" && r.id === DEMO.groveId)).toBe(true);
+    expect(rows.some((r) => r.scope === "grove" && r.id === DEMO.secondGroveId)).toBe(
       true,
     );
+    for (const groveId of [DEMO.groveId, DEMO.secondGroveId]) {
+      const idxVer = rows.find((r) => r.scope === "grove" && r.id === groveId)?.version;
+      const live = await fetchLiveGrovePack(groveId);
+      expect(idxVer).toBe(live.version);
+    }
   });
 
-  it("revoking storyteller consent drops frag4 revision; asset 404; no transcript in any manifest", async () => {
-    await svc
-      .from("consents")
-      .update({
-        status: "revoked",
-        revoked_on: new Date().toISOString().slice(0, 10),
-        revoked_reason: "integration",
-      })
-      .eq("id", DEMO.storytellerConsentId);
-
-    await runJobs();
-    // force rebuild + purge
-    await invoke("build-pack", { grove_id: DEMO.groveId, reason: "after-revoke" });
-    await invoke("purge-assets", {});
-
-    const { pack } = await fetchLatestGrovePack();
+  it("contingency bumps contingencyRevisionNo in pack; correction does not", async () => {
+    const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    expect(parsed.revisions.some((r) => r.id === DEMO.frag4RevId)).toBe(false);
-    expect(parsed.assets.some((a) => a.sha === DEMO.frag4AssetSha)).toBe(false);
+    const frag4Rev = parsed.revisions.find((r) => r.id === DEMO.frag4Rev2Id);
+    const frag10Rev = parsed.revisions.find((r) => r.id === DEMO.frag10R2Id);
+    expect(frag4Rev?.changeKind).toBe("correction");
+    expect(frag4Rev?.contingencyRevisionNo).toBe(1);
+    expect(frag10Rev?.changeKind).toBe("contingency");
+    expect(frag10Rev?.contingencyRevisionNo).toBe(2);
+  });
 
-    const pub = await fetch(
-      `${url}/storage/v1/object/public/public-media/a/${DEMO.frag4AssetSha}.wav`,
-    );
-    // N4: not 2xx and body says not found (local Storage often 400 "Object not found")
-    expect(pub.ok).toBe(false);
-    const pubBody = await pub.text();
-    expect(pubBody.toLowerCase()).toMatch(/not found|object not found/);
+  it("second grove lists cross-grove externalPrerequisites for Farmington frag1", async () => {
+    const { pack } = await fetchLiveGrovePack(DEMO.secondGroveId);
+    const parsed = GrovePack.parse(pack);
+    const ext = parsed.externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
+    expect(ext).toBeDefined();
+    expect(ext?.groveId).toBe(DEMO.groveId);
+    expect(ext?.contingencyRevisionNo).toBe(1);
+  });
 
-    // R2: every stored grove manifest free of revoked revision id / transcript
-    const { data: files } = await svc.storage
-      .from("public-media")
-      .list(`packs/grove/${DEMO.groveId}`, { limit: 100 });
-    for (const f of files ?? []) {
-      const { data: blob } = await svc.storage
-        .from("public-media")
-        .download(`packs/grove/${DEMO.groveId}/${f.name}`);
-      const text = await blob!.text();
-      expect(text).not.toContain(DEMO.frag4RevId);
-      expect(text).not.toMatch(/Parking Lot 1 narration/i);
+  it("portrait images are public in storage after publish reconcile", async () => {
+    for (const sha of [DEMO.portraitASha, DEMO.portraitBSha]) {
+      const { data: row } = await svc
+        .from("image_assets")
+        .select("is_public")
+        .eq("sha256", sha)
+        .single();
+      expect(row?.is_public).toBe(true);
+      const path = `i/${sha}.png`;
+      const { data, error } = await anon.storage.from("public-media").download(path);
+      expect(error, path).toBeNull();
+      expect(data).toBeTruthy();
     }
-  }, 180_000);
-
-  it("deciding crossroads includes frag10 rev2", async () => {
-    await svc
-      .from("crossroads")
-      .update({
-        status: "decided",
-        outcome_option_id: DEMO.optionAId,
-      })
-      .eq("id", DEMO.crossroadsId);
-    await invoke("build-pack", { grove_id: DEMO.groveId, reason: "after-decide" });
-    await runJobs();
-    const { pack } = await fetchLatestGrovePack();
+    const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    expect(parsed.revisions.some((r) => r.id === DEMO.frag10R2Id)).toBe(true);
-  }, 120_000);
-
-  it("publish_at gate: future excluded, past included after jobs", async () => {
-    const future = new Date(Date.now() + 86400_000).toISOString();
-    await svc
-      .from("fragment_revisions")
-      .update({ publish_at: future })
-      .eq("id", DEMO.frag8RevId);
-    await invoke("build-pack", { grove_id: DEMO.groveId, reason: "future-pub" });
-    let { pack } = await fetchLatestGrovePack();
-    expect(GrovePack.parse(pack).revisions.some((r) => r.id === DEMO.frag8RevId)).toBe(
-      false,
-    );
-
-    const past = new Date(Date.now() - 3600_000).toISOString();
-    await svc
-      .from("fragment_revisions")
-      .update({ publish_at: past })
-      .eq("id", DEMO.frag8RevId);
-    // enqueue via SQL helper path: direct rebuild
-    await invoke("build-pack", { grove_id: DEMO.groveId, reason: "past-pub" });
-    ({ pack } = await fetchLatestGrovePack());
-    expect(GrovePack.parse(pack).revisions.some((r) => r.id === DEMO.frag8RevId)).toBe(
-      true,
-    );
-  }, 120_000);
+    expect(parsed.characters.some((c) => c.portraitSha === DEMO.portraitASha)).toBe(true);
+  });
 
   it("no-op rebuild: content_sha256 equal, version unchanged", async () => {
-    const before = await fetchLatestGrovePack();
+    const before = await fetchLiveGrovePack();
     const res = await invoke("build-pack", {
       grove_id: DEMO.groveId,
       reason: "noop",
     });
     const body = await res.json();
     expect(res.ok).toBe(true);
-    const after = await fetchLatestGrovePack();
+    const after = await fetchLiveGrovePack();
     expect(after.contentSha).toBe(before.contentSha);
     expect(after.version).toBe(before.version);
     expect(JSON.stringify(body)).toMatch(/noop|true/);
-    // two consecutive content hashes equal
     const digest = (s: string) =>
       createHash("sha256").update(s, "utf8").digest("hex");
     const bodyA = { ...(after.pack as object) } as Record<string, unknown>;
     delete bodyA.packVersion;
     delete bodyA.builtAt;
-    const h1 = digest(canonicalJson(bodyA));
-    expect(h1).toBe(before.contentSha);
+    expect(digest(canonicalJson(bodyA))).toBe(before.contentSha);
   }, 60_000);
 
-  it("forged service_role JWT is rejected by internal functions (S3)", async () => {
+  it("forged service_role JWT is rejected by internal functions", async () => {
     const header = Buffer.from(
       JSON.stringify({ alg: "none", typ: "JWT" }),
     ).toString("base64url");
@@ -298,18 +348,13 @@ describe("M2b pack integration", () => {
           ? { grove_id: DEMO.groveId, reason: "forged" }
           : {};
       const res = await invoke(name, body, forged);
-      expect(
-        [401, 403].includes(res.status),
-        `${name} got ${res.status}, expected 401 or 403`,
-      ).toBe(true);
+      expect([401, 403].includes(res.status), `${name} → ${res.status}`).toBe(true);
     }
-
-    const ok = await invoke("run-jobs", {});
-    expect(ok.status).toBe(200);
+    expect((await invoke("run-jobs", {})).status).toBe(200);
   }, 60_000);
 
-  it("writer cannot publish; editor can call publish endpoint auth", async () => {
-    const writerEmail = `m2b-writer-${Date.now()}@test.local`;
+  it("writer cannot publish release; editor auth is not 403", async () => {
+    const writerEmail = `m3a-writer-${Date.now()}@test.local`;
     const password = "test-password-writer-1";
     const { data: w, error: wErr } = await svc.auth.admin.createUser({
       email: writerEmail,
@@ -319,7 +364,7 @@ describe("M2b pack integration", () => {
     if (wErr || !w.user) throw new Error(wErr?.message ?? "writer create");
     const { error: staffErr } = await svc.from("staff").insert({
       user_id: w.user.id,
-      display_name: "M2b Writer",
+      display_name: "M3a Writer",
       role: "writer",
       active: true,
     });
@@ -334,20 +379,303 @@ describe("M2b pack integration", () => {
     });
     if (wSign || !wSession.session) throw new Error(wSign?.message ?? "writer signIn");
     const writerJwt = wSession.session.access_token;
+
     const denied = await invoke(
       "publish",
-      { entity: "revision", ids: [DEMO.frag8RevId] },
+      { releaseId: DEMO.draftReleaseId },
       writerJwt,
     );
     expect(denied.status).toBe(403);
 
     const { jwt: editorJwt } = await ensureEditor();
-    const allowed = await invoke(
-      "publish",
-      { entity: "revision", ids: [DEMO.frag8RevId] },
-      editorJwt,
-    );
-    const allowedBody = await allowed.text();
-    expect(allowed.status, allowedBody).not.toBe(403);
+    const allowed = await invoke("publish", { release_id: DEMO.draftReleaseId }, editorJwt);
+    expect(allowed.status).not.toBe(403);
   }, 60_000);
+
+  it("staged edit does not leak into live pack until release includes it", async () => {
+    const staged = `STAGED-${Date.now()}`;
+    const { data: snapBefore } = await svc
+      .from("published_snapshots")
+      .select("data")
+      .eq("entity", "fragment")
+      .eq("entity_id", DEMO.frag1Id)
+      .single();
+
+    await svc
+      .from("fragments")
+      .update({ teaser: { en: staged } })
+      .eq("id", DEMO.frag1Id);
+
+    const { pack } = await fetchLiveGrovePack();
+    const parsed = GrovePack.parse(pack);
+    const frag = parsed.fragments.find((f) => f.id === DEMO.frag1Id);
+    expect(frag?.teaser.en).not.toBe(staged);
+    expect(frag?.teaser.en).toBe(
+      (snapBefore?.data as { teaser?: { en?: string } })?.teaser?.en,
+    );
+
+    const { data: snapAfter } = await svc
+      .from("published_snapshots")
+      .select("data")
+      .eq("entity", "fragment")
+      .eq("entity_id", DEMO.frag1Id)
+      .single();
+    expect(snapAfter?.data).toEqual(snapBefore?.data);
+  }, 60_000);
+
+  it("atomic go-live: index keeps prior live versions until publishing release completes", async () => {
+    const releaseId = randomUUID();
+    const vBefore1 = (await fetchLiveGrovePack(DEMO.groveId)).version;
+    const vBefore2 = (await fetchLiveGrovePack(DEMO.secondGroveId)).version;
+
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration atomic golive",
+      status: "draft",
+    });
+    await copyReleaseItems(DEMO.publishedReleaseId, releaseId);
+
+    await svc
+      .from("groves")
+      .update({ name: { en: `Golive-${Date.now()}` } })
+      .eq("id", DEMO.groveId);
+    await svc
+      .from("groves")
+      .update({ name: { en: `Nearby-${Date.now()}` } })
+      .eq("id", DEMO.secondGroveId);
+
+    const { jwt } = await ensureEditor();
+    const pub = await invoke("publish", { releaseId }, jwt);
+    expect(pub.ok, await pub.text()).toBe(true);
+
+    const { data: rel } = await svc
+      .from("releases")
+      .select("status")
+      .eq("id", releaseId)
+      .single();
+    expect(rel?.status).toBe("publishing");
+
+    const { data: pendingBuilds } = await svc
+      .from("pack_builds")
+      .select("live, version")
+      .eq("release_id", releaseId);
+    expect(pendingBuilds?.some((b) => b.live === false)).toBe(true);
+    expect(await indexGroveVersion(DEMO.groveId)).toBe(vBefore1);
+    expect(await indexGroveVersion(DEMO.secondGroveId)).toBe(vBefore2);
+
+    await drainJobs();
+
+    const { data: relAfter } = await svc
+      .from("releases")
+      .select("status")
+      .eq("id", releaseId)
+      .single();
+    expect(relAfter?.status).toBe("published");
+
+    const vAfter1 = (await fetchLiveGrovePack(DEMO.groveId)).version;
+    const vAfter2 = (await fetchLiveGrovePack(DEMO.secondGroveId)).version;
+    expect(vAfter1).toBeGreaterThanOrEqual(vBefore1);
+    expect(vAfter2).toBeGreaterThanOrEqual(vBefore2);
+    expect(await indexGroveVersion(DEMO.groveId)).toBe(vAfter1);
+    expect(await indexGroveVersion(DEMO.secondGroveId)).toBe(vAfter2);
+  }, 240_000);
+
+  it("Farmington frag1 contingency bumps externalPrerequisites on second grove", async () => {
+    const releaseId = randomUUID();
+    const newRevId = randomUUID();
+    const extBefore = GrovePack.parse(
+      (await fetchLiveGrovePack(DEMO.secondGroveId)).pack,
+    ).externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
+    expect(extBefore?.contingencyRevisionNo).toBe(1);
+
+    const { data: versions } = await svc
+      .from("revision_versions")
+      .select("language, time_window, narration_asset_id, transcript")
+      .eq("revision_id", DEMO.frag1RevId)
+      .limit(1);
+    const v0 = versions?.[0];
+    if (!v0) throw new Error("frag1 rev1 version missing");
+
+    await svc.from("fragment_revisions").insert({
+      id: newRevId,
+      fragment_id: DEMO.frag1Id,
+      revision_no: 2,
+      status: "draft",
+      change_kind: "contingency",
+      change_note: "integration contingency r2",
+    });
+    await svc.from("revision_versions").insert({
+      revision_id: newRevId,
+      language: v0.language,
+      time_window: v0.time_window,
+      narration_asset_id: v0.narration_asset_id,
+      transcript: "TEST transcript — frag1 r2 contingency narration tone.",
+    });
+
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration frag1 c2",
+      status: "draft",
+    });
+    await copyReleaseItems(DEMO.publishedReleaseId, releaseId);
+    await svc.from("release_items").insert({
+      release_id: releaseId,
+      entity: "revision",
+      entity_id: newRevId,
+    });
+
+    const { jwt } = await ensureEditor();
+    const pub = await invoke("publish", { release_id: releaseId }, jwt);
+    expect(pub.ok, await pub.text()).toBe(true);
+    await drainJobs();
+
+    const extAfter = GrovePack.parse(
+      (await fetchLiveGrovePack(DEMO.secondGroveId)).pack,
+    ).externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
+    expect(extAfter?.contingencyRevisionNo).toBe(2);
+    expect(extAfter?.contingencyRevisionNo).toBeGreaterThan(
+      extBefore!.contingencyRevisionNo,
+    );
+  }, 240_000);
+
+  it("scheduled release succeeds via fn_enqueue_due_releases and publish_release job", async () => {
+    const releaseId = randomUUID();
+    const stamp = `SchedOK-${Date.now()}`;
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration scheduled ok",
+      status: "scheduled",
+      publish_at: new Date(Date.now() - 60_000).toISOString(),
+    });
+    await copyReleaseItems(DEMO.publishedReleaseId, releaseId);
+    await svc.from("groves").update({ name: { en: stamp } }).eq("id", DEMO.groveId);
+
+    const { error: enqErr } = await svc.rpc("fn_enqueue_due_releases");
+    if (enqErr) throw new Error(enqErr.message);
+
+    const { data: jobs } = await svc
+      .from("jobs")
+      .select("kind, payload")
+      .eq("kind", "publish_release");
+    expect(
+      jobs?.some((j) => (j.payload as { release_id?: string })?.release_id === releaseId),
+    ).toBe(true);
+
+    const { data: relPub } = await svc
+      .from("releases")
+      .select("status")
+      .eq("id", releaseId)
+      .single();
+    expect(relPub?.status).toBe("publishing");
+
+    await drainJobs();
+
+    const { data: relAfter } = await svc
+      .from("releases")
+      .select("status")
+      .eq("id", releaseId)
+      .single();
+    expect(relAfter?.status).toBe("published");
+
+    const parsed = GrovePack.parse((await fetchLiveGrovePack()).pack);
+    expect(parsed.grove.name.en).toBe(stamp);
+  }, 240_000);
+
+  it("scheduled release check failure marks release failed", async () => {
+    const releaseId = randomUUID();
+    const portraitId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000140";
+    const prevAlt =
+      (
+        await svc.from("image_assets").select("alt_text").eq("id", portraitId).single()
+      ).data?.alt_text ?? null;
+
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration scheduled fail",
+      status: "scheduled",
+      publish_at: new Date(Date.now() - 60_000).toISOString(),
+    });
+    await svc.from("release_items").insert({
+      release_id: releaseId,
+      entity: "image",
+      entity_id: portraitId,
+    });
+    await svc
+      .from("image_assets")
+      .update({ alt_text: { en: "" } })
+      .eq("id", portraitId);
+
+    const { error: enqErr } = await svc.rpc("fn_enqueue_due_releases");
+    if (enqErr) throw new Error(enqErr.message);
+    await drainJobs();
+
+    const { data: rel } = await svc
+      .from("releases")
+      .select("status, last_check")
+      .eq("id", releaseId)
+      .single();
+    expect(rel?.status).toBe("failed");
+    const failures = (rel?.last_check as { failures?: { code?: string }[] })?.failures ?? [];
+    expect(failures.some((f) => f.code === "NO_ALT_TEXT")).toBe(true);
+
+    if (prevAlt) {
+      await svc.from("image_assets").update({ alt_text: prevAlt }).eq("id", portraitId);
+    }
+  }, 120_000);
+
+  it("forced build failure leaves release failed and prior live packs", async () => {
+    const releaseId = randomUUID();
+    const liveBefore = await fetchLiveGrovePack(DEMO.groveId);
+    const idxBefore = await indexGroveVersion(DEMO.groveId);
+
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration forced pack failure",
+      status: "draft",
+    });
+    await copyReleaseItems(DEMO.publishedReleaseId, releaseId);
+    await svc
+      .from("groves")
+      .update({ name: { en: `FailBuild-${Date.now()}` } })
+      .eq("id", DEMO.groveId);
+
+    const { jwt } = await ensureEditor();
+    const pub = await invoke("publish", { release_id: releaseId }, jwt);
+    expect(pub.ok, await pub.text()).toBe(true);
+
+    const bogusGrove = "00000000-0000-0000-0000-000000000099";
+    const { data: rebuildJobs, error: jobErr } = await svc
+      .from("jobs")
+      .select("id, payload")
+      .eq("kind", "rebuild_pack")
+      .eq("status", "queued");
+    if (jobErr) throw new Error(jobErr.message);
+    for (const job of rebuildJobs ?? []) {
+      const payload = job.payload as Record<string, unknown>;
+      if (payload.release_id === releaseId || payload.releaseId === releaseId) {
+        await svc
+          .from("jobs")
+          .update({
+            payload: { ...payload, grove_id: bogusGrove, region_id: undefined },
+          })
+          .eq("id", job.id);
+      }
+    }
+
+    for (let i = 0; i < 8; i++) {
+      await invoke("run-jobs", {});
+    }
+
+    const { data: rel } = await svc
+      .from("releases")
+      .select("status, last_check")
+      .eq("id", releaseId)
+      .single();
+    expect(rel?.status).toBe("failed");
+
+    const liveAfter = await fetchLiveGrovePack(DEMO.groveId);
+    expect(liveAfter.version).toBe(liveBefore.version);
+    expect(liveAfter.contentSha).toBe(liveBefore.contentSha);
+    expect(await indexGroveVersion(DEMO.groveId)).toBe(idxBefore);
+  }, 300_000);
 });
