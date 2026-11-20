@@ -4,7 +4,7 @@
 **Date:** 2026-11-19
 **Deciders:** JoJo (product owner), architect (Claude)
 **Amends:** PRODUCT_SPEC §1 and FR-1/FR-2, DATA_MODEL §4, §11, §12.1, §14 and §15, JOURNAL_SPEC §3, AUDIO_SPEC §4.2
-**Amended by:** ADR 0004 (2026-11-20):
+**Amended by:** ADR 0004 (2026-11-20). Where the body below conflicts with these amendments (same-grove prerequisites, tier default radii of 30/25/20 m, crossroads, protected or unmarked fragments, "a later revision doesn't undo completion"), the amendments and DATA_MODEL v3 win:
 - **Prerequisites may cross groves** (one story world). The same-grove guard is removed; the cycle check and its lock are story-wide.
 - **Completion is per Story Contingency.** A prerequisite member is satisfied only if the device completed a revision at or after that fragment's latest contingency revision. Corrections carry completion forward. This replaces §3's "a later revision doesn't undo it". Fragments already revealed stay revealed.
 - **Completing either time version** (Day or Night) of a fragment satisfies prerequisites.

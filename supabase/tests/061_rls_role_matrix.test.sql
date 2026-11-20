@@ -1,4 +1,4 @@
--- Staff role matrix: viewer/writer/sound/editor/admin/inactive + no-staff (R2).
+-- Staff role matrix: viewer/writer/sound/editor/admin/inactive + no-staff (M3a).
 begin;
 select plan(7);
 
@@ -23,14 +23,14 @@ insert into public.staff (user_id, display_name, role, active) values
   ('bbbbbbbb-bbbb-4ccc-8ddd-200000000006', 'Inactive', 'viewer', false);
 
 insert into public.fragment_revisions (
-  id, fragment_id, revision_no, status, content_note, change_note
+  id, fragment_id, revision_no, status, change_kind, change_note
 ) values (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000070',
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
   9,
   'draft',
-  '{}'::jsonb,
-  '{}'::jsonb
+  'contingency',
+  'rls test'
 );
 
 -- viewer cannot write groves (USING fails → 0 rows)
@@ -119,13 +119,13 @@ select is(
 
 reset role;
 
--- no-staff authenticated sees nothing (R2)
+-- no-staff authenticated sees nothing
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-200000000007', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
 select is(
-  (select count(*)::int from public.sites),
+  (select count(*)::int from public.published_snapshots),
   0,
   'no-staff authenticated sees nothing'
 );

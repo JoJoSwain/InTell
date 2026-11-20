@@ -14,20 +14,32 @@ const boundary = {
   ],
 };
 
+const sha =
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 const baseGrove = {
-  schema: 1 as const,
+  schema: 2 as const,
   groveId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
+  regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
   packVersion: 1,
   builtAt: "2026-06-15T17:00:00.000Z",
   grove: {
     id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
     name: { en: "Demo" },
     premise: { en: "Premise" },
+    accessNotes: { parking: { en: "Lot A" } },
     boundary,
-    site: { name: "Site" },
+    allowsSpeakerWildlifeSounds: false,
   },
-  rings: [],
-  characters: [],
+  characters: [
+    {
+      id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000020",
+      publicName: { en: "Mara" },
+      publicIntro: { en: "A guide." },
+      portraitSha: sha,
+      portraitAlt: { en: "Portrait of Mara" },
+    },
+  ],
   fragments: [
     {
       id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000030",
@@ -35,32 +47,117 @@ const baseGrove = {
       isEnding: false,
       requires: [] as string[][],
       title: { en: "Root" },
-      visibility: "marked" as const,
+      teaser: { en: "By the reeds. A beginning." },
+      visibility: "standard" as const,
       storyOrder: 1,
       retired: false,
       lat: 40.96,
       lng: -111.93,
-      radiusM: 25,
-      threadIds: [],
-      characterIds: [],
+      radiusM: 10.67,
+      threadIds: [] as string[],
+      characters: [
+        {
+          characterId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000020",
+          prominence: "major" as const,
+          introduces: true,
+          cardLine: { en: "You meet Mara." },
+        },
+      ],
     },
   ],
-  revisions: [],
-  currentRevisionByFragment: {},
+  externalPrerequisites: [] as {
+    fragmentId: string;
+    groveId: string;
+    contingencyRevisionNo: number;
+  }[],
+  revisions: [
+    {
+      id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000040",
+      fragmentId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000030",
+      revisionNo: 1,
+      changeKind: "contingency" as const,
+      contingencyRevisionNo: 1,
+      versions: [
+        {
+          lang: "en",
+          timeWindow: "day" as const,
+          assetSha: sha,
+          durationMs: 1000,
+          bytes: 100,
+          transcript: "Hello.",
+        },
+      ],
+    },
+  ],
   questions: [],
-  crossroads: [],
   music: { cues: [] },
   ambienceZones: [],
-  ledger: [],
-  gatherings: [],
-  assets: [],
+  gatherings: [
+    {
+      title: { en: "Dawn walk" },
+      startsAt: "2026-07-01T13:00:00.000Z",
+      url: "https://example.com/gather",
+    },
+  ],
+  assets: [
+    {
+      sha,
+      ext: "m4a",
+      bytes: 100,
+      kind: "narration" as const,
+    },
+  ],
 };
 
-describe("GrovePack", () => {
-  it("accepts a minimal valid pack with requires/isEnding", () => {
+describe("GrovePack schema 2", () => {
+  it("accepts a minimal valid pack", () => {
     const parsed = GrovePack.parse(baseGrove);
-    expect(parsed.fragments[0]?.isEnding).toBe(false);
-    expect(parsed.fragments[0]?.requires).toEqual([]);
+    expect(parsed.schema).toBe(2);
+    expect(parsed.regionId).toBe(baseGrove.regionId);
+    expect(parsed.fragments[0]?.teaser).toEqual({
+      en: "By the reeds. A beginning.",
+    });
+    expect(parsed.grove.allowsSpeakerWildlifeSounds).toBe(false);
+  });
+
+  it("accepts physical fragments with lat/lng and no radiusM", () => {
+    const pack = {
+      ...baseGrove,
+      fragments: [
+        {
+          ...baseGrove.fragments[0],
+          visibility: "physical" as const,
+          lat: 40.961,
+          lng: -111.931,
+          markerHash: sha,
+          radiusM: undefined,
+        },
+      ],
+    };
+    const { radiusM, ...physical } = pack.fragments[0]!;
+    void radiusM;
+    const parsed = GrovePack.parse({
+      ...pack,
+      fragments: [physical],
+    });
+    expect(parsed.fragments[0]?.visibility).toBe("physical");
+    expect(parsed.fragments[0]?.lat).toBe(40.961);
+    expect(parsed.fragments[0]?.radiusM).toBeUndefined();
+  });
+
+  it("rejects physical fragments that include radiusM", () => {
+    const bad = {
+      ...baseGrove,
+      fragments: [
+        {
+          ...baseGrove.fragments[0],
+          visibility: "physical" as const,
+          markerHash: sha,
+          radiusM: 10.67,
+        },
+      ],
+    };
+    expect(() => GrovePack.parse(bad)).toThrow(/radiusM/i);
   });
 
   it("rejects markerCode on fragments (forbidden)", () => {
@@ -76,70 +173,132 @@ describe("GrovePack", () => {
     expect(() => GrovePack.parse(bad)).toThrow();
   });
 
-  it("rejects lat/lng on protected fragments", () => {
+  it("rejects Story Notes fields on fragments", () => {
     const bad = {
       ...baseGrove,
       fragments: [
         {
           ...baseGrove.fragments[0],
-          visibility: "protected" as const,
-          lat: 40.96,
-          lng: -111.93,
-          radiusM: 10,
-          markerHash:
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        },
-      ],
-    };
-    expect(() => GrovePack.parse(bad)).toThrow(/protected/i);
-  });
-
-  it("rejects seed text / voice fields on ledger", () => {
-    const bad = {
-      ...baseGrove,
-      ledger: [
-        {
-          ringId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000011",
-          growers: ["ok"],
-          anonymousCount: 0,
-          seedsPlanted: 1,
-          seedsGrown: 0,
-          seedText: "secret",
+          notes: "internal",
+          indigenyEarth: "secret",
         },
       ],
     };
     expect(() => GrovePack.parse(bad)).toThrow();
   });
 
-  it("rejects vote tallies on crossroads", () => {
+  it("rejects Story Notes fields on characters", () => {
     const bad = {
       ...baseGrove,
-      crossroads: [
+      characters: [
         {
-          id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000070",
-          ringId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000011",
-          anchorFragmentId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000031",
-          prompt: { en: "Choose" },
-          voteRadiusM: 50,
-          opensAt: "2026-01-01T00:00:00.000Z",
-          closesAt: "2026-12-01T00:00:00.000Z",
-          status: "open",
-          options: [],
-          voteCount: 12,
+          ...baseGrove.characters[0],
+          notes: "staff only",
         },
       ],
     };
     expect(() => GrovePack.parse(bad)).toThrow();
+  });
+
+  it("rejects nested site and removed v2 keys", () => {
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        grove: {
+          ...baseGrove.grove,
+          site: { name: "old" },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        rings: [],
+      }),
+    ).toThrow();
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        crossroads: [],
+      }),
+    ).toThrow();
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        ledger: [],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts externalPrerequisites and image assets", () => {
+    const parsed = GrovePack.parse({
+      ...baseGrove,
+      externalPrerequisites: [
+        {
+          fragmentId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000099",
+          groveId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000011",
+          contingencyRevisionNo: 2,
+        },
+      ],
+      assets: [
+        ...baseGrove.assets,
+        { sha: sha.replace(/^a/, "b"), ext: "webp", bytes: 50, kind: "image" },
+      ],
+    });
+    expect(parsed.externalPrerequisites).toHaveLength(1);
+    expect(parsed.assets.some((a) => a.kind === "image")).toBe(true);
   });
 });
 
-describe("RegionPack", () => {
-  it("allows null landcover", () => {
+describe("RegionPack schema 2", () => {
+  it("requires timezone, sunReference, and layer timeWindow", () => {
     const pack = {
-      schema: 1 as const,
+      schema: 2 as const,
       regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
       packVersion: 0,
       builtAt: "2026-06-15T17:00:00.000Z",
+      timezone: "America/Denver",
+      sunReference: { lat: 40.98, lng: -111.9 },
+      ambienceProfiles: [
+        {
+          id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000050",
+          slug: "marsh",
+          name: "Marsh",
+          layers: [
+            {
+              id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000051",
+              name: "Day bed",
+              kind: "bed",
+              timeWindow: "day" as const,
+              wildlifeCall: false,
+              speakerSafe: true,
+              assetShas: [sha],
+            },
+          ],
+        },
+      ],
+      landcover: null,
+      ambienceZones: [],
+      musicZones: [],
+      musicCues: [],
+      uiCues: [],
+      assets: [],
+    };
+    const parsed = RegionPack.parse(pack);
+    expect(parsed.schema).toBe(2);
+    expect(parsed.timezone).toBe("America/Denver");
+    expect(parsed.ambienceProfiles[0]?.name).toBe("Marsh");
+    expect(parsed.ambienceProfiles[0]?.layers[0]?.timeWindow).toBe("day");
+  });
+
+  it("allows null landcover", () => {
+    const pack = {
+      schema: 2 as const,
+      regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
+      packVersion: 0,
+      builtAt: "2026-06-15T17:00:00.000Z",
+      timezone: "America/Denver",
+      sunReference: { lat: 40.98, lng: -111.9 },
       ambienceProfiles: [],
       landcover: null,
       ambienceZones: [],

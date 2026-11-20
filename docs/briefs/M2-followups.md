@@ -1,5 +1,7 @@
 # M2 follow-ups (carry into the M3 brief)
 
+> **Status (2026-11-20):** #1 (definer allowlist) is folded into M3a. #2 is superseded by the story-wide advisory lock in M3a (prerequisites can now cross groves). #3 and #4 stay deferred until after M3. ADR 0002 is now Accepted (Google Maps, online), and the B7 sites question is answered in ADR 0004 (Farmington Bay, Ogden Nature Center, the Nature Center at Pia Okwai).
+
 **Author:** architect (Claude), 2026-11-19, at the M2b PR approval
 
 M2b was approved with these items deferred. None of them exposes protected coordinates, PII or unpublished content. Public signups are off.

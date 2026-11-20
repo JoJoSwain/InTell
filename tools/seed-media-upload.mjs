@@ -29,6 +29,18 @@ function parseEnv(text) {
 }
 
 function loadStackEnv() {
+  // Prefer process env so we don't call `supabase status` after `functions serve`
+  // (on Windows that can stop the edge_runtime container).
+  const fromProcess = {
+    API_URL: process.env.API_URL || process.env.SUPABASE_URL,
+    SUPABASE_URL: process.env.SUPABASE_URL || process.env.API_URL,
+    SERVICE_ROLE_KEY:
+      process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY:
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY,
+  };
+  if (fromProcess.API_URL && fromProcess.SERVICE_ROLE_KEY) return fromProcess;
+
   try {
     const text = execSync("pnpm exec supabase status -o env", {
       cwd: root,
@@ -38,13 +50,21 @@ function loadStackEnv() {
     });
     return parseEnv(text);
   } catch (e) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (url && key) return { API_URL: url, SERVICE_ROLE_KEY: key };
     console.error("supabase status failed; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
     process.exit(1);
   }
 }
+
+/** Minimal valid 1×1 PNG (68 bytes) for seed portrait placeholders (C4 / §15). */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+const SEED_PORTRAITS = [
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+];
 
 const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
 if (!fs.existsSync(tonesDir)) {
@@ -102,3 +122,16 @@ for (const entry of Object.values(meta.assets)) {
   uploaded += 1;
 }
 console.log(`seed-media-upload: ${uploaded} file(s) -> staging-audio`);
+
+let portraits = 0;
+for (const sha of SEED_PORTRAITS) {
+  const storagePath = `${sha}.png`;
+  try {
+    await uploadObject("staging-images", storagePath, PNG_1X1, "image/png");
+  } catch (e) {
+    console.error(String(e));
+    process.exit(1);
+  }
+  portraits += 1;
+}
+console.log(`seed-media-upload: ${portraits} portrait(s) -> staging-images`);

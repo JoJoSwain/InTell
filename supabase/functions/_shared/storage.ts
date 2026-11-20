@@ -25,6 +25,28 @@ export async function copyStagingToPublic(
   if (up) throw new Error(`public upload failed for ${toPath}: ${up.message}`);
 }
 
+export async function copyStagingImageToPublic(
+  client: SupabaseClient,
+  sha: string,
+  ext: string,
+): Promise<void> {
+  const fromPath = `${sha}.${ext}`;
+  const toPath = `i/${sha}.${ext}`;
+  const { data: blob, error: dl } = await client.storage
+    .from("staging-images")
+    .download(fromPath);
+  if (dl || !blob) {
+    throw new Error(`staging-images download failed for ${fromPath}: ${dl?.message ?? "missing"}`);
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const { error: up } = await client.storage.from("public-media").upload(toPath, bytes, {
+    contentType: imageMimeForExt(ext),
+    upsert: true,
+    cacheControl: CACHE_AUDIO,
+  });
+  if (up) throw new Error(`public image upload failed for ${toPath}: ${up.message}`);
+}
+
 export async function uploadManifest(
   client: SupabaseClient,
   scope: "grove" | "region",
@@ -98,6 +120,20 @@ function mimeForExt(ext: string): string {
       return "audio/mp4";
     case "ogg":
       return "audio/ogg";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function imageMimeForExt(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
     default:
       return "application/octet-stream";
   }

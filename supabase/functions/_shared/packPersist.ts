@@ -3,6 +3,7 @@ import { canonicalJson, contentSha256 } from "./from-shared/canonicalJson.ts";
 import { GrovePack, RegionPack } from "./from-shared/packs.ts";
 import { sha256Hex } from "./digest.ts";
 import {
+  copyStagingImageToPublic,
   copyStagingToPublic,
   deletePublicPrefixExcept,
   uploadManifest,
@@ -17,17 +18,53 @@ export type PackPersistInput = {
   assetShas: string[];
   bytesTotal: number;
   reason?: string;
+  /** When set, build is live=false until fn_release_go_live. */
+  releaseId?: string | null;
 };
 
 export type PackPersistResult =
-  | { noop: true; contentSha256: string }
+  | { noop: true; contentSha256: string; releaseId?: string | null }
   | {
       noop: false;
       version: number;
       manifestPath: string;
       manifestSha256: string;
       contentSha256: string;
+      releaseId?: string | null;
     };
+
+async function copyPackAssets(
+  client: SupabaseClient,
+  assetShas: string[],
+): Promise<void> {
+  for (const sha of assetShas) {
+    const { data: audio } = await client
+      .from("audio_assets")
+      .select("ext")
+      .eq("sha256", sha)
+      .maybeSingle();
+    if (audio?.ext) {
+      try {
+        await copyStagingToPublic(client, sha, audio.ext as string);
+      } catch (e) {
+        console.error(`copy audio ${sha}: ${e}`);
+      }
+      continue;
+    }
+    const { data: image } = await client
+      .from("image_assets")
+      .select("ext")
+      .eq("sha256", sha)
+      .maybeSingle();
+    if (image?.ext) {
+      try {
+        await copyStagingImageToPublic(client, sha, image.ext as string);
+      } catch (e) {
+        console.error(`copy image ${sha}: ${e}`);
+      }
+    }
+  }
+}
 
 export async function persistPackIfChanged(
   client: SupabaseClient,
@@ -38,8 +75,10 @@ export async function persistPackIfChanged(
   delete forHash.builtAt;
   const contentSha = await contentSha256(forHash, sha256Hex);
 
-  const versionCol = input.scope === "grove" ? "pack_version" : "pack_version";
   const table = input.scope === "grove" ? "groves" : "regions";
+  const releaseId = input.releaseId ?? null;
+  // Builds tagged with a release start non-live; unpublish rebuilds are live immediately (R4).
+  const live = releaseId == null;
 
   const { data: latest } = await client
     .from("pack_builds")
@@ -51,7 +90,12 @@ export async function persistPackIfChanged(
     .maybeSingle();
 
   if (latest?.content_sha256 === contentSha) {
-    return { noop: true, contentSha256: contentSha };
+    // Still copy staging → public: first build may have run before seed media
+    // upload finished; a later no-op must heal missing public objects.
+    await copyPackAssets(client, input.assetShas);
+    // No-op is still success for go-live (R4): run-jobs marks the job done, then
+    // fn_release_go_live runs when no rebuild_pack jobs remain queued/running/failed.
+    return { noop: true, contentSha256: contentSha, releaseId };
   }
 
   const { data: place, error: placeErr } = await client
@@ -99,27 +143,15 @@ export async function persistPackIfChanged(
     asset_hashes: input.assetShas,
     bytes_total: input.bytesTotal,
     reason: input.reason ?? null,
+    release_id: releaseId,
+    live,
   });
   if (insErr) throw new Error(`pack_builds insert: ${insErr.message}`);
 
   const prefix = `packs/${input.scope}/${input.scopeId}`;
   await deletePublicPrefixExcept(client, prefix, new Set([path]));
 
-  // Ensure every referenced asset exists in public-media (staging → public upsert)
-  for (const sha of input.assetShas) {
-    const { data: asset } = await client
-      .from("audio_assets")
-      .select("ext")
-      .eq("sha256", sha)
-      .maybeSingle();
-    if (!asset?.ext) continue;
-    try {
-      await copyStagingToPublic(client, sha, asset.ext as string);
-    } catch (e) {
-      // Already-public objects or missing staging — continue; reconciler owns deletes
-      console.error(`copy asset ${sha}: ${e}`);
-    }
-  }
+  await copyPackAssets(client, input.assetShas);
 
   await client.rpc("fn_enqueue_purge_reconcile", {
     p_reason: "rebuild",
@@ -132,5 +164,6 @@ export async function persistPackIfChanged(
     manifestPath: path,
     manifestSha256,
     contentSha256: contentSha,
+    releaseId,
   };
 }

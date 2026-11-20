@@ -1,14 +1,21 @@
 {
   "_about": "Source geometry for the test grove at the Farmington Bird Refuge (George S. and Dolores Doré Eccles Wildlife Education Center, Farmington, UT). Trail points and Frags 1–7 supplied by JoJo on 2026-11-19 from Google Maps. Every coordinate in seed.sql and apps/mobile/e2e/demo-route.gpx derives from this file. Edit here, then regenerate. Coordinates are [lat, lng] (WGS84); GeoJSON/PostGIS use [lng, lat], so the generator must swap them.",
   "_shape_note": "UNCONFIRMED: the points look like a lollipop: a stem P1 → P2 → P3, then a loop P3 → P4 … P11 → P3. The segment P11 → P1 would cross the trail at P3. Treat the trail path as P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P3,P2,P1 until JoJo confirms.",
-  "site": {
-    "slug": "farmington-bird-refuge",
-    "name": "Farmington Bird Refuge",
-    "region": "wasatch-front"
+  "region": {
+    "slug": "wasatch-front",
+    "sun_reference": [
+      40.96,
+      -111.92
+    ]
   },
   "grove": {
     "slug": "demo",
     "boundary_rule": "ST_Buffer(ST_ConvexHull(all trail points + all fragment points)::geography, 50): a simple polygon covering the buildings, the trail and the marsh inside the loop. No holes."
+  },
+  "second_grove": {
+    "slug": "demo-nearby",
+    "offset_m_east": 300,
+    "boundary_rule": "ST_Translate(Farmington grove_boundary, ~300 m east in longitude at this latitude)."
   },
   "trail_points": {
     "P1": [
@@ -82,10 +89,11 @@
         40.96121690030455,
         -111.9289567296216
       ],
-      "visibility": "marked",
-      "radius_m": 30,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [],
-      "source": "JoJo table"
+      "source": "JoJo table",
+      "note": "Day + Night revision versions in seed (same narration asset)."
     },
     {
       "key": "frag2",
@@ -96,15 +104,14 @@
         40.961160186855395,
         -111.9284256522191
       ],
-      "visibility": "marked",
-      "radius_m": 25,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag1"
         ]
       ],
-      "source": "JoJo table",
-      "note": "crossroads anchor"
+      "source": "JoJo table"
     },
     {
       "key": "frag3",
@@ -115,8 +122,8 @@
         40.96201088348705,
         -111.92832909268199
       ],
-      "visibility": "marked",
-      "radius_m": 25,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag1"
@@ -133,15 +140,15 @@
         40.96167870801638,
         -111.92839346570048
       ],
-      "visibility": "marked",
-      "radius_m": 20,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag2"
         ]
       ],
       "source": "JoJo table",
-      "note": "37 m from frag3 and can compete with it: expect exactly one RADIUS_OVERLAP warning (frag3/frag4)"
+      "note": "Revision 2 is a Story Correction (stable UUID …00004b)."
     },
     {
       "key": "frag5",
@@ -152,8 +159,8 @@
         40.96226203944031,
         -111.92912302657665
       ],
-      "visibility": "marked",
-      "radius_m": 20,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag2"
@@ -174,8 +181,8 @@
         40.96121690030455,
         -111.9289567296216
       ],
-      "visibility": "marked",
-      "radius_m": 30,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag1"
@@ -205,8 +212,8 @@
         40.96148214619988,
         -111.92434422906307
       ],
-      "visibility": "marked",
-      "radius_m": 30,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag6"
@@ -224,14 +231,15 @@
         40.96191983612974,
         -111.91900317684377
       ],
-      "visibility": "unmarked",
-      "radius_m": 25,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag7"
         ]
       ],
-      "source": "architect (test coverage; trail P7)"
+      "source": "architect (test coverage; trail P7)",
+      "note": "A25: standard fragment with Day-only revision_version in seed (no night row)."
     },
     {
       "key": "frag9",
@@ -242,16 +250,16 @@
         40.96274950945259,
         -111.92196390715493
       ],
-      "visibility": "protected",
+      "visibility": "physical",
       "marker_code": "DEMO-001",
-      "radius_m": 20,
+      "radius_m": 10.67,
       "requires": [
         [
           "frag8"
         ]
       ],
       "source": "architect (test coverage; trail P9)",
-      "note": "QR only; never in the GPX, packs (coords) or logs"
+      "note": "Physical play via marker; packs include coords + marker hash (no raw marker_code)."
     },
     {
       "key": "frag10",
@@ -262,8 +270,8 @@
         40.96009704801594,
         -111.92223165960147
       ],
-      "visibility": "marked",
-      "radius_m": 20,
+      "visibility": "standard",
+      "radius_m": 10.67,
       "requires": [
         [
           "frag8",
@@ -271,10 +279,10 @@
         ]
       ],
       "source": "architect (test coverage; trail P4)",
-      "note": "OR test. Revision 1 normal; revision 2 requires the crossroads outcome (tests the fn_current_revision fallback)"
+      "note": "OR test. Revision 2 is a Story Contingency (replaces M2 crossroads outcome gate)."
     }
   ],
-  "_fragment_spacing": "Pairs closer than their summed radii: frag1/frag6 (0 m) and frag1/frag2 (45 m) are exempt because one must precede the other; frag3/frag4 (37 m) can compete, so exactly one RADIUS_OVERLAP warning is expected. All other pairs are clear.",
+  "_fragment_spacing": "Radii are 10.67 m (35 ft default). Pairs at 0 m or with ordering constraints are exempt from overlap warnings; frag3/frag4 remain a plausible RADIUS_OVERLAP case at ~37 m.",
   "zones": {
     "ambience_marsh": "same polygon as the grove boundary (profile: marsh)",
     "music_zone": "the part of the grove boundary east of longitude -111.9235 (between P11 and P10), clipped to the boundary. The walk crosses its edge twice."
@@ -287,12 +295,8 @@
     "_start_note": "about 100 m west of frag1, outside the boundary buffer, so the route enters the grove and the ambience zone",
     "route": "start → frag1 → frag2 → frag4 → frag3 → frag5 → frag6 (frag1's point) → trail P2 → P3 → frag7 (≈P11) → P10 → chord to P8 (passes ~75 m from frag9) → frag8 (P7) → P6 → P5 → frag10 (P4) → P3 → P2 → P1 → start",
     "pace": "1.4 m/s: one point per second, 1.4 m apart",
-    "dwell": "at each fragment, stand still (repeat the same point each second) for its revision-1 narration duration_ms (from supabase/seed-media.json) + 5 s, because completion needs the whole fragment (ADR 0003 §3)",
-    "never": "enter frag9's radius (protected; QR only)"
+    "dwell": "at each fragment, stand still (repeat the same point each second) for its revision-1 narration duration_ms (from supabase/seed-media.json) + 5 s",
+    "never": "do not auto-trigger frag9 proximity (physical marker only)"
   },
-  "prerequisite_semantics": "ADR 0003: 'requires' is a list of groups; ALL groups must be satisfied; a group is satisfied when ANY member has been completed (played to the end). [] = revealed from the start.",
-  "crossroads": {
-    "anchor": "frag2",
-    "gates_revision": "frag10 revision 2"
-  }
+  "prerequisite_semantics": "ADR 0004: requires is a list of groups; ALL groups must be satisfied; a group is satisfied when ANY member has been completed. Cross-grove members resolve via externalPrerequisites when the other grove pack is installed."
 }

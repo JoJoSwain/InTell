@@ -1,4 +1,5 @@
--- N2: security definer functions executable by anon/authenticated must match allowlist
+-- N2 (M3a + F2): security definer functions executable by anon/authenticated match allowlist.
+-- Grants: 20261121100013_m3a_definer_grants.sql; F2 revoke in 20261121100014.
 begin;
 select plan(1);
 
@@ -23,25 +24,18 @@ select is(
     ) s
   ),
   array[
-    'fn_asset_is_playable(p_asset_id uuid, p_timezone text)',
-    'fn_cue_is_playable(p_cue_id uuid)',
-    'fn_current_revision(p_fragment_id uuid)',
-    'fn_date_unexpired(p_expires_on date, p_timezone text)',
-    'fn_enqueue_purge_asset(p_asset_sha text)',
-    'fn_enqueue_rebuild_pack(p_grove_id uuid, p_region_id uuid)',
-    'fn_layer_assets_playable(p_layer_id uuid)',
-    'fn_must_precede(p_earlier uuid, p_later uuid)',
-    'fn_publish_check(p_entity text, p_ids uuid[])',
-    'fn_publish_commit(p_entity text, p_ids uuid[])',
-    'fn_region_today(p_timezone text)',
+    -- Admin publish checklist (editor+ guard inside the function).
+    'fn_publish_check(p_release_id uuid)',
+    -- Publish/unpublish commit: service_role only (F2); not on this allowlist.
+    -- Publish commit and unpublish call this guard (still needed for service path).
     'fn_require_editor_or_service()',
-    'fn_revision_is_playable(p_revision_id uuid)',
-    'fn_site_ok(p_site_id uuid)',
-    'fn_unpublish_commit(p_entity text, p_ids uuid[])',
+    'fn_snapshot_projection_guarded(p_entity text, p_entity_id uuid)',
+    -- Devices discover live packs (DATA_MODEL §12.3); anon + staff.
     'get_pack_index()',
+    -- RLS policies resolve staff roles.
     'has_role(roles staff_role[])'
   ]::text[],
-  'security definer execute grants for anon/authenticated match reviewed allowlist'
+  'security definer execute grants for anon/authenticated match M3a+F2 allowlist'
 );
 
 select * from finish();

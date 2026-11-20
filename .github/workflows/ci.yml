@@ -5,6 +5,12 @@ on:
     branches: ["**"]
   pull_request:
 
+# Push + pull_request both fire for PR branches; cancel the older run so two
+# supabase stacks never race on the same runner's fixed host ports (54324…).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -37,6 +43,8 @@ jobs:
       - run: pnpm db:seed-media-meta
       # Fail if regenerated shas/bytes diverge from committed metadata (Windows vs Linux)
       - run: git diff --exit-code supabase/seed-media.json
+      # Clear any leftover containers/ports from a cancelled prior attempt on this VM.
+      - run: pnpm exec supabase stop --no-backup || true
       - run: pnpm exec supabase start
       - name: Setup local DB + Vault + seed media
         env:

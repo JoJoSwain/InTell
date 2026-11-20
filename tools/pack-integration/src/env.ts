@@ -2,9 +2,32 @@ import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { DEMO } from "./test-constants";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
+export { DEMO } from "./test-constants";
+
 export function supabaseEnv(): Record<string, string> {
+  // Prefer process env (CI eval's `supabase status -o env` before vitest).
+  // Calling `supabase status` after `functions serve` on Windows can stop the
+  // edge_runtime container and break integration with 503.
+  const fromProcess = {
+    API_URL: process.env.API_URL ?? process.env.SUPABASE_URL,
+    SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.API_URL,
+    SERVICE_ROLE_KEY:
+      process.env.SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY:
+      process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SERVICE_ROLE_KEY,
+    ANON_KEY: process.env.ANON_KEY ?? process.env.SUPABASE_ANON_KEY,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? process.env.ANON_KEY,
+  };
+  if (fromProcess.API_URL && fromProcess.SERVICE_ROLE_KEY && fromProcess.ANON_KEY) {
+    return Object.fromEntries(
+      Object.entries(fromProcess).filter(([, v]) => typeof v === "string"),
+    ) as Record<string, string>;
+  }
+
   // Windows needs PowerShell for supabase status -o env; Linux CI has no powershell.exe.
   const text = execSync("pnpm exec supabase status -o env", {
     encoding: "utf8",
@@ -27,16 +50,3 @@ export function supabaseEnv(): Record<string, string> {
   }
   return out;
 }
-
-export const DEMO = {
-  groveId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
-  regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
-  frag4RevId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000043",
-  frag8RevId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000047",
-  frag10R2Id: "aaaaaaaa-bbbb-4ccc-8ddd-00000000004a",
-  crossroadsId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000070",
-  optionAId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000071",
-  storytellerConsentId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000053",
-  frag4AssetSha:
-    "56bf2aee6f44f93dacfad0bbb51b522b0becad55d0a3aa01108f9f6fc8440b59",
-};

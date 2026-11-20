@@ -1,70 +1,57 @@
--- Happy-path publish check/commit on a draft revision.
+-- Release-scoped fn_publish_check / fn_publish_commit + snapshots (M3a).
 begin;
-select plan(4);
+select plan(6);
 
--- Guard requires service_role or editor/admin (S2).
 select set_config('request.jwt.claim.role', 'service_role', true);
 
-insert into public.fragment_revisions (
-  id, fragment_id, revision_no, ring_id, status, content_note, change_note
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
-  3,
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000011',
-  'draft',
-  '{}'::jsonb,
-  '{}'::jsonb
-);
+insert into public.releases (id, name, status)
+values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081', 'pgtap-commit', 'draft');
 
-insert into public.revision_versions (
-  revision_id, language, narration_asset_id, transcript
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080',
-  'en',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000100',
-  'TEST transcript — draft publish commit path.'
-);
-
-insert into public.revision_contributors (
-  revision_id, contributor_id, role, consent_id
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000050',
-  'narrator',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000051'
-);
+insert into public.release_items (release_id, entity, entity_id) values
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081', 'grove', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081', 'fragment', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000036'),
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081', 'revision', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000046');
 
 select ok(
-  (public.fn_publish_check(
-    'revision',
-    array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080'::uuid]
-  )->>'ok')::boolean,
-  'fn_publish_check ok for draft revision'
+  (public.fn_publish_check('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081')->>'ok')::boolean,
+  'fn_publish_check ok for partial release (frag7)'
 );
 
-delete from public.jobs;
+delete from public.jobs where payload->>'release_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081';
 
 select ok(
-  (public.fn_publish_commit(
-    'revision',
-    array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080'::uuid]
-  )->>'committed')::boolean,
+  (public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081')->>'committed')::boolean,
   'fn_publish_commit sets committed'
 );
 
 select is(
   (select status from public.fragment_revisions
-    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000080'),
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000046'),
   'published'::public.publish_status,
   'revision status becomes published'
 );
 
 select ok(
   exists (
-    select 1 from public.jobs where kind = 'rebuild_pack'
+    select 1 from public.published_snapshots
+    where entity = 'fragment' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000036'
   ),
-  'publish_commit enqueues rebuild_pack'
+  'publish_commit writes fragment snapshot'
+);
+
+select is(
+  (select status from public.releases where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081'),
+  'publishing'::public.release_status,
+  'release status becomes publishing'
+);
+
+select ok(
+  exists (
+    select 1 from public.jobs
+    where kind = 'rebuild_pack'
+      and payload->>'release_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000081'
+  ),
+  'publish_commit enqueues rebuild_pack jobs for release'
 );
 
 select * from finish();

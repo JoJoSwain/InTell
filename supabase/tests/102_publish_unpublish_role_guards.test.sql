@@ -1,4 +1,5 @@
--- S2: direct RPC publish/unpublish refused for non-editors; editor succeeds
+-- F2: fn_publish_commit / fn_unpublish_commit have no EXECUTE for authenticated.
+-- Direct RPC is refused at the grant level for every staff role; editors publish via edge (integration).
 begin;
 select plan(8);
 
@@ -16,57 +17,27 @@ insert into public.staff (user_id, display_name, role, active) values
   ('bbbbbbbb-bbbb-4ccc-8ddd-520000000003', 'Pub Writer', 'writer', true),
   ('bbbbbbbb-bbbb-4ccc-8ddd-520000000004', 'Pub Editor', 'editor', true);
 
-insert into public.fragment_revisions (
-  id, fragment_id, revision_no, ring_id, status, content_note, change_note
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
-  4,
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000011',
-  'draft',
-  '{}'::jsonb,
-  '{}'::jsonb
-);
+insert into public.releases (id, name, status)
+values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082', 'role-guard release', 'draft');
 
-insert into public.revision_versions (
-  revision_id, language, narration_asset_id, transcript
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082',
-  'en',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000100',
-  'TEST transcript — role-guard publish commit.'
-);
+insert into public.release_items (release_id, entity, entity_id) values
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082', 'grove', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082', 'fragment', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000036'),
+  ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082', 'revision', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000046');
 
-insert into public.revision_contributors (
-  revision_id, contributor_id, role, consent_id
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000050',
-  'narrator',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000051'
-);
-
--- non-staff: unpublish refused
+-- non-staff
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-520000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select throws_ok(
   $$select public.fn_unpublish_commit(
-      'grove',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
+      'grove', array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
     )$$,
-  '42501',
-  null,
-  'non-staff cannot fn_unpublish_commit'
+  '42501', null, 'non-staff cannot fn_unpublish_commit'
 );
 select throws_ok(
-  $$select public.fn_publish_commit(
-      'revision',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082'::uuid]
-    )$$,
-  '42501',
-  null,
-  'non-staff cannot fn_publish_commit'
+  $$select public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')$$,
+  '42501', null, 'non-staff cannot fn_publish_commit'
 );
 reset role;
 
@@ -76,21 +47,13 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select throws_ok(
   $$select public.fn_unpublish_commit(
-      'grove',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
+      'grove', array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
     )$$,
-  '42501',
-  null,
-  'viewer cannot fn_unpublish_commit'
+  '42501', null, 'viewer cannot fn_unpublish_commit'
 );
 select throws_ok(
-  $$select public.fn_publish_commit(
-      'revision',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082'::uuid]
-    )$$,
-  '42501',
-  null,
-  'viewer cannot fn_publish_commit'
+  $$select public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')$$,
+  '42501', null, 'viewer cannot fn_publish_commit'
 );
 reset role;
 
@@ -100,43 +63,32 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select throws_ok(
   $$select public.fn_unpublish_commit(
-      'grove',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
+      'grove', array['aaaaaaaa-bbbb-4ccc-8ddd-000000000010'::uuid]
     )$$,
-  '42501',
-  null,
-  'writer cannot fn_unpublish_commit'
+  '42501', null, 'writer cannot fn_unpublish_commit'
 );
 select throws_ok(
-  $$select public.fn_publish_commit(
-      'revision',
-      array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082'::uuid]
-    )$$,
-  '42501',
-  null,
-  'writer cannot fn_publish_commit'
+  $$select public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')$$,
+  '42501', null, 'writer cannot fn_publish_commit'
 );
 reset role;
 
--- editor succeeds
+-- editor: direct RPC refused (F2 — edge/service_role only)
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-520000000004', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
-select ok(
-  (public.fn_publish_commit(
-    'revision',
-    array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082'::uuid]
-  )->>'committed')::boolean,
-  'editor can fn_publish_commit'
+select throws_ok(
+  $$select public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')$$,
+  '42501', null, 'editor cannot fn_publish_commit via direct RPC'
 );
 
-select ok(
-  (public.fn_unpublish_commit(
-    'revision',
-    array['aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082'::uuid]
-  )->>'ok')::boolean,
-  'editor can fn_unpublish_commit'
+select throws_ok(
+  $$select public.fn_unpublish_commit(
+      'fragment',
+      array['aaaaaaaa-bbbb-4ccc-8ddd-000000000036'::uuid]
+    )$$,
+  '42501', null, 'editor cannot fn_unpublish_commit via direct RPC'
 );
 
 reset role;

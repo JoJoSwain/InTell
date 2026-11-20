@@ -1,22 +1,56 @@
 import { z } from "zod";
-import { L10n } from "./l10n.ts";
+import { AccessNotes, L10n } from "./l10n.ts";
 import { MusicCondition, StemRulePack } from "./music.ts";
 
 const Uuid = z.string().uuid();
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+
+const TimeWindow = z.enum(["day", "night"]);
+const ChangeKind = z.enum(["contingency", "correction"]);
+const AssetKind = z.enum([
+  "narration",
+  "sfx_oneshot",
+  "sfx_bed",
+  "music_stem",
+  "voice_cue",
+  "growth_cue",
+  "image",
+]);
 
 const GeoJsonPolygon = z.object({
   type: z.literal("Polygon"),
   coordinates: z.array(z.array(z.tuple([z.number(), z.number()]))),
 });
 
-/** Forbidden on any pack fragment. */
-const ForbiddenFragmentKeys = z
+const PackStem = z
   .object({
-    markerCode: z.never().optional(),
-    marker_code: z.never().optional(),
+    assetSha: Sha256,
+    role: z.string(),
+    gainDb: z.number(),
+    stateGains: z.array(StemRulePack),
+    loopStartMs: z.number().int().nullable().optional(),
+    loopEndMs: z.number().int().nullable().optional(),
   })
-  .passthrough();
+  .strict();
+
+const PackAsset = z
+  .object({
+    sha: Sha256,
+    ext: z.string().min(1),
+    bytes: z.number().int().positive(),
+    kind: AssetKind,
+  })
+  .strict();
+
+const AmbienceZone = z
+  .object({
+    id: Uuid,
+    boundary: GeoJsonPolygon,
+    profileSlug: z.string(),
+    priority: z.number().int(),
+    edgeFadeM: z.number(),
+  })
+  .strict();
 
 export const GrovePackFragment = z
   .object({
@@ -25,33 +59,42 @@ export const GrovePackFragment = z
     isEnding: z.boolean(),
     requires: z.array(z.array(Uuid)),
     title: L10n,
-    visibility: z.enum(["marked", "unmarked", "protected"]),
+    teaser: L10n,
+    visibility: z.enum(["standard", "physical"]),
     storyOrder: z.number(),
-    gapHint: L10n.nullable().optional(),
     retired: z.boolean(),
-    lat: z.number().optional(),
-    lng: z.number().optional(),
+    lat: z.number(),
+    lng: z.number(),
     radiusM: z.number().optional(),
     markerHash: Sha256.optional(),
     threadIds: z.array(Uuid),
-    characterIds: z.array(Uuid),
+    characters: z.array(
+      z
+        .object({
+          characterId: Uuid,
+          prominence: z.enum(["major", "minor"]),
+          introduces: z.boolean(),
+          cardLine: L10n,
+        })
+        .strict(),
+    ),
   })
   .strict()
   .superRefine((frag, ctx) => {
-    if (frag.visibility === "protected") {
-      if (frag.lat !== undefined || frag.lng !== undefined || frag.radiusM !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "protected fragment must omit lat/lng/radiusM",
-        });
-      }
+    if (frag.visibility === "physical" && frag.radiusM !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "physical fragment must omit radiusM",
+        path: ["radiusM"],
+      });
     }
   });
 
 export const GrovePack = z
   .object({
-    schema: z.literal(1),
+    schema: z.literal(2),
     groveId: Uuid,
+    regionId: Uuid,
     packVersion: z.number().int().nonnegative(),
     builtAt: z.string().min(1),
     grove: z
@@ -59,59 +102,48 @@ export const GrovePack = z
         id: Uuid,
         name: L10n,
         premise: L10n,
-        accessNotes: L10n.nullable().optional(),
+        accessNotes: AccessNotes,
+        websiteUrl: z.string().nullable().optional(),
+        gatheringsUrl: z.string().nullable().optional(),
         boundary: GeoJsonPolygon,
-        site: z
-          .object({
-            name: z.string(),
-            accessInfo: L10n.nullable().optional(),
-            websiteUrl: z.string().nullable().optional(),
-            gatheringsUrl: z.string().nullable().optional(),
-          })
-          .strict(),
+        allowsSpeakerWildlifeSounds: z.boolean(),
         growthCueAssetSha: Sha256.optional(),
       })
       .strict(),
-    rings: z.array(
-      z
-        .object({
-          id: Uuid,
-          ringNo: z.number().int(),
-          name: L10n,
-          themeNote: L10n.nullable().optional(),
-          status: z.string(),
-          plantingOpensAt: z.string().nullable().optional(),
-          plantingClosesAt: z.string().nullable().optional(),
-          releasedAt: z.string().nullable().optional(),
-          writerNoteSha: Sha256.optional(),
-        })
-        .strict(),
-    ),
     characters: z.array(
       z
         .object({
           id: Uuid,
           publicName: L10n,
-          publicBio: L10n.nullable().optional(),
-          introducedByFragmentIds: z.array(Uuid),
+          publicIntro: L10n,
+          portraitSha: Sha256.optional(),
+          portraitAlt: L10n.optional(),
         })
         .strict(),
     ),
     fragments: z.array(GrovePackFragment),
+    externalPrerequisites: z.array(
+      z
+        .object({
+          fragmentId: Uuid,
+          groveId: Uuid,
+          contingencyRevisionNo: z.number().int().positive(),
+        })
+        .strict(),
+    ),
     revisions: z.array(
       z
         .object({
           id: Uuid,
           fragmentId: Uuid,
-          revisionNo: z.number().int(),
-          ringId: Uuid,
-          publishAt: z.string().min(1),
-          contentNote: L10n.nullable().optional(),
-          changeNote: L10n.nullable().optional(),
+          revisionNo: z.number().int().positive(),
+          changeKind: ChangeKind,
+          contingencyRevisionNo: z.number().int().positive(),
           versions: z.array(
             z
               .object({
                 lang: z.string().min(1),
+                timeWindow: TimeWindow,
                 assetSha: Sha256,
                 durationMs: z.number().int().positive(),
                 bytes: z.number().int().positive(),
@@ -120,76 +152,21 @@ export const GrovePack = z
               })
               .strict(),
           ),
-          credits: z.array(
-            z
-              .object({
-                display: z.string(),
-                role: z.string(),
-                license: z.string().optional(),
-              })
-              .strict(),
-          ),
-          grownFromSeedCount: z.number().int().nonnegative(),
         })
         .strict(),
     ),
-    currentRevisionByFragment: z.record(Uuid, Uuid),
     questions: z.array(
       z
         .object({
           id: Uuid,
-          ringId: Uuid.optional(),
           text: L10n,
           anchorFragmentId: Uuid.optional(),
           anchorCharacterId: Uuid.optional(),
-          requiresHeard: z.boolean(),
+          requiresCompleted: z.boolean(),
           opensAt: z.string().nullable().optional(),
           closesAt: z.string().nullable().optional(),
         })
         .strict(),
-    ),
-    crossroads: z.array(
-      z
-        .object({
-          id: Uuid,
-          ringId: Uuid,
-          anchorFragmentId: Uuid,
-          prompt: L10n,
-          teaserSha: Sha256.optional(),
-          voteRadiusM: z.number(),
-          opensAt: z.string().min(1),
-          closesAt: z.string().min(1),
-          status: z.string(),
-          options: z.array(
-            z
-              .object({
-                id: Uuid,
-                label: L10n,
-                description: L10n.nullable().optional(),
-              })
-              .strict(),
-          ),
-          outcome: z
-            .object({
-              optionId: Uuid,
-              note: L10n.nullable().optional(),
-            })
-            .strict()
-            .optional(),
-        })
-        .strict()
-        .superRefine((c, ctx) => {
-          // Forbidden: vote counts before decided
-          const extra = c as Record<string, unknown>;
-          for (const k of Object.keys(extra)) {
-            if (/vote|tally|count/i.test(k) && k !== "voteRadiusM") {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: `forbidden crossroads field: ${k}`,
-              });
-            }
-          }
-        }),
     ),
     music: z
       .object({
@@ -199,22 +176,12 @@ export const GrovePack = z
               id: Uuid,
               zone: GeoJsonPolygon.optional(),
               useGroveBoundary: z.boolean(),
+              timeWindow: TimeWindow,
               priority: z.number().int(),
               conditions: MusicCondition,
               minDwellS: z.number(),
               crossfadeMs: z.number().int(),
-              stems: z.array(
-                z
-                  .object({
-                    assetSha: Sha256,
-                    role: z.string(),
-                    gainDb: z.number(),
-                    stateGains: z.array(StemRulePack),
-                    loopStartMs: z.number().int().nullable().optional(),
-                    loopEndMs: z.number().int().nullable().optional(),
-                  })
-                  .strict(),
-              ),
+              stems: z.array(PackStem),
             })
             .strict()
             .superRefine((cue, ctx) => {
@@ -228,70 +195,48 @@ export const GrovePack = z
         ),
       })
       .strict(),
-    ambienceZones: z.array(
-      z
-        .object({
-          id: Uuid,
-          boundary: GeoJsonPolygon,
-          profileSlug: z.string(),
-          priority: z.number().int(),
-          edgeFadeM: z.number(),
-        })
-        .strict(),
-    ),
-    ledger: z.array(
-      z
-        .object({
-          ringId: Uuid,
-          growers: z.array(z.string()),
-          anonymousCount: z.number().int().nonnegative(),
-          seedsPlanted: z.number().int().nonnegative(),
-          seedsGrown: z.number().int().nonnegative(),
-        })
-        .strict(),
-    ),
+    ambienceZones: z.array(AmbienceZone),
     gatherings: z.array(
       z
         .object({
-          title: z.string(),
+          title: L10n,
           startsAt: z.string().datetime({ offset: true }),
           url: z.string(),
         })
         .strict(),
     ),
-    assets: z.array(
-      z
-        .object({
-          sha: Sha256,
-          ext: z.string().min(1),
-          bytes: z.number().int().positive(),
-          kind: z.string(),
-        })
-        .strict(),
-    ),
+    assets: z.array(PackAsset),
   })
-  .strict()
-  .and(ForbiddenFragmentKeys.optional());
+  .strict();
 
 export type GrovePack = z.infer<typeof GrovePack>;
 
 export const RegionPack = z
   .object({
-    schema: z.literal(1),
+    schema: z.literal(2),
     regionId: Uuid,
     packVersion: z.number().int().nonnegative(),
     builtAt: z.string().min(1),
+    timezone: z.string().min(1),
+    sunReference: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+      })
+      .strict(),
     ambienceProfiles: z.array(
       z
         .object({
           id: Uuid,
           slug: z.string(),
-          name: L10n,
+          name: z.string(),
           layers: z.array(
             z
               .object({
                 id: Uuid,
+                name: z.string(),
                 kind: z.string(),
+                timeWindow: TimeWindow,
                 wildlifeCall: z.boolean(),
                 speakerSafe: z.boolean(),
                 assetShas: z.array(Sha256),
@@ -316,17 +261,7 @@ export const RegionPack = z
       })
       .strict()
       .nullable(),
-    ambienceZones: z.array(
-      z
-        .object({
-          id: Uuid,
-          boundary: GeoJsonPolygon,
-          profileSlug: z.string(),
-          priority: z.number().int(),
-          edgeFadeM: z.number(),
-        })
-        .strict(),
-    ),
+    ambienceZones: z.array(AmbienceZone),
     musicZones: z.array(
       z
         .object({
@@ -341,22 +276,12 @@ export const RegionPack = z
         .object({
           id: Uuid,
           zoneId: Uuid.optional(),
+          timeWindow: TimeWindow,
           priority: z.number().int(),
           conditions: MusicCondition,
           minDwellS: z.number(),
           crossfadeMs: z.number().int(),
-          stems: z.array(
-            z
-              .object({
-                assetSha: Sha256,
-                role: z.string(),
-                gainDb: z.number(),
-                stateGains: z.array(StemRulePack),
-                loopStartMs: z.number().int().nullable().optional(),
-                loopEndMs: z.number().int().nullable().optional(),
-              })
-              .strict(),
-          ),
+          stems: z.array(PackStem),
         })
         .strict(),
     ),
@@ -369,16 +294,7 @@ export const RegionPack = z
         })
         .strict(),
     ),
-    assets: z.array(
-      z
-        .object({
-          sha: Sha256,
-          ext: z.string().min(1),
-          bytes: z.number().int().positive(),
-          kind: z.string(),
-        })
-        .strict(),
-    ),
+    assets: z.array(PackAsset),
   })
   .strict();
 
