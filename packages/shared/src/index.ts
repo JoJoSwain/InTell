@@ -40,3 +40,13 @@ export {
   estimateDecodedPcmBytes,
   estimateDecodedPcmBytesAtRate,
 } from "./audio/decodeCache";
+
+export { createSeededRng, hashSeed, type SeededRng } from "./audio/seededRng";
+
+export {
+  DEFAULT_ONESHOT_SHAS,
+  ONESHOT_HORIZON_SEC,
+  ONESHOT_MEAN_INTERVAL_SEC,
+  OneShotWindowScheduler,
+  type OneShotPlan,
+} from "./audio/oneshotSchedule";

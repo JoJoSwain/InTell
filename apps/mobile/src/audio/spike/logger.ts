@@ -4,10 +4,17 @@ import { Share } from "react-native";
 
 const LOG_NAME = "audio-spike-log.jsonl";
 
+/** Wall time of the previous diagnostics write (for jsTickGapMs). */
+let lastDiagWallMs: number | null = null;
+
 function logUri(): string {
   const base = FileSystem.documentDirectory;
   if (!base) throw new Error("documentDirectory unavailable");
   return base + LOG_NAME;
+}
+
+export function resetDiagnosticsTickClock(): void {
+  lastDiagWallMs = null;
 }
 
 export async function appendSpikeLog(
@@ -37,7 +44,16 @@ export async function appendDiagnostics(
   diagnostics: EngineDiagnostics,
   extra?: Record<string, unknown>,
 ): Promise<void> {
-  await appendSpikeLog({ type: "diagnostics", ...diagnostics, ...extra });
+  const now = Date.now();
+  const jsTickGapMs =
+    lastDiagWallMs == null ? 0 : now - lastDiagWallMs;
+  lastDiagWallMs = now;
+  await appendSpikeLog({
+    type: "diagnostics",
+    ...diagnostics,
+    jsTickGapMs,
+    ...extra,
+  });
 }
 
 export async function shareSpikeLog(): Promise<void> {

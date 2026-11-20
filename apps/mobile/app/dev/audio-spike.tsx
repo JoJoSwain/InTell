@@ -11,14 +11,23 @@ import type {
   LoopGroupHandle,
   VoiceHandle,
 } from "@intell/shared";
+import {
+  hashSeed,
+  ONESHOT_HORIZON_SEC,
+  OneShotWindowScheduler,
+} from "@intell/shared";
 import { RNAudioApiEngine } from "../../src/audio/engine";
 import { SPIKE_ASSET_MODULES } from "../../src/audio/spike/assets";
 import { FIXTURES_MISSING_MESSAGE } from "../../src/audio/spike/fixturesReady";
 import {
   appendDiagnostics,
   appendSpikeLog,
+  resetDiagnosticsTickClock,
   shareSpikeLog,
 } from "../../src/audio/spike/logger";
+
+/** Fixed seed so one-shot schedules are reproducible across runs. */
+const SPIKE_ONESHOT_SEED = hashSeed("intell-audio-spike");
 
 /**
  * Hidden M1 spike screen. Dev-only; deep link: intell://dev/audio-spike
@@ -36,8 +45,11 @@ function AudioSpikeBody() {
   const bedRef = useRef<VoiceHandle | null>(null);
   const loopRef = useRef<LoopGroupHandle | null>(null);
   const narrationRef = useRef<VoiceHandle | null>(null);
-  const oneshotTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const logTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const oneshotScheduler = useRef(
+    new OneShotWindowScheduler(SPIKE_ONESHOT_SEED),
+  );
+  const mixRunning = useRef(false);
   const bedIsWind = useRef(true);
   const stemBDb = useRef(-8);
 
@@ -46,6 +58,48 @@ function AudioSpikeBody() {
   const [running, setRunning] = useState(false);
   const [diag, setDiag] = useState<EngineDiagnostics | null>(null);
   const [status, setStatus] = useState("idle");
+
+  const topUpOneShots = useCallback((reason: string) => {
+    const engine = engineRef.current;
+    if (!engine || !mixRunning.current) return;
+    let nowSec: number;
+    try {
+      nowSec = engine.getContextCurrentTime();
+    } catch {
+      return;
+    }
+    const plans = oneshotScheduler.current.fillWindow(
+      nowSec,
+      ONESHOT_HORIZON_SEC,
+    );
+    for (const plan of plans) {
+      engine.playOneShot(
+        { sha: plan.sha, durationMs: 1000 },
+        {
+          bus: "surroundings",
+          gainDb: plan.gainDb,
+          pan: plan.pan,
+          rate: plan.rate,
+          whenSec: plan.atSec,
+        },
+      );
+      void appendSpikeLog({
+        type: "oneshotScheduled",
+        reason,
+        seq: plan.seq,
+        sha: plan.sha,
+        atSec: plan.atSec,
+        pan: plan.pan,
+        rate: plan.rate,
+        gainDb: plan.gainDb,
+        appState: engine.getAppState(),
+        contextTimeSec: nowSec,
+      });
+    }
+    if (plans.length > 0) {
+      setDiag(engine.getDiagnostics());
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,23 +134,36 @@ function AudioSpikeBody() {
             void appendSpikeLog({
               type: "routeChange",
               route,
+              appState: engine.getAppState(),
               raw: engine.lastDevicesInfo,
             });
+            topUpOneShots("routeChange");
           }),
         );
         unsubs.push(
           engine.onInterruption((e) => {
-            void appendSpikeLog({ type: "interruption", event: e });
+            void appendSpikeLog({
+              type: "interruption",
+              event: e,
+              appState: engine.getAppState(),
+            });
+            topUpOneShots("interruption");
           }),
         );
         unsubs.push(
           engine.onRemoteCommand((c) => {
-            void appendSpikeLog({ type: "remoteCommand", command: c });
+            void appendSpikeLog({
+              type: "remoteCommand",
+              command: c,
+              appState: engine.getAppState(),
+            });
+            topUpOneShots("remoteCommand");
           }),
         );
         unsubs.push(
           engine.onAppStateChange((state) => {
             void appendSpikeLog({ type: "appState", state });
+            topUpOneShots("appState");
           }),
         );
         unsubs.push(
@@ -104,7 +171,20 @@ function AudioSpikeBody() {
             void appendSpikeLog({
               type: visible ? "notificationShow" : "notificationHide",
               visible,
+              appState: engine.getAppState(),
             });
+            topUpOneShots("notification");
+          }),
+        );
+        unsubs.push(
+          engine.onVoiceEnded((e) => {
+            void appendSpikeLog({
+              type: "voiceEnded",
+              voiceId: e.voiceId,
+              kind: e.kind,
+              appState: e.appState,
+            });
+            topUpOneShots("voiceEnded");
           }),
         );
 
@@ -130,13 +210,13 @@ function AudioSpikeBody() {
     return () => {
       cancelled = true;
       clearInterval(uiTimer);
-      if (oneshotTimer.current) clearInterval(oneshotTimer.current);
       if (logTimer.current) clearInterval(logTimer.current);
+      mixRunning.current = false;
       for (const u of unsubs) u();
       void engine.dispose();
       engineRef.current = null;
     };
-  }, []);
+  }, [topUpOneShots]);
 
   const startFullMix = useCallback(async () => {
     const engine = engineRef.current;
@@ -178,20 +258,14 @@ function AudioSpikeBody() {
       bedIsWind.current = true;
       stemBDb.current = -8;
 
-      if (oneshotTimer.current) clearInterval(oneshotTimer.current);
-      oneshotTimer.current = setInterval(() => {
-        const n = 1 + Math.floor(Math.random() * 6);
-        engine.playOneShot(
-          { sha: `oneshot_${n}`, durationMs: 1000 },
-          {
-            bus: "surroundings",
-            gainDb: -12,
-            pan: Math.random() * 2 - 1,
-            rate: 0.9 + Math.random() * 0.2,
-          },
-        );
-      }, 8000);
+      oneshotScheduler.current.reset(
+        SPIKE_ONESHOT_SEED,
+        engine.getContextCurrentTime(),
+      );
+      mixRunning.current = true;
+      topUpOneShots("mixStart");
 
+      resetDiagnosticsTickClock();
       if (logTimer.current) clearInterval(logTimer.current);
       logTimer.current = setInterval(() => {
         void appendDiagnostics(engine.getDiagnostics());
@@ -205,7 +279,7 @@ function AudioSpikeBody() {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
     }
-  }, [ready]);
+  }, [ready, topUpOneShots]);
 
   const toggleNarration = useCallback(() => {
     const engine = engineRef.current;
@@ -261,8 +335,9 @@ function AudioSpikeBody() {
   const stopAll = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (oneshotTimer.current) clearInterval(oneshotTimer.current);
+    mixRunning.current = false;
     if (logTimer.current) clearInterval(logTimer.current);
+    engine.cancelScheduledOneShots();
     if (loopRef.current) engine.stop(loopRef.current, 500);
     if (bedRef.current) engine.stop(bedRef.current, 500);
     if (narrationRef.current) engine.stop(narrationRef.current, 500);
@@ -318,6 +393,7 @@ function AudioSpikeBody() {
                 contextTimeMs: diag.contextTimeMs,
                 wallElapsedMs: diag.wallElapsedMs,
                 clockGapMs: diag.clockGapMs,
+                scheduledAheadMs: diag.scheduledAheadMs,
                 contextState: diag.contextState,
                 appState: diag.appState,
                 notificationVisible: diag.notificationVisible,

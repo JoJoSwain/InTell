@@ -129,6 +129,9 @@ export class RNAudioApiEngine implements AudioEngine {
   >();
   private appStateSubs = new Set<(state: AppStateStatus) => void>();
   private notificationSubs = new Set<(visible: boolean) => void>();
+  private voiceEndedSubs = new Set<
+    (e: { voiceId: string; kind: VoiceState["kind"]; appState: string }) => void
+  >();
 
   private systemSubs: AudioEventSubscription[] = [];
   private notifSubs: AudioEventSubscription[] = [];
@@ -225,6 +228,39 @@ export class RNAudioApiEngine implements AudioEngine {
     return () => this.notificationSubs.delete(cb);
   }
 
+  /** Fires when a BufferSource ends — including while the screen is locked. */
+  onVoiceEnded(
+    cb: (e: {
+      voiceId: string;
+      kind: VoiceState["kind"];
+      appState: string;
+    }) => void,
+  ): Unsubscribe {
+    this.voiceEndedSubs.add(cb);
+    return () => this.voiceEndedSubs.delete(cb);
+  }
+
+  getContextCurrentTime(): number {
+    return this.requireContext().currentTime;
+  }
+
+  getAppState(): AppStateStatus {
+    return this.appState;
+  }
+
+  /** Stop every one-shot voice (pending future starts and in-flight). */
+  cancelScheduledOneShots(): void {
+    for (const voice of [...this.voices.values()]) {
+      if (voice.kind !== "oneshot") continue;
+      try {
+        voice.source.stop();
+      } catch {
+        // already stopped
+      }
+      this.voices.delete(voice.id);
+    }
+  }
+
   async load(sha: string, uri: string): Promise<BufferHandle> {
     this.requireContext();
     const cache = this.requireCache();
@@ -297,6 +333,7 @@ export class RNAudioApiEngine implements AudioEngine {
 
     source.onended = () => {
       this.voices.delete(voice.id);
+      this.emitVoiceEnded(voice.id, voice.kind);
       if (![...this.voices.values()].some((v) => v.kind === "narration")) {
         this.narrationActive = false;
         this.applyDucking(DuckingPolicy.DUCK_RELEASE_MS);
@@ -317,7 +354,13 @@ export class RNAudioApiEngine implements AudioEngine {
 
   playOneShot(
     h: BufferHandle,
-    p: { bus: BusId; gainDb: number; pan: number; rate: number },
+    p: {
+      bus: BusId;
+      gainDb: number;
+      pan: number;
+      rate: number;
+      whenSec?: number;
+    },
   ): VoiceHandle {
     const ctx = this.requireContext();
     const internal = this.requireBuffer(h.sha);
@@ -336,7 +379,8 @@ export class RNAudioApiEngine implements AudioEngine {
     source.playbackRate.value = p.rate;
     source.connect(gain);
 
-    const when = ctx.currentTime;
+    const when =
+      p.whenSec != null ? Math.max(p.whenSec, ctx.currentTime) : ctx.currentTime;
     source.start(when);
 
     const voice: VoiceState = {
@@ -358,6 +402,7 @@ export class RNAudioApiEngine implements AudioEngine {
     this.voices.set(voice.id, voice);
     source.onended = () => {
       this.voices.delete(voice.id);
+      this.emitVoiceEnded(voice.id, voice.kind);
     };
     return { id: voice.id };
   }
@@ -671,6 +716,7 @@ export class RNAudioApiEngine implements AudioEngine {
       contextState: ctx?.state,
       appState: this.appState,
       notificationVisible: this.notificationVisible,
+      scheduledAheadMs: this.computeScheduledAheadMs(ctx),
     };
   }
 
@@ -763,6 +809,24 @@ export class RNAudioApiEngine implements AudioEngine {
     if (this.notificationVisible === visible) return;
     this.notificationVisible = visible;
     for (const cb of this.notificationSubs) cb(visible);
+  }
+
+  private emitVoiceEnded(voiceId: string, kind: VoiceState["kind"]): void {
+    const payload = { voiceId, kind, appState: this.appState };
+    for (const cb of this.voiceEndedSubs) cb(payload);
+  }
+
+  private computeScheduledAheadMs(ctx: AudioContext | null): number {
+    if (!ctx) return 0;
+    let maxWhen = 0;
+    for (const voice of this.voices.values()) {
+      if (voice.kind !== "oneshot") continue;
+      if (voice.startedAtContextTime > ctx.currentTime) {
+        maxWhen = Math.max(maxWhen, voice.startedAtContextTime);
+      }
+    }
+    if (maxWhen <= 0) return 0;
+    return Math.max(0, (maxWhen - ctx.currentTime) * 1000);
   }
 
   private applyDucking(rampMs: number): void {

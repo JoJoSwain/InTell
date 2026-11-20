@@ -39,7 +39,17 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 
 **Verdict:** _Pending_
 
+## Findings so far
+(Android device spike, before the 60-minute protocol run is complete.)
+
+- **Background JS timers stop.** With the screen locked, React Native JS timers do not fire on Android. A 43 s locked period produced no 60-second diagnostics line until return to `active`. Native audio (AudioContext graph) kept playing; only timer-driven JS work (periodic logging, previously `setInterval` one-shots) stalled.
+- **Pre-schedule one-shots on the audio clock.** Random one-shots are planned with a seeded RNG (`OneShotWindowScheduler` in `@intell/shared`) and scheduled with `AudioBufferSourceNode.start(when)` for a rolling **5-minute** horizon ahead of `audioContext.currentTime`. The window is topped up whenever JS wakes (AppState change, route / interruption / remote / notification / `onended`). Pending one-shots are cancelled on Stop. This keeps surroundings events going while JS is frozen.
+- **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start.
+  - **Growing positive gap** (wall ahead of the audio clock) indicates dropouts / audio clock starvation.
+  - **Slight negative drift** is a clock-rate difference between wall time and the audio clock, not a failure by itself.
+
 ## Consequences
 - UI never imports `react-native-audio-api` (ESLint `no-restricted-imports`).
 - Decode LRU cap for the spike is **96 MB**; product may retune after memory data.
+- Product ambience one-shot scheduling must not rely on JS timers alone while locked; prefer audio-clock pre-scheduling (or another native wake path confirmed by spike logs).
 - iOS cloud build needs JoJo to run `eas init` (Expo account) before `eas build` — not done by the spike agent.

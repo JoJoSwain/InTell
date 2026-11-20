@@ -54,6 +54,17 @@ export interface EngineDiagnostics {
   appState?: string;
   /** Whether the playback notification / FGS notification is shown. */
   notificationVisible?: boolean;
+  /**
+   * How far ahead (ms) the farthest pending one-shot is scheduled on the
+   * audio clock. 0 if none pending.
+   */
+  scheduledAheadMs?: number;
+  /**
+   * Wall ms since the previous diagnostics write. Large values mean JS timers
+   * (or the logging loop) did not run — typical when Android freezes JS while
+   * locked.
+   */
+  jsTickGapMs?: number;
 }
 
 export interface AudioEngine {
@@ -69,7 +80,14 @@ export interface AudioEngine {
   resumeNarration(): void;
   playOneShot(
     h: BufferHandle,
-    p: { bus: BusId; gainDb: number; pan: number; rate: number },
+    p: {
+      bus: BusId;
+      gainDb: number;
+      pan: number;
+      rate: number;
+      /** Absolute AudioContext time; defaults to currentTime (immediate). */
+      whenSec?: number;
+    },
   ): VoiceHandle;
   startLoopGroup(
     bus: BusId,
