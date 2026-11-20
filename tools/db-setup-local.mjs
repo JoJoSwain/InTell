@@ -35,6 +35,7 @@ function parseEnv(text) {
   return out;
 }
 
+run("node tools/sync-edge-shared.mjs");
 run("pnpm exec supabase db reset");
 
 const env = parseEnv(run("pnpm exec supabase status -o env", { capture: true }));
@@ -58,8 +59,16 @@ select vault.create_secret('${esc(serviceKey)}', 'run_jobs_service_key', 'M2a lo
 const tmp = path.join(os.tmpdir(), "intell-vault-setup.sql");
 fs.writeFileSync(tmp, sql, "utf8");
 try {
-  run(
-    `docker exec -i supabase_db_Replaceplace psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
+  // Pipe the SQL file — do not pass multiline via -c (Windows escapes `\n` literally).
+  execSync(
+    `docker exec -i supabase_db_Replaceplace psql -U postgres -d postgres -v ON_ERROR_STOP=1`,
+    {
+      stdio: ["pipe", "inherit", "inherit"],
+      encoding: "utf8",
+      env: process.env,
+      shell: true,
+      input: sql,
+    },
   );
 } finally {
   try {
@@ -71,3 +80,11 @@ try {
 
 console.log("Vault secrets run_jobs_url / run_jobs_service_key written.");
 console.log(`run_jobs_url=${runJobsUrl}`);
+
+const seedTonesDir = path.join(process.cwd(), "tools", "audio-fixtures", "seed-tones");
+if (!fs.existsSync(seedTonesDir)) {
+  run("pnpm db:seed-media-meta");
+}
+
+run("node tools/sync-edge-shared.mjs");
+run("node tools/seed-media-upload.mjs");

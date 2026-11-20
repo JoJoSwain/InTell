@@ -1,0 +1,20 @@
+{
+  "name": "@intell/pack-integration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "echo \"pack-integration: use pnpm test:integration (needs Docker)\"",
+    "test:integration": "vitest run",
+    "lint": "node --check src/env.ts",
+    "typecheck": "node --check src/env.ts"
+  },
+  "dependencies": {
+    "@intell/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^3.0.5"
+  }
+}

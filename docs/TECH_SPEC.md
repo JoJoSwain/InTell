@@ -120,6 +120,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
    - download new current-revision assets (automatically on Wi-Fi, with a prompt on cellular)
    - **delete every local asset whose sha is not in any installed manifest** (mandatory)
    - Journal rows whose revision vanished show the "no longer available" state
+   - Treat Storage **400** and **404** the same as missing (local Storage often returns `400 Object not found` instead of 404)
 4. **LRU** for older heard revisions: keep their audio only while still playable and referenced by `heard`.
 
 ### 3.5 Recording (seeds and field notes)

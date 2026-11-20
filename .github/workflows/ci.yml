@@ -21,3 +21,44 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @intell/admin build
+
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:check-edge-shared
+      # seed-tones/ is gitignored; generate before upload in db:setup-local
+      - run: pnpm db:seed-media-meta
+      # Fail if regenerated shas/bytes diverge from committed metadata (Windows vs Linux)
+      - run: git diff --exit-code supabase/seed-media.json
+      - run: pnpm exec supabase start
+      - name: Setup local DB + Vault + seed media
+        env:
+          # In-network URL for pg_net from the DB container (verify empirically)
+          RUN_JOBS_URL: http://host.docker.internal:54321/functions/v1/run-jobs
+        run: pnpm db:setup-local
+      - name: Serve edge functions (JWT verification on)
+        run: pnpm exec supabase functions serve &
+      - name: Wait for functions
+        run: |
+          eval "$(pnpm exec supabase status -o env)"
+          export SERVICE_ROLE_KEY
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:54321/functions/v1/run-jobs" \
+              -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+            if echo "$code" | grep -qE '200|401|403|405'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "functions not ready"; exit 1
+      - run: pnpm exec supabase test db
+      - run: pnpm test:integration

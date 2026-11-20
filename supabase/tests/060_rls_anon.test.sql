@@ -13,15 +13,18 @@ select ok(
   'anon has SELECT=false on every public table'
 );
 
-select ok(
+-- M2b C19: anon may execute get_pack_index only
+select is(
   (
-    select coalesce(bool_and(not has_function_privilege('anon', p.oid, 'EXECUTE')), true)
+    select count(*)::int
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.prokind = 'f'
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
   ),
-  'anon has EXECUTE=false on every public function'
+  1,
+  'anon has EXECUTE on exactly one public function (get_pack_index)'
 );
 
 -- authenticated user with no staff row
