@@ -35,9 +35,10 @@ describe("demo-geometry GPX track", () => {
     }
   });
 
-  it("dwells ≥ narration+5s inside each non-protected fragment radius", () => {
+  it("dwells ≥ narration+5s inside each proximity (non-physical) fragment radius", () => {
     for (const frag of fixture.fragments) {
-      if (frag.visibility === "protected") continue;
+      // Physical fragments never proximity-trigger (ADR / PRODUCT_SPEC); GPX skips them.
+      if (frag.visibility === "physical") continue;
       const center = ll(frag.at);
       const need = dwellSeconds(frag.key, media);
       let best = 0;
@@ -57,9 +58,10 @@ describe("demo-geometry GPX track", () => {
     }
   });
 
-  it("never enters frag9 protected radius", () => {
+  it("never enters frag9 physical radius (marker-only)", () => {
     const frag9 = fixture.fragments.find((f) => f.key === "frag9");
     expect(frag9).toBeTruthy();
+    expect(frag9.visibility).toBe("physical");
     const center = ll(frag9.at);
     for (let i = 0; i < track.length; i++) {
       const d = haversineM(track[i], center);

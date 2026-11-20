@@ -4,10 +4,18 @@ select plan(4);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
 
+-- Isolate: publish pipeline may have flipped is_public before pgTAP (CI drain / local runs).
+update public.image_assets
+   set is_public = false
+ where id in (
+   'aaaaaaaa-bbbb-4ccc-8ddd-000000000140',
+   'aaaaaaaa-bbbb-4ccc-8ddd-000000000141'
+ );
+
 select ok(
   (select coalesce(is_public, false) = false
      from public.image_assets
-     where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000140'),
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000140'),
   'seed portrait images start is_public false'
 );
 

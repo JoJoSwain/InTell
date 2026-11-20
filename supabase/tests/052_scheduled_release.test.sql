@@ -4,6 +4,9 @@ select plan(5);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
 
+-- Isolate from leftover publish_release jobs (local pollution / prior tests).
+delete from public.jobs where kind = 'publish_release';
+
 insert into public.releases (id, name, status, publish_at)
 values (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000052',

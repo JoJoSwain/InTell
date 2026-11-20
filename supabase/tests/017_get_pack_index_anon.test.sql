@@ -20,7 +20,10 @@ select ok(
   'anon can execute get_pack_index'
 );
 
--- Empty index when no live pack_builds (seed queues rebuilds but does not insert builds)
+-- CI may have drained seed rebuild_pack jobs before pgTAP, leaving live builds.
+-- Isolate this file: hide every seed build, then assert empty / controlled fixtures.
+update public.pack_builds set live = false;
+
 select is(
   public.get_pack_index(),
   '[]'::jsonb,
