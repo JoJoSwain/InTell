@@ -1,0 +1,15 @@
+{
+  "name": "@intell/demo-geometry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "lint": "node --check generate.mjs && node --check track.mjs",
+    "typecheck": "node --check generate.mjs && node --check track.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  }
+}
