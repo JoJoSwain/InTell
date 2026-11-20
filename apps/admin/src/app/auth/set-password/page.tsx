@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,21 @@ export default function SetPasswordPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sessionReady, setSessionReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!cancelled) setSessionReady(Boolean(user));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -24,6 +40,31 @@ export default function SetPasswordPage() {
     }
     router.replace("/");
     router.refresh();
+  }
+
+  if (sessionReady === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-bg px-6">
+        <p className="text-textMuted">Checking session…</p>
+      </main>
+    );
+  }
+
+  if (!sessionReady) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-bg px-6 text-center">
+        <h1 className="font-serif text-2xl font-semibold">Link required</h1>
+        <p className="mt-3 max-w-md text-textMuted">
+          This page needs a valid invite or reset link.
+        </p>
+        <Link
+          href="/sign-in"
+          className="mt-6 text-sm text-primary underline-offset-4 hover:underline"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
   }
 
   return (

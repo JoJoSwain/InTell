@@ -35,11 +35,11 @@ async function requireAdmin() {
 async function callInviteStaff(
   supabase: Awaited<ReturnType<typeof createClient>>,
   body: Record<string, unknown>,
-) {
+): Promise<{ ok: true; resent?: boolean } | { ok: false; error: string }> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("not signed in");
+  if (!session?.access_token) return { ok: false, error: "not signed in" };
 
   const base =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
@@ -54,34 +54,47 @@ async function callInviteStaff(
   const json = (await res.json().catch(() => ({}))) as {
     error?: string;
     detail?: string;
+    resent?: boolean;
   };
   if (!res.ok) {
-    throw new Error(json.detail ?? json.error ?? `invite-staff ${res.status}`);
+    return {
+      ok: false,
+      error: json.detail ?? json.error ?? `invite-staff ${res.status}`,
+    };
   }
+  return { ok: true, resent: json.resent };
 }
 
-export async function inviteStaff(formData: FormData) {
+export async function inviteStaff(
+  formData: FormData,
+): Promise<{ error?: string; resent?: boolean }> {
   const { supabase } = await requireAdmin();
   const email = String(formData.get("email") ?? "").trim();
   const displayName = String(formData.get("displayName") ?? "").trim();
   const role = String(formData.get("role") ?? "writer") as StaffRole;
   if (!email || !displayName || !ROLES.includes(role)) {
-    throw new Error("email, display name and role are required");
+    return { error: "email, display name and role are required" };
   }
-  await callInviteStaff(supabase, {
+  const result = await callInviteStaff(supabase, {
     action: "invite",
     email,
     displayName,
     role,
   });
+  if (!result.ok) return { error: result.error };
   revalidatePath("/staff");
+  return { resent: result.resent };
 }
 
 export async function deactivateStaff(formData: FormData) {
   const { supabase } = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
   if (!userId) throw new Error("userId required");
-  await callInviteStaff(supabase, { action: "deactivate", userId });
+  const result = await callInviteStaff(supabase, {
+    action: "deactivate",
+    userId,
+  });
+  if (!result.ok) throw new Error(result.error);
   revalidatePath("/staff");
 }
 
@@ -89,7 +102,11 @@ export async function reactivateStaff(formData: FormData) {
   const { supabase } = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
   if (!userId) throw new Error("userId required");
-  await callInviteStaff(supabase, { action: "reactivate", userId });
+  const result = await callInviteStaff(supabase, {
+    action: "reactivate",
+    userId,
+  });
+  if (!result.ok) throw new Error(result.error);
   revalidatePath("/staff");
 }
 

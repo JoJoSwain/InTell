@@ -29,6 +29,25 @@ const Body = z.discriminatedUnion("action", [
   }),
 ]);
 
+async function findAuthUserByEmail(
+  svc: ReturnType<typeof serviceClient>,
+  email: string,
+) {
+  const needle = email.toLowerCase();
+  let page = 1;
+  for (;;) {
+    const { data, error } = await svc.auth.admin.listUsers({
+      page,
+      perPage: 200,
+    });
+    if (error) throw new Error(error.message);
+    const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === needle);
+    if (hit) return hit;
+    if (data.users.length < 200) return null;
+    page += 1;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
@@ -45,6 +64,24 @@ Deno.serve(async (req) => {
   const svc = serviceClient();
 
   if (body.action === "invite") {
+    let existing;
+    try {
+      existing = await findAuthUserByEmail(svc, body.email);
+    } catch (e) {
+      return json({
+        error: "invite failed",
+        detail: e instanceof Error ? e.message : "lookup failed",
+      }, 400);
+    }
+
+    if (existing?.email_confirmed_at) {
+      return json({
+        error: "already registered",
+        detail:
+          "That email already has an account. Ask them to sign in or use Forgot password.",
+      }, 409);
+    }
+
     const { data: invited, error: inviteErr } = await svc.auth.admin
       .inviteUserByEmail(body.email, {
         data: { display_name: body.displayName },
@@ -70,13 +107,17 @@ Deno.serve(async (req) => {
 
     await svc.from("audit_log").insert({
       actor: gate.userId,
-      action: "staff.invite",
+      action: existing ? "staff.reinvite" : "staff.invite",
       entity: "staff",
       entity_id: invited.user.id,
       detail: { role: body.role, email: body.email },
     });
 
-    return json({ ok: true, userId: invited.user.id });
+    return json({
+      ok: true,
+      userId: invited.user.id,
+      resent: Boolean(existing),
+    });
   }
 
   if (body.action === "deactivate") {
@@ -97,13 +138,11 @@ Deno.serve(async (req) => {
       .update({ active: false })
       .eq("user_id", body.userId);
     if (updErr) {
-      // A1 last-admin raises 42501
       return json({ error: updErr.message }, 400);
     }
 
-    // A2: ban so they cannot sign in
     const { error: banErr } = await svc.auth.admin.updateUserById(body.userId, {
-      ban_duration: "876000h", // ~100 years
+      ban_duration: "876000h",
     });
     if (banErr) {
       return json({ error: banErr.message }, 400);
@@ -120,7 +159,6 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
-  // reactivate
   const { data: row, error: readErr } = await svc
     .from("staff")
     .select("user_id, active, role")

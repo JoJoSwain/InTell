@@ -1,15 +1,22 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
-export default function SignInPage() {
+const LINK_ERROR =
+  "That link has expired or was already used. Ask an admin to resend your invite, or use Forgot password.";
+
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkError = searchParams.get("error") === "link";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    linkError ? LINK_ERROR : null,
+  );
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -94,7 +101,7 @@ export default function SignInPage() {
             const supabase = createClient();
             const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
               email,
-              { redirectTo: `${window.location.origin}/auth/callback?next=/auth/set-password` },
+              { redirectTo: window.location.origin },
             );
             setPending(false);
             if (resetErr) {
@@ -115,5 +122,19 @@ export default function SignInPage() {
         ) : null}
       </form>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-bg px-6">
+          <p className="text-textMuted">Loading…</p>
+        </main>
+      }
+    >
+      <SignInForm />
+    </Suspense>
   );
 }

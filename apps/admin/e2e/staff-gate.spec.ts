@@ -93,7 +93,9 @@ test.describe("M3b staff gate", () => {
     await page.getByRole("link", { name: "Staff" }).click();
     await expect(page.getByRole("heading", { name: "Staff" })).toBeVisible();
 
-    const inviteEmail = `e2e-invited-${Date.now()}@test.local`;
+    const stamp = Date.now();
+    const inviteEmail = `e2e-invited-${stamp}@test.local`;
+    const displayName = `E2E Invited Writer ${stamp}`;
     const adminToken = await passwordGrant(auth, "admin");
 
     const inviteRes = await request.post(
@@ -107,7 +109,7 @@ test.describe("M3b staff gate", () => {
         data: {
           action: "invite",
           email: inviteEmail,
-          displayName: "E2E Invited Writer",
+          displayName,
           role: "writer",
         },
       },
@@ -117,6 +119,7 @@ test.describe("M3b staff gate", () => {
     expect(body.userId).toBeTruthy();
 
     await page.reload();
-    await expect(page.getByText("E2E Invited Writer")).toBeVisible();
+    await expect(page.getByText(displayName)).toBeVisible();
   });
 });
+

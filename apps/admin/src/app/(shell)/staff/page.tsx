@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canManageStaff, isActiveStaff, loadStaff } from "@/lib/staff";
-import { StatusBadge } from "@/components/status-badge";
 import { InviteStaffForm } from "./invite-form";
 import { StaffRowActions } from "./row-actions";
 
@@ -62,7 +61,15 @@ export default async function StaffPage() {
               <p className="text-sm text-textMuted">{row.role}</p>
             </div>
             <div className="flex items-center gap-3">
-              <StatusBadge status={row.active ? "published" : "retired"} />
+              <span
+                className={
+                  row.active
+                    ? "text-sm font-medium text-primary"
+                    : "text-sm text-textMuted"
+                }
+              >
+                {row.active ? "Active" : "Inactive"}
+              </span>
               <StaffRowActions
                 userId={row.user_id}
                 displayName={row.display_name}

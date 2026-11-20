@@ -43,12 +43,13 @@ See `apps/admin/.env.example` and the root `.env.example`. Required for the admi
    - Disable sign-ups; anonymous sign-ins off; MFA off.
    - Minimum password length **10**.
    - Leaked-password protection, session timeouts and backups: **not on Free** — turn on when staging upgrades to Pro, before real content.
-   - Site URL: production admin URL (`https://intell-admin.vercel.app`).
-   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob for this project (`https://intell-admin-*-replaceplace.vercel.app/**`, plus any branch-style host Vercel shows such as `https://intell-admin-git-*-replaceplace.vercel.app/**`).
-   - SMTP (provider-agnostic): either a dedicated sending mailbox (e.g. `no-reply@replaceplace.com`) on `smtp.gmail.com` port 465 with an app password, or the Workspace SMTP relay (`smtp-relay.gmail.com`). Configure values only in the dashboard.
-6. **Bootstrap the first admin (A4)** — no service-key script:
-   1. Supabase dashboard → **Authentication → Users → Invite user** (yourself).
-   2. Accept the email and set a password (min 10).
+   - Site URL: production admin URL (`https://intell-admin.vercel.app`). Invites and resets use Site URL, so invite links from a preview still land on production admin; that is expected while previews share the staging database.
+   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob (`https://intell-admin-*.vercel.app/**`, adjusted to the exact pattern from the Vercel dashboard).
+   - **Email templates:** paste `supabase/templates/invite.html` and `supabase/templates/recovery.html` into **Authentication → Emails → Templates** (**Invite user** and **Reset password**). Subjects: "You're invited to InTell" and "Reset your InTell password". Local/CI already wire these via `supabase/config.toml`.
+   - **SMTP:** provider-agnostic. Use either a dedicated sending mailbox on `smtp.gmail.com` port 465 with an app password, or the Workspace SMTP relay (`smtp-relay.gmail.com`). Configure values only in the dashboard (no values in the repo).
+6. **Bootstrap the first admin (A4)** — no email and no service-key script:
+   1. Supabase dashboard → **Authentication → Users → Add user → Create new user**.
+   2. Enter the email and a password of at least 10 characters, and tick **Auto Confirm User**.
    3. In the SQL editor, insert your staff row (replace the uuid):
 
    ```sql
@@ -77,4 +78,4 @@ pnpm --filter @intell/admin e2e:prepare   # creates gitignored test users
 pnpm --filter @intell/admin test:e2e
 ```
 
-Credentials are written to `apps/admin/e2e/.auth-users.json` (gitignored). No Google Maps key is required for M3b.
+Credentials are written to `apps/admin/e2e/.auth-users.json` (gitignored). No Google Maps key is required for M3b. Invite and recovery flows read messages from local Mailpit.
