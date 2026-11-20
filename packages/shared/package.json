@@ -15,6 +15,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
+    "suncalc": "^2.1.4",
     "zod": "^3.24.2"
   },
   "devDependencies": {

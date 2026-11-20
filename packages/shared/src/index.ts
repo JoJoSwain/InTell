@@ -1,4 +1,4 @@
-export { L10n, pickL10n } from "./schemas/l10n";
+export { AccessNotes, L10n, pickL10n } from "./schemas/l10n";
 export {
   TelemetryEvent,
   EVENT_NAMES,
@@ -16,12 +16,73 @@ export {
   PackIndexEntry,
 } from "./schemas/packs";
 export {
+  AmbienceLayerSnapshot,
+  AmbienceProfileSnapshot,
+  AmbienceZoneSnapshot,
+  CharacterSnapshot,
+  FragmentSnapshot,
+  GroveSnapshot,
+  ImageSnapshot,
+  MusicCueSnapshot,
+  MusicCueStemSnapshot,
+  MusicZoneSnapshot,
+  SnapshotSchemas,
+  UiCueSnapshot,
+  parseSnapshot,
+  safeParseSnapshot,
+  type SnapshotData,
+  type SnapshotEntity,
+} from "./schemas/snapshots";
+export {
   canonicalJson,
   contentSha256,
   roundCoord,
   roundCoordsDeep,
   sortKeysDeep,
 } from "./canonicalJson";
+
+export {
+  completionSatisfiesContingency,
+  contingencyRevisionNo,
+  type ChangeKind,
+  type RevisionChange,
+  type RevisionForContingency,
+} from "./story/contingency";
+
+export {
+  currentTimeWindow,
+  localMinutesSinceMidnight,
+  polarFallbackTimeWindow,
+} from "./time/timeWindow";
+export type {
+  SunReference,
+  TimeWindow,
+  TimeWindow as DayNight,
+} from "./time/timeWindow";
+
+export {
+  DEFAULT_TRIGGER_RADIUS_FT,
+  DEFAULT_TRIGGER_RADIUS_M,
+  FEET_PER_METER,
+  FEET_PER_METRE,
+  MAX_TRIGGER_RADIUS_FT,
+  MAX_TRIGGER_RADIUS_M,
+  METERS_PER_FOOT,
+  METERS_PER_MILE,
+  METRES_PER_MILE,
+  MILES_PER_METER,
+  MIN_TRIGGER_RADIUS_FT,
+  MIN_TRIGGER_RADIUS_M,
+  feetToMeters,
+  feetToMetres,
+  formatFeet,
+  metersToFeet,
+  metersToMiles,
+  metresToFeet,
+  metresToMiles,
+  milesToMeters,
+  milesToMetres,
+} from "./units";
 
 export type {
   AudioEngine,
