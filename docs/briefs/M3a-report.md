@@ -3,7 +3,8 @@
 **Branch:** `m3a-schema-realign` (PR #6 → `master`)  
 **Plan:** `docs/briefs/M3a-plan.md` (`96c48fd`)  
 **Review (wins):** `docs/briefs/M3a-plan-review.md` (`eb86136`) — R1–R6 applied  
-**Status:** Implementation complete; **stopped for architect review**. M3b not started.
+**Status:** Implementation complete; **stopped for architect review**. M3b not started.  
+**CI follow-up:** tip includes `fix(ci): isolate pack-index pgTAP; skip physical dwell in GPX tests` after `check`/`db` failures on `43bc76a`.
 
 ---
 
