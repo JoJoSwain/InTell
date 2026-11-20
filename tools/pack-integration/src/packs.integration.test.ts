@@ -1,9 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "node:crypto";
-import { createHash } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { execSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, beforeAll } from "vitest";
 import { GrovePack, RegionPack, canonicalJson } from "@intell/shared";
 import { DEMO, supabaseEnv } from "./env";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const env = supabaseEnv();
 const url = env.API_URL || env.SUPABASE_URL;
@@ -234,6 +238,13 @@ async function waitForPublishedSeed(timeoutMs = 180_000): Promise<void> {
 
 describe.sequential("M3a pack integration", () => {
   beforeAll(async () => {
+    // Re-upload seed tones/portraits: purge/reconcile or a fresh DB wipe can
+    // empty staging while pack_builds still point at those shas.
+    execSync("node tools/seed-media-upload.mjs", {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit",
+    });
     await waitForPublishedSeed();
   }, 240_000);
 
