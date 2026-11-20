@@ -146,6 +146,7 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 |---|---|
 | `fn_admin_upsert_region` helper | PostgREST cannot cast WKT/GeoJSON into `geography` cleanly from the admin; editor+ `SECURITY DEFINER` RPC with `has_role` guard (granted to `authenticated`, on the definer allowlist). |
 | React **19.2.4** (not latest 19.3.x) | Dual React copies (admin vs workspace) broke Next build (`useContext` on `/404`); root `pnpm.overrides` + pin 19.2.4 keeps a single tree. |
+
 ---
 
 ## 9. Open questions / JoJo follow-ups
@@ -156,17 +157,17 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 
 ---
 
-## 11. Review fixes (vs `M3b-review.md`)
+## 10. Review fixes (vs `M3b-review.md`)
 
 ### Commits since `41a5064`
 
 ```
+17576b9 docs: M3b report Review fixes for R1–R3
 fef9b9d fix(admin): M3b R1–R3 invite/confirm flow and review nits
 2644147 docs: add M3b implementation review
 f2425bd docs: confirm Vercel preview and CI on M3b report
 ```
 
-(+ report amend commit after this section).
 
 ### Required
 
@@ -195,7 +196,7 @@ Local suite green after fixes. PR #8 CI + Vercel preview status for the push con
 
 ---
 
-## 12. Explicit non-goals (held)
+## 11. Explicit non-goals (held)
 
 - M3c not started.
 - No secret values written or requested.
