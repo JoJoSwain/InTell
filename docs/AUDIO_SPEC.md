@@ -169,7 +169,7 @@ Cue "Salt Marsh – After the Flood" priority 300, conditions {outcome:{crossroa
 | music_stem | AAC stereo, 160 kbps | -23 LUFS (sum of stems ≈ -20) | All stems in a cue the same length; loop points set |
 | voice_cue / writer_note | AAC mono, 96 kbps | -18 LUFS | |
 
-- Loudness is measured at upload in the browser (an ITU-R BS.1770 implementation in `packages/shared/audio/loudness.ts`, run via Web Audio in the admin) and stored in `audio_assets.loudness_lufs`.
+- Loudness is measured at upload in the browser (an ITU-R BS.1770 implementation in `packages/shared/src/audio/loudness.ts`, run via Web Audio in the admin) and stored in `audio_assets.loudness_lufs`.
 - **Licensing:** every non-original asset needs `asset_rights`. CC0 or owned recordings are preferred. Record attribution for CC-BY. Never upload commercial library sounds without a license document.
 
 ---

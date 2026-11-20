@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="InTell M2a demo-route-gpx" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Demo Park walk (placeholder coordinates)</name>
+    <desc>TODO(JoJo): placeholder coordinates — passes marked/unmarked fragments; skips protected; crosses zone edges</desc>
+  </metadata>
+  <trk>
+    <name>demo-route</name>
+    <trkseg>
+      <trkpt lat="40.900000" lon="-111.900000"><ele>1300</ele><time>2026-01-01T18:00:00.000Z</time></trkpt>
+      <trkpt lat="40.900400" lon="-111.900400"><ele>1300</ele><time>2026-01-01T18:00:30.000Z</time></trkpt>
+      <trkpt lat="40.899700" lon="-111.900600"><ele>1300</ele><time>2026-01-01T18:01:00.000Z</time></trkpt>
+      <trkpt lat="40.900000" lon="-111.900000"><ele>1300</ele><time>2026-01-01T18:01:30.000Z</time></trkpt>
+      <trkpt lat="40.900350" lon="-111.899600"><ele>1300</ele><time>2026-01-01T18:02:00.000Z</time></trkpt>
+      <trkpt lat="40.899650" lon="-111.899450"><ele>1300</ele><time>2026-01-01T18:02:30.000Z</time></trkpt>
+      <trkpt lat="40.900000" lon="-111.898300"><ele>1300</ele><time>2026-01-01T18:03:00.000Z</time></trkpt>
+      <trkpt lat="40.899800" lon="-111.899800"><ele>1300</ele><time>2026-01-01T18:03:30.000Z</time></trkpt>
+      <trkpt lat="40.900000" lon="-111.900000"><ele>1300</ele><time>2026-01-01T18:04:00.000Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

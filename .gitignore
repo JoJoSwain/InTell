@@ -278,3 +278,7 @@ start-app.bat
 .turbo/
 **/.next/
 !.env.example
+
+# Regenerable M2a seed tones (metadata is supabase/seed-media.json)
+tools/audio-fixtures/seed-tones/
+supabase/.tmp-vault-setup.sql

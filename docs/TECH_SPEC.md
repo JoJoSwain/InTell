@@ -146,7 +146,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 ## 5. Edge functions
 | Function | Caller | Purpose |
 |---|---|---|
-| `publish` / `unpublish` | Admin | Runs `fn_publish` (DATA_MODEL §11), copies assets public, rebuilds packs |
+| `publish` / `unpublish` | Admin | Two-phase publish / unpublish per DATA_MODEL §10 (check → copy → commit; enqueues rebuild/purge jobs) |
 | `build-pack` | Internal | Builds a grove or region manifest (DATA_MODEL §12) |
 | `purge-assets` | Internal (pg_net) | Removes non-playable public objects |
 | `export-archive` | Admin | Zip of revisions, transcripts, metadata, credits, seed links (internal) |
@@ -180,7 +180,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 
 ---
 
-## 8. Telemetry events (zod schemas in `packages/shared/schemas/events.ts`)
+## 8. Telemetry events (zod schemas in `packages/shared/src/schemas/events.ts`)
 | Area | Events (props) |
 |---|---|
 | App | `app_opened`, `pack_downloaded {scope, bytes}` |

@@ -51,6 +51,7 @@ create table regions (
   id uuid pk, slug text unique not null, name text not null,
   timezone text not null default 'America/Denver',
   bounds geography(Polygon,4326),                 -- for region pack & landcover export
+  pack_version int not null default 0,             -- bumped on every region pack rebuild
   …ts
 );
 
@@ -284,6 +285,18 @@ create table landcover_grids (                     -- generated offline by tools
   file_path text not null,                         -- public-media/landcover/{region}/{version}.bin (h3 → class)
   version int not null, generated_at timestamptz not null
 );
+
+create table ui_cues (                             -- short UI voice cues (e.g. Hush "Listen.")
+  id uuid pk,
+  region_id uuid references regions(id),           -- null = global
+  key text not null check (key in ('hush_listen')), -- new keys need a migration that extends the check
+  language lang not null,
+  asset_id uuid not null references audio_assets(id),
+  status publish_status not null default 'draft',
+  …ts,
+  unique nulls not distinct (region_id, key, language)
+);
+-- Included in packs only when published and its asset is playable.
 ```
 
 ---
@@ -309,7 +322,7 @@ create table music_cues (                          -- a piece of music + when it
   crossfade_ms int not null default 6000,
   status publish_status not null default 'draft',
   …ts,
-  check (music_zone_id is not null or grove_id is not null)
+  check (num_nonnulls(music_zone_id, grove_id) = 1)  -- exactly one; pack has zone or useGroveBoundary, never both
 );
 
 create table music_cue_stems (                     -- 1..n synchronized stems per cue
@@ -461,14 +474,29 @@ create table pack_builds (id bigint generated always as identity primary key,
   version int not null, manifest_path text not null, manifest_sha256 text not null,
   asset_hashes text[] not null, bytes_total bigint not null,
   built_at timestamptz not null default now(), reason text);
+
+create table jobs (                                -- outbox; triggers/functions only insert rows
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('rebuild_pack','purge_asset')),
+  payload jsonb not null,                          -- ids only, e.g. {grove_id} or {asset_sha}; never coordinates or codes
+  status text not null default 'queued',
+  attempts int not null default 0,
+  last_error text,
+  run_after timestamptz not null default now(),
+  …ts
+);
+-- pg_cron every minute → pg_net → `run-jobs` edge function (idempotent, retries/backoff, max 5 attempts).
 ```
+Region pack rebuilds bump `regions.pack_version` (same role as `groves.pack_version`).
 
 ---
 
 ## 9. Playability rules (SQL functions)
-All are `stable` and `security definer`, owned by a dedicated role.
+All are `stable` and `security definer`, owned by `postgres` (the migration owner, which owns the tables), with `search_path = ''` (or an explicit schema list) and fully qualified names. `revoke execute … from public`, then grant only what each function needs. Only `get_pack_index()` is granted to `anon`. No dedicated owner role: a separate role would need `BYPASSRLS`, which we can't reliably grant on Supabase.
 
-- **`fn_asset_is_playable(asset_id)`**: at least one `asset_rights` row with `status='active'` and an unexpired `expires_on`. When the right is `consent_form`, its consent must also be active, unexpired and include `'app'`.
+**Expiry:** `expires_on is null` means the row never expires. An item expires when `expires_on < current_date` in the **region's** time zone (so the expiry job and playability agree).
+
+- **`fn_asset_is_playable(asset_id)`**: at least one `asset_rights` row with `status='active'` and an unexpired `expires_on` (null = never expires). When the right is `consent_form`, its consent must also be active, unexpired and include `'app'`.
 - **`fn_site_ok(site_id)`**: an active, unexpired `site_approvals` row exists.
 - **`fn_revision_is_playable(revision_id)`** requires all of:
   - the revision is `published` with `publish_at ≤ now()`, and its fragment is neither `unpublished` nor `draft`
@@ -483,19 +511,29 @@ All are `stable` and `security definer`, owned by a dedicated role.
 ---
 
 ## 10. Write paths and triggers
+Publishing is two-phase so storage and the database can't disagree (via the `publish` edge function):
+
+1. **`fn_publish_check(entity, ids[])`** — read-only; returns the checklist result (§11) plus `asset_shas_to_publish[]`.
+2. The edge function copies each staged asset `staging-audio/{sha}` → `public-media/a/{sha}.{ext}`. If any copy fails, it stops and nothing is committed.
+3. **`fn_publish_commit(entity, ids[])`** — in one transaction: re-runs the checks; sets statuses and `is_public`; sets `seed_links.stage='grown'` and `seeds.status='grown'` for linked targets; writes the audit log; **enqueues** `rebuild_pack` jobs.
+
 | Event | Effect |
 |---|---|
-| `fn_publish(entity, ids[])` (via the `publish` edge fn) | Runs the checklist (§11). On success: set statuses; mark assets `is_public` and copy `staging-audio/{sha}` → `public-media/a/{sha}.{ext}`; set `seed_links.stage='grown'` and `seeds.status='grown'` for linked targets; rebuild affected packs; audit |
-| `consents` / `asset_rights` / `site_approvals` status leaves `active` (trigger) | Find affected assets, revisions and cues; recompute; for assets no longer playable set `is_public=false` and delete the public object (pg_net → `purge-assets` fn); rebuild affected packs; audit |
-| Crossroads `closes_at` passes (pg_cron every 5 min) | Set `status='closed'`; the moderator confirms the tally → `decided` + `outcome_option_id` → rebuild packs (unlocks dependent revisions and cues) |
-| Scheduled `publish_at` passes (pg_cron every 5 min) | Rebuild packs for groves with newly playable revisions |
+| Publish (check → copy → commit, above) | On commit success: statuses, public flags, grown links, audit; enqueue `rebuild_pack` |
+| `consents` / `asset_rights` / `site_approvals` status leaves `active` (trigger) | Find affected assets, revisions and cues; recompute; for assets no longer playable set `is_public=false` and enqueue `purge_asset`; enqueue `rebuild_pack` for affected packs; audit. (`run-jobs` performs the Storage delete.) |
+| Crossroads `closes_at` passes (pg_cron every 5 min) | Set `status='closed'` and enqueue `rebuild_pack` (pack carries status so devices stop offering the vote); the moderator confirms the tally → `decided` + `outcome_option_id` → enqueue another `rebuild_pack` (unlocks dependent revisions and cues) |
+| Scheduled `publish_at` passes (pg_cron every 5 min) | Enqueue `rebuild_pack` for groves with newly playable revisions |
 | Daily 02:00 regional time | Expire consents, rights and approvals (fires the trigger); purge `memory_contact` older than 90 days; delete `voice_path` files for seeds `resting` or `hidden` more than 30 days, or `grown` more than 180 days without `may_quote` |
 
-Every pack rebuild bumps `groves.pack_version` (or the region version) and inserts a `pack_builds` row.
+Every pack rebuild bumps `groves.pack_version` or `regions.pack_version` and inserts a `pack_builds` row. Triggers and functions only **insert jobs**; they never call HTTP. `run-jobs` processes the outbox.
+
+A grove may remain `published` with zero playable revisions after a later revocation. The checklist gates publish only; the pack builder must still emit a valid pack with whatever is playable (possibly none) and must not auto-unpublish.
 
 ---
 
-## 11. Publish checklist (`fn_publish` returns `{ok, failures:[{code,message,entity_id}]}`)
+## 11. Publish checklist (`fn_publish_check` returns `{ok, failures:[{code, severity:'error'|'warning', message, entity_id}], asset_shas_to_publish[]}`)
+`ok` is true when there are no `error` entries. Warnings do not fail the check. `RADIUS_OVERLAP` and `LOUDNESS` are warnings; every other code is an error.
+
 | Code | Rule |
 |---|---|
 | `NO_TRANSCRIPT` | Every revision version has a non-empty transcript |
@@ -559,7 +597,8 @@ Every pack rebuild bumps `groves.pack_version` (or the region version) and inser
 `get_pack_index()` RPC (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox}]`. It's the only live query devices need besides writes.
 
 ### 12.4 Rules
-- Packs **never** include: protected coordinates, marker codes (only their hashes), contributor PII, seed text or voice, vote counts before a crossroads is decided, or credit names not yet `approved`.
+- Packs **never** include: protected coordinates, marker codes (only their hashes), contributor PII, seed text or voice, vote counts before a crossroads is decided, or seed credit names not yet `approved`.
+- The ledger's `approved` credit rule applies to **seed** credit names (`seeds.credit_name` with `credit_status = 'approved'`). Revision credits use `contributors.display_credit`, which the contributor chose in their consent; an active consent is the approval for those credits.
 - The device must delete any local asset whose sha isn't in the union of the current manifests (mandatory on sync; this is how revocation reaches phones).
 - Assets are immutable by sha, so CDN caching is safe. Manifests are versioned paths and are never overwritten.
 
