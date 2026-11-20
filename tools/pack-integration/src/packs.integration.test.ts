@@ -169,8 +169,26 @@ async function ensureEditor(): Promise<{ client: SupabaseClient; jwt: string }> 
   return { client, jwt };
 }
 
+async function livePackReadable(groveId: string): Promise<boolean> {
+  const { data: build } = await svc
+    .from("pack_builds")
+    .select("manifest_path")
+    .eq("scope", "grove")
+    .eq("scope_id", groveId)
+    .eq("live", true)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!build?.manifest_path) return false;
+  const { data, error } = await svc.storage
+    .from("public-media")
+    .download(build.manifest_path as string);
+  return !error && !!data;
+}
+
 async function waitForPublishedSeed(timeoutMs = 180_000): Promise<void> {
   const started = Date.now();
+  let bootstrapped = false;
   while (Date.now() - started < timeoutMs) {
     await drainJobs();
     const { data: rel } = await svc
@@ -178,18 +196,14 @@ async function waitForPublishedSeed(timeoutMs = 180_000): Promise<void> {
       .select("status")
       .eq("id", DEMO.publishedReleaseId)
       .single();
-    if (rel?.status === "published") {
-      const { data: live } = await svc
-        .from("pack_builds")
-        .select("id")
-        .eq("scope", "grove")
-        .eq("scope_id", DEMO.groveId)
-        .eq("live", true)
-        .limit(1)
-        .maybeSingle();
-      if (live) return;
-    }
-    if (rel?.status === "publishing") {
+    const readable =
+      (await livePackReadable(DEMO.groveId)) &&
+      (await livePackReadable(DEMO.secondGroveId));
+    if (rel?.status === "published" && readable) return;
+
+    // After backup restore, pack_builds rows may exist while storage objects do not.
+    if (!bootstrapped || rel?.status === "publishing" || !readable) {
+      bootstrapped = true;
       await invoke("build-pack", {
         grove_id: DEMO.groveId,
         release_id: DEMO.publishedReleaseId,
@@ -288,7 +302,8 @@ describe.sequential("M3a pack integration", () => {
     const ext = parsed.externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
     expect(ext).toBeDefined();
     expect(ext?.groveId).toBe(DEMO.groveId);
-    expect(ext?.contingencyRevisionNo).toBe(1);
+    // Seed starts at 1; later contingency releases may raise it — still a number ≥ 1.
+    expect(ext?.contingencyRevisionNo).toBeGreaterThanOrEqual(1);
   });
 
   it("portrait images are public in storage after publish reconcile", async () => {
@@ -310,6 +325,14 @@ describe.sequential("M3a pack integration", () => {
   });
 
   it("no-op rebuild: content_sha256 equal, version unchanged", async () => {
+    // Align live pack with current projection first (seed/go-live may lag).
+    const sync = await invoke("build-pack", {
+      grove_id: DEMO.groveId,
+      reason: "sync-before-noop",
+    });
+    expect(sync.ok).toBe(true);
+    await drainJobs();
+
     const before = await fetchLiveGrovePack();
     const res = await invoke("build-pack", {
       grove_id: DEMO.groveId,
@@ -327,7 +350,7 @@ describe.sequential("M3a pack integration", () => {
     delete bodyA.packVersion;
     delete bodyA.builtAt;
     expect(digest(canonicalJson(bodyA))).toBe(before.contentSha);
-  }, 60_000);
+  }, 120_000);
 
   it("forged service_role JWT is rejected by internal functions", async () => {
     const header = Buffer.from(
@@ -455,15 +478,26 @@ describe.sequential("M3a pack integration", () => {
       .single();
     expect(rel?.status).toBe("publishing");
 
-    const { data: pendingBuilds } = await svc
-      .from("pack_builds")
-      .select("live, version")
-      .eq("release_id", releaseId);
-    expect(pendingBuilds?.some((b) => b.live === false)).toBe(true);
+    // Builds are created by rebuild_pack jobs; until drainJobs runs they may
+    // not exist yet. Atomicity is: index stays on prior live versions while
+    // the release is still publishing, then both groves advance together.
+    const { count: queuedRebuilds } = await svc
+      .from("jobs")
+      .select("*", { count: "exact", head: true })
+      .eq("kind", "rebuild_pack")
+      .eq("status", "queued");
+    expect((queuedRebuilds ?? 0) >= 2).toBe(true);
     expect(await indexGroveVersion(DEMO.groveId)).toBe(vBefore1);
     expect(await indexGroveVersion(DEMO.secondGroveId)).toBe(vBefore2);
 
     await drainJobs();
+
+    const { data: releaseBuilds } = await svc
+      .from("pack_builds")
+      .select("live")
+      .eq("release_id", releaseId);
+    expect((releaseBuilds ?? []).length).toBeGreaterThan(0);
+    expect((releaseBuilds ?? []).every((b) => b.live === true)).toBe(true);
 
     const { data: relAfter } = await svc
       .from("releases")
@@ -486,7 +520,7 @@ describe.sequential("M3a pack integration", () => {
     const extBefore = GrovePack.parse(
       (await fetchLiveGrovePack(DEMO.secondGroveId)).pack,
     ).externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
-    expect(extBefore?.contingencyRevisionNo).toBe(1);
+    expect(extBefore?.contingencyRevisionNo).toBeGreaterThanOrEqual(1);
 
     const { data: versions } = await svc
       .from("revision_versions")
@@ -496,21 +530,33 @@ describe.sequential("M3a pack integration", () => {
     const v0 = versions?.[0];
     if (!v0) throw new Error("frag1 rev1 version missing");
 
-    await svc.from("fragment_revisions").insert({
+    const { data: maxRev } = await svc
+      .from("fragment_revisions")
+      .select("revision_no")
+      .eq("fragment_id", DEMO.frag1Id)
+      .order("revision_no", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextNo = (maxRev?.revision_no ?? 1) + 1;
+
+    const { error: revInsErr } = await svc.from("fragment_revisions").insert({
       id: newRevId,
       fragment_id: DEMO.frag1Id,
-      revision_no: 2,
+      revision_no: nextNo,
       status: "draft",
       change_kind: "contingency",
       change_note: "integration contingency r2",
     });
-    await svc.from("revision_versions").insert({
+    if (revInsErr) throw new Error(`frag1 contingency rev insert: ${revInsErr.message}`);
+
+    const { error: verInsErr } = await svc.from("revision_versions").insert({
       revision_id: newRevId,
       language: v0.language,
       time_window: v0.time_window,
       narration_asset_id: v0.narration_asset_id,
-      transcript: "TEST transcript — frag1 r2 contingency narration tone.",
+      transcript: "TEST transcript — frag1 contingency narration tone.",
     });
+    if (verInsErr) throw new Error(`frag1 contingency version insert: ${verInsErr.message}`);
 
     await svc.from("releases").insert({
       id: releaseId,
@@ -518,21 +564,21 @@ describe.sequential("M3a pack integration", () => {
       status: "draft",
     });
     await copyReleaseItems(DEMO.publishedReleaseId, releaseId);
-    await svc.from("release_items").insert({
+    const { error: itemErr } = await svc.from("release_items").insert({
       release_id: releaseId,
       entity: "revision",
       entity_id: newRevId,
     });
+    if (itemErr) throw new Error(`release_items insert: ${itemErr.message}`);
 
     const { jwt } = await ensureEditor();
-    const pub = await invoke("publish", { release_id: releaseId }, jwt);
+    const pub = await invoke("publish", { releaseId }, jwt);
     expect(pub.ok, await pub.text()).toBe(true);
     await drainJobs();
 
     const extAfter = GrovePack.parse(
       (await fetchLiveGrovePack(DEMO.secondGroveId)).pack,
     ).externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
-    expect(extAfter?.contingencyRevisionNo).toBe(2);
     expect(extAfter?.contingencyRevisionNo).toBeGreaterThan(
       extBefore!.contingencyRevisionNo,
     );
@@ -584,42 +630,47 @@ describe.sequential("M3a pack integration", () => {
   it("scheduled release check failure marks release failed", async () => {
     const releaseId = randomUUID();
     const portraitId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000140";
+    const seedAlt = { en: "Placeholder portrait for demo character River." };
     const prevAlt =
       (
         await svc.from("image_assets").select("alt_text").eq("id", portraitId).single()
-      ).data?.alt_text ?? null;
+      ).data?.alt_text ?? seedAlt;
 
-    await svc.from("releases").insert({
-      id: releaseId,
-      name: "integration scheduled fail",
-      status: "scheduled",
-      publish_at: new Date(Date.now() - 60_000).toISOString(),
-    });
-    await svc.from("release_items").insert({
-      release_id: releaseId,
-      entity: "image",
-      entity_id: portraitId,
-    });
-    await svc
-      .from("image_assets")
-      .update({ alt_text: { en: "" } })
-      .eq("id", portraitId);
+    try {
+      await svc.from("releases").insert({
+        id: releaseId,
+        name: "integration scheduled fail",
+        status: "scheduled",
+        publish_at: new Date(Date.now() - 60_000).toISOString(),
+      });
+      await svc.from("release_items").insert({
+        release_id: releaseId,
+        entity: "image",
+        entity_id: portraitId,
+      });
+      await svc
+        .from("image_assets")
+        .update({ alt_text: { en: "" } })
+        .eq("id", portraitId);
 
-    const { error: enqErr } = await svc.rpc("fn_enqueue_due_releases");
-    if (enqErr) throw new Error(enqErr.message);
-    await drainJobs();
+      const { error: enqErr } = await svc.rpc("fn_enqueue_due_releases");
+      if (enqErr) throw new Error(enqErr.message);
+      await drainJobs();
 
-    const { data: rel } = await svc
-      .from("releases")
-      .select("status, last_check")
-      .eq("id", releaseId)
-      .single();
-    expect(rel?.status).toBe("failed");
-    const failures = (rel?.last_check as { failures?: { code?: string }[] })?.failures ?? [];
-    expect(failures.some((f) => f.code === "NO_ALT_TEXT")).toBe(true);
-
-    if (prevAlt) {
-      await svc.from("image_assets").update({ alt_text: prevAlt }).eq("id", portraitId);
+      const { data: rel } = await svc
+        .from("releases")
+        .select("status, last_check")
+        .eq("id", releaseId)
+        .single();
+      expect(rel?.status).toBe("failed");
+      const failures = (rel?.last_check as { failures?: { code?: string }[] })?.failures ?? [];
+      expect(failures.some((f) => f.code === "NO_ALT_TEXT")).toBe(true);
+    } finally {
+      const { error: restoreErr } = await svc
+        .from("image_assets")
+        .update({ alt_text: seedAlt })
+        .eq("id", portraitId);
+      if (restoreErr) throw new Error(`restore alt_text: ${restoreErr.message}`);
     }
   }, 120_000);
 
@@ -627,6 +678,15 @@ describe.sequential("M3a pack integration", () => {
     const releaseId = randomUUID();
     const liveBefore = await fetchLiveGrovePack(DEMO.groveId);
     const idxBefore = await indexGroveVersion(DEMO.groveId);
+
+    // Prior tests may have cleared portrait alt; restore before check/commit.
+    const { error: altErr } = await svc
+      .from("image_assets")
+      .update({
+        alt_text: { en: "Placeholder portrait for demo character River." },
+      })
+      .eq("id", "aaaaaaaa-bbbb-4ccc-8ddd-000000000140");
+    if (altErr) throw new Error(`restore portrait alt: ${altErr.message}`);
 
     await svc.from("releases").insert({
       id: releaseId,
@@ -640,30 +700,37 @@ describe.sequential("M3a pack integration", () => {
       .eq("id", DEMO.groveId);
 
     const { jwt } = await ensureEditor();
-    const pub = await invoke("publish", { release_id: releaseId }, jwt);
+    const pub = await invoke("publish", { releaseId }, jwt);
     expect(pub.ok, await pub.text()).toBe(true);
 
     const bogusGrove = "00000000-0000-0000-0000-000000000099";
     const { data: rebuildJobs, error: jobErr } = await svc
       .from("jobs")
-      .select("id, payload")
+      .select("id, payload, attempts")
       .eq("kind", "rebuild_pack")
       .eq("status", "queued");
     if (jobErr) throw new Error(jobErr.message);
+    let corrupted = 0;
     for (const job of rebuildJobs ?? []) {
       const payload = job.payload as Record<string, unknown>;
       if (payload.release_id === releaseId || payload.releaseId === releaseId) {
+        // Point every rebuild at a missing grove and leave one attempt so the
+        // next run-jobs marks the job (and release) failed.
         await svc
           .from("jobs")
           .update({
-            payload: { ...payload, grove_id: bogusGrove, region_id: undefined },
+            payload: { grove_id: bogusGrove, release_id: releaseId },
+            attempts: 4,
           })
           .eq("id", job.id);
+        corrupted += 1;
       }
     }
+    expect(corrupted).toBeGreaterThan(0);
 
-    for (let i = 0; i < 8; i++) {
-      await invoke("run-jobs", {});
+    for (let i = 0; i < 6; i++) {
+      const res = await invoke("run-jobs", {});
+      expect(res.status).toBe(200);
     }
 
     const { data: rel } = await svc
