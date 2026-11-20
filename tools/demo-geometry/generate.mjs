@@ -121,7 +121,7 @@ insert into public._seed_geometry (key, kind, geog) values
   ('ambience_marsh', 'polygon', extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 50)),
   ('music_zone', 'polygon', extensions.ST_Intersection(
      extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 50)::extensions.geometry,
-     extensions.ST_GeomFromText('POLYGON((-180 -90, ${musicClipLng} -90, ${musicClipLng} 90, -180 90, -180 -90))', 4326)
+     extensions.ST_GeomFromText('POLYGON((${musicClipLng} -90, 180 -90, 180 90, ${musicClipLng} 90, ${musicClipLng} -90))', 4326)
    )::extensions.geography),
   ('region_bounds', 'polygon', extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 500))
 `;
@@ -204,7 +204,8 @@ function narrationMs(fragKey) {
   return asset.duration_ms;
 }
 
-const STEP_M = 5;
+// Fixture pace: 1.4 m/s → one point per second, 1.4 m apart
+const STEP_M = 1.4;
 const track = [];
 for (let i = 0; i < waypoints.length - 1; i++) {
   const a = waypoints[i];

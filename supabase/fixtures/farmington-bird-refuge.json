@@ -286,7 +286,7 @@
     ],
     "_start_note": "about 100 m west of frag1, outside the boundary buffer, so the route enters the grove and the ambience zone",
     "route": "start → frag1 → frag2 → frag4 → frag3 → frag5 → frag6 (frag1's point) → trail P2 → P3 → frag7 (≈P11) → P10 → chord to P8 (passes ~75 m from frag9) → frag8 (P7) → P6 → P5 → frag10 (P4) → P3 → P2 → P1 → start",
-    "pace": "a point every 5 m, one timestamp per second (about 1.4 m/s)",
+    "pace": "1.4 m/s: one point per second, 1.4 m apart",
     "dwell": "at each fragment, stand still (repeat the same point each second) for its revision-1 narration duration_ms (from supabase/seed-media.json) + 5 s, because completion needs the whole fragment (ADR 0003 §3)",
     "never": "enter frag9's radius (protected; QR only)"
   },
