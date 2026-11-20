@@ -9,12 +9,11 @@
 ## 1. Commits on `m2a-schema` (this work)
 
 ```
-docs: ADR 0003 story graph
-feat(db): ADR 0003 story graph + Farmington seed
-docs: add M2a story-graph report
+a67397b feat(db): ADR 0003 story graph + Farmington seed
+9bc0b67 docs: ADR 0003 story graph
 ```
 
-(Exact SHAs after push; see `git log --oneline origin/master..HEAD`.)
+Full branch tip log vs master also includes prior M2a commits (`c1ff1db`, `fc4856e`, …).
 
 ---
 
