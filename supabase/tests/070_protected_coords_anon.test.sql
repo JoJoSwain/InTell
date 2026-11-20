@@ -3,16 +3,18 @@
 begin;
 select plan(5);
 
-select ok(
-  not exists (
-    select 1
+-- M2b C19: anon may execute get_pack_index only (index has no protected coords)
+select is(
+  (
+    select count(*)::int
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.prokind = 'f'
       and has_function_privilege('anon', p.oid, 'EXECUTE')
   ),
-  'anon has no execute on public functions (incl. anything returning coords)'
+  1,
+  'anon executes exactly one public function (get_pack_index)'
 );
 
 delete from public.audit_log;

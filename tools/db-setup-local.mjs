@@ -35,6 +35,7 @@ function parseEnv(text) {
   return out;
 }
 
+run("node tools/sync-edge-shared.mjs");
 run("pnpm exec supabase db reset");
 
 const env = parseEnv(run("pnpm exec supabase status -o env", { capture: true }));
@@ -71,3 +72,22 @@ try {
 
 console.log("Vault secrets run_jobs_url / run_jobs_service_key written.");
 console.log(`run_jobs_url=${runJobsUrl}`);
+
+try {
+  run("node tools/seed-media-upload.mjs");
+} catch (e) {
+  console.warn(
+    "seed-media-upload skipped (generate tones with pnpm db:seed-media-meta first):",
+    e?.message ?? e,
+  );
+}
+
+run("node tools/sync-edge-shared.mjs");
+try {
+  run("node tools/seed-media-upload.mjs");
+} catch (e) {
+  console.warn(
+    "seed-media-upload failed (start stack / generate tones first):",
+    e?.message ?? e,
+  );
+}

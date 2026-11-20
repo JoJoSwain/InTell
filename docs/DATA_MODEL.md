@@ -487,6 +487,7 @@ create index on events (grove_id, occurred_at);
 create table pack_builds (id bigint generated always as identity primary key,
   scope text not null check (scope in ('grove','region')), scope_id uuid not null,
   version int not null, manifest_path text not null, manifest_sha256 text not null,
+  content_sha256 text,                             -- canonical JSON sans packVersion/builtAt; equal ⇒ rebuild no-op
   asset_hashes text[] not null, bytes_total bigint not null,
   built_at timestamptz not null default now(), reason text);
 
@@ -529,20 +530,25 @@ All are `stable` and `security definer`, owned by `postgres` (the migration owne
 Publishing is two-phase so storage and the database can't disagree (via the `publish` edge function):
 
 1. **`fn_publish_check(entity, ids[])`** — read-only; returns the checklist result (§11) plus `asset_shas_to_publish[]`.
-2. The edge function copies each staged asset `staging-audio/{sha}` → `public-media/a/{sha}.{ext}`. If any copy fails, it stops and nothing is committed.
+2. The edge function copies each staged asset `staging-audio/{sha}` → `public-media/a/{sha}.{ext}` with `Cache-Control: public, max-age=3600`. If any copy fails, it stops and nothing is committed.
 3. **`fn_publish_commit(entity, ids[])`** — in one transaction: re-runs the checks; sets statuses and `is_public`; sets `seed_links.stage='grown'` and `seeds.status='grown'` for linked targets; writes the audit log; **enqueues** `rebuild_pack` jobs.
+
+**Unpublish:** `fn_unpublish_commit(entity, ids[])` (editor/admin via the `unpublish` edge function) sets `status='unpublished'` for `grove` | `fragment` | `revision` | `music_cue` | `ambience_zone` | `music_zone` | `ui_cue`, writes the audit log, and enqueues `rebuild_pack` for affected scopes. No storage ops inline; children are not cascaded. An unpublished grove drops out of `get_pack_index`; unpublished fragments drop out of their pack. The §10 reconciler removes files after the rebuild.
 
 | Event | Effect |
 |---|---|
 | Publish (check → copy → commit, above) | On commit success: statuses, public flags, grown links, audit; enqueue `rebuild_pack` |
-| `consents` / `asset_rights` / `site_approvals` status leaves `active` (trigger) | Find affected assets, revisions and cues; recompute; for assets no longer playable set `is_public=false` and enqueue `purge_asset`; enqueue `rebuild_pack` for affected packs; audit. (`run-jobs` performs the Storage delete.) |
+| Unpublish (`fn_unpublish_commit`) | Status `unpublished`, audit, enqueue `rebuild_pack`; reconciler removes storage after rebuild |
+| `consents` / `asset_rights` / `site_approvals` status leaves `active` (trigger) | Find affected assets, revisions and cues; recompute; enqueue `rebuild_pack` (and a deduped `purge_asset` reconcile). Storage deletes and authoritative `is_public` updates are done by the reconciler after rebuilds. |
 | Crossroads `closes_at` passes (pg_cron every 5 min) | Set `status='closed'` and enqueue `rebuild_pack` (pack carries status so devices stop offering the vote); the moderator confirms the tally → `decided` + `outcome_option_id` → enqueue another `rebuild_pack` (unlocks dependent revisions and cues) |
 | Scheduled `publish_at` passes (pg_cron every 5 min) | Enqueue `rebuild_pack` for groves with newly playable revisions |
 | Daily 02:00 regional time | Expire consents, rights and approvals (fires the trigger); purge `memory_contact` older than 90 days; delete `voice_path` files for seeds `resting` or `hidden` more than 30 days, or `grown` more than 180 days without `may_quote` |
 
-Every pack rebuild bumps `groves.pack_version` or `regions.pack_version` and inserts a `pack_builds` row. Triggers and functions only **insert jobs**; they never call HTTP. `run-jobs` processes the outbox.
+**Pack rebuild / outbox:** Triggers and functions only **insert jobs**; they never call HTTP. `run-jobs` processes **all queued `rebuild_pack` jobs before any `purge_asset` job** in a run. Each successful rebuild enqueues one deduplicated `purge_asset` reconcile (payload is informational). `build-pack` computes canonical JSON **without** `packVersion`/`builtAt`, hashes it as `content_sha256`, and **no-ops** (no write, no version bump) when it matches the latest `pack_builds.content_sha256` for the scope. Otherwise it bumps `groves.pack_version` or `regions.pack_version`, writes the manifest, and inserts a `pack_builds` row.
 
-A grove may remain `published` with zero playable revisions after a later revocation. The checklist gates publish only; the pack builder must still emit a valid pack with whatever is playable (possibly none) and must not auto-unpublish.
+**Public media reconciler (`purge-assets`):** `public-media/a/` must contain **exactly** the union of `assets[].sha` across the **latest** manifest of every scope listed by `get_pack_index`. Delete every `public-media/a/*` object whose sha is not in that keep-set and set `audio_assets.is_public = false` for them; set `is_public = true` only for shas in the keep-set. Idempotent.
+
+A grove may remain `published` with zero playable revisions after a later revocation. The checklist gates publish only; the pack builder must still emit a valid pack with whatever is playable (possibly none) and must not auto-unpublish. Such a grove **stays** in `get_pack_index` so devices can drop revoked content.
 
 ---
 
@@ -572,7 +578,7 @@ A grove may remain `published` with zero playable revisions after a later revoca
 ## 12. Content packs (the delivery format)
 
 ### 12.1 Grove pack
-`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by the `build-pack` edge function. zod `GrovePack`:
+`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by the `build-pack` edge function. Manifests use **canonical JSON** (deep-sorted object keys, no insignificant whitespace, UTF-8; arrays in defined order — fragments by `storyOrder` then `id`; revisions by `fragmentId` then `revisionNo`; `requires` groups/members by `sort_order` then id; assets by `sha`; other lists by `id`; coordinates rounded to **6** decimal places). `manifest_sha256` is over those exact bytes. `builtAt` is the latest `updated_at` among rows that fed the pack (deterministic input watermark), and is excluded from `content_sha256` along with `packVersion`. zod `GrovePack`:
 ```ts
 {
   schema: 1, groveId, packVersion, builtAt,
@@ -611,13 +617,14 @@ A grove may remain `published` with zero playable revisions after a later revoca
 - `assets`
 
 ### 12.3 Index
-`get_pack_index()` RPC (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox}]`. It's the only live query devices need besides writes.
+`get_pack_index()` RPC (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox}]` from the **latest** `pack_builds` row per `(scope, scope_id)`. Grove `name` is `groves.name` (L10n jsonb); region `name` is `{"en": regions.name}`. `bbox` is `[minLng, minLat, maxLng, maxLat]` from `ST_Envelope` of `groves.boundary` / `regions.bounds`. **Groves** appear only when `status = 'published'` and a build exists (including published groves with zero playable revisions). **Regions** appear when a `pack_builds` row exists (regions have no publish status). It's the only live query devices need besides writes.
 
 ### 12.4 Rules
 - Packs **never** include: protected coordinates, marker codes (only their hashes), contributor PII, seed text or voice, vote counts before a crossroads is decided, or seed credit names not yet `approved`.
 - The ledger's `approved` credit rule applies to **seed** credit names (`seeds.credit_name` with `credit_status = 'approved'`). Revision credits use `contributors.display_credit`, which the contributor chose in their consent; an active consent is the approval for those credits.
 - The device must delete any local asset whose sha isn't in the union of the current manifests (mandatory on sync; this is how revocation reaches phones).
-- Assets are immutable by sha, so CDN caching is safe. Manifests are versioned paths and are never overwritten.
+- Manifest paths are versioned and are never **overwritten**. After a new version is written and indexed, the reconciler **deletes older manifest objects** for that scope (`pack_builds` rows stay as history). Devices already hold their installed manifest locally.
+- Cache headers on upload: audio `a/{sha}.{ext}` → `Cache-Control: public, max-age=3600`; manifests → `public, max-age=60` (revocation reaches shared caches within those bounds). Assets remain content-addressed by sha.
 
 ---
 

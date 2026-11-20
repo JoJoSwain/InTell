@@ -68,6 +68,9 @@ declare
 
   c_contributor_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000050';
   c_consent_id             constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000051';
+  -- R5: frag4-only storyteller consent (revocation leaves other revisions playable)
+  c_storyteller_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000052';
+  c_storyteller_consent_id constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000053';
 
   c_question_id            constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000060';
   c_crossroads_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000070';
@@ -235,6 +238,28 @@ begin
     null
   );
 
+  insert into public.contributors (
+    id, display_credit, legal_name, contact_email, notes
+  ) values (
+    c_storyteller_id,
+    'Demo Storyteller',
+    'Demo Storyteller (test)',
+    'demo-storyteller@example.invalid',
+    'M2b R5: consent covers frag4 revision 1 narration only'
+  );
+
+  insert into public.consents (
+    id, contributor_id, status, channels, license_line, signed_on, expires_on
+  ) values (
+    c_storyteller_consent_id,
+    c_storyteller_id,
+    'active',
+    array['app','archive']::text[],
+    'Demo Storyteller consent — frag4 only',
+    current_date - 60,
+    null
+  );
+
   ---------------------------------------------------------------------------
   -- Audio assets (exact values from supabase/seed-media.json)
   ---------------------------------------------------------------------------
@@ -364,7 +389,7 @@ begin
     (c_asset_narr_f1_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
     (c_asset_narr_f2_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
     (c_asset_narr_f3_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_f4_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f4_id,      'consent_form', c_storyteller_id, c_storyteller_consent_id, null, 'active'),
     (c_asset_narr_f5_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
     (c_asset_narr_f6_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
     (c_asset_narr_f7_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
@@ -577,7 +602,7 @@ begin
     (c_rev_f1_id,     c_contributor_id, 'narrator', c_consent_id),
     (c_rev_f2_id,     c_contributor_id, 'narrator', c_consent_id),
     (c_rev_f3_id,     c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_f4_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f4_id,     c_storyteller_id, 'storyteller', c_storyteller_consent_id),
     (c_rev_f5_id,     c_contributor_id, 'narrator', c_consent_id),
     (c_rev_f6_id,     c_contributor_id, 'narrator', c_consent_id),
     (c_rev_f7_id,     c_contributor_id, 'narrator', c_consent_id),

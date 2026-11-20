@@ -10,8 +10,15 @@
     "dev:admin": "pnpm --filter @intell/admin dev",
     "dev:mobile": "pnpm --filter @intell/mobile start",
     "db:setup-local": "node tools/db-setup-local.mjs",
+    "db:sync-edge-shared": "node tools/sync-edge-shared.mjs",
+    "db:check-edge-shared": "node tools/check-edge-shared.mjs",
+    "db:seed-media-upload": "node tools/seed-media-upload.mjs",
     "db:seed-media-meta": "pnpm --filter @intell/audio-fixtures generate:seed-meta",
-    "db:demo-geometry": "node tools/demo-geometry/generate.mjs"
+    "db:demo-geometry": "node tools/demo-geometry/generate.mjs",
+    "db:sync-edge-shared": "node tools/sync-edge-shared.mjs",
+    "db:check-edge-shared": "node tools/check-edge-shared.mjs",
+    "db:seed-media-upload": "node tools/seed-media-upload.mjs",
+    "test:integration": "pnpm --filter @intell/pack-integration test:integration"
   },
   "devDependencies": {
     "supabase": "3.2.0",

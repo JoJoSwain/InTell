@@ -4,6 +4,24 @@ export {
   EVENT_NAMES,
   type EventName,
 } from "./schemas/events";
+export {
+  MusicCondition,
+  StemRule,
+  StemRulePack,
+} from "./schemas/music";
+export {
+  GrovePack,
+  GrovePackFragment,
+  RegionPack,
+  PackIndexEntry,
+} from "./schemas/packs";
+export {
+  canonicalJson,
+  contentSha256,
+  roundCoord,
+  roundCoordsDeep,
+  sortKeysDeep,
+} from "./canonicalJson";
 
 export type {
   AudioEngine,
