@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, "cursor/**"]
+    branches: ["**"]
   pull_request:
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm --filter @intell/admin lint
       - run: pnpm --filter @intell/admin build
