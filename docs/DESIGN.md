@@ -1,6 +1,6 @@
 # InTell — Design Spec (v2, partly superseded)
 
-> **Superseded in part by ADR 0004 (2026-11-20).** §5 (admin) is updated for M3, and the token values in §1.1 and the type scale in §1.3 still apply. Everything else (token *uses* such as `seed` and the crossroads `accent`, §1.2 map style, §1.4 haptics and UI sounds, §2 copy, §3 components, §4 screens, §6 checklist items about the tree, storybook and Echo) still describes v2 and will be rewritten with Ashley (Creative Director) before M5. Until then, ADR 0004 wins: Google Maps online (ADR 0002); markers at 100% when playable and 35% when locked or out of their time window, colored by tier; a teaser pop-up for locked markers; Chronicle (bottom left), a center button (TBD) and Journal (bottom right) with Settings top right; no Grow, Rings, Crossroads, Ledger, Fork sheet or seeds.
+> **Superseded in part by ADR 0004 (2026-11-20).** §5 (admin) is updated for M3, and the token values in §1.1 and the type scale in §1.3 still apply. Everything else (token *uses* such as `seed` and the crossroads `accent`, §1.2 map style, §1.4 haptics and UI sounds, §2 copy, §3 components, §4 screens, §6 checklist items about the tree, storybook and Echo) still describes v2 and will be rewritten with Ashley (Creative Director) before M5. Until then, ADR 0004 wins: Google Maps online (ADR 0002); markers at 100% when playable and 35% when locked or out of their time window, colored by tier; a teaser pop-up for locked markers; Chronicle (bottom left), a center button (TBD) and Journal (bottom right) with Settings top right; no Grow, Rings, Crossroads, Ledger, Fork sheet or seeds; no Play button for a first listen (narration starts on arrival, one fragment at a time).
 
 **The design goal:** the phone is a quiet companion. Sound does the work; the map orients; every screen is easy to leave. Screen-level detail for the Chronicle and the Journal will live in their own specs (rewritten before M8 and M9). This doc holds the system they share.
 
@@ -125,6 +125,6 @@ Status badges: Draft gray, Scheduled blue, Published green, Failed red, Retired 
 - [ ] Journal tree has a list equivalent; the storybook reads as continuous text
 - [ ] Hold-to-record has a tap-to-start/stop alternative
 - [ ] Every heard fragment has a transcript; Echo has lock-screen controls
-- [ ] Accessible play works within 35 ft of the fragment's point (it needs location)
+- [ ] The accessible trigger starts fragments automatically within 35 ft of their point (it needs location)
 - [ ] 200% text, reduced motion, contrast tests pass
 - [ ] The mixer is operable by screen reader (adjustable sliders with values)

@@ -57,13 +57,14 @@ Taking part (visits, fragments completed) · depth (share reaching branches and 
 ## 2. Principles (these break ties)
 1. **The place comes first.** Every feature serves the on-site encounter. Nothing lets a first listen happen off site.
 2. **The environment is the interface.** A map, Chronicle and Journal buttons, a center button (to be decided), Settings, and a dark playing overlay. No feeds, search, lists of nearby content, streaks, badges, percentages or push notifications.
+2a. **Hands-free.** The story starts itself when you arrive. There's never a Play button for a first listen, so the phone can stay in a pocket. **One story fragment plays at a time**, layered over the surroundings and soundtrack; two fragments never overlap.
 3. **In situ first.** New fragments play only on site. A fragment enters the Chronicle only after it has been completed on site.
 4. **Sound accompanies reality.** Surroundings are mixed low, with Hush moments; wildlife calls never play on the speaker (AUDIO_SPEC §1).
 5. **Replaceplace makes everything that plays.** Writing, narration, music and sound effects are produced by Replaceplace staff, for creative control and quality. No AI-generated text, narration, music or sound. Listeners' Journal entries inform the writers; they're never played, shown or credited.
 6. **Show where the story leads, not what it says.** Locked fragments are visible on the map; only their teaser is shown until they're completed.
 7. **Earth and World meet in the body.** Fragments and teasers point to real sounds, textures and things in the place, and tie them to the story.
 8. **Anonymous by default.** No listener accounts. Location never leaves the phone. Story progress stays on the phone.
-9. **Accessible by default.** Transcripts, screen readers, large text, reduced motion, accessible play, image alt text.
+9. **Accessible by default.** Transcripts, screen readers, large text, reduced motion, a more forgiving accessible trigger, image alt text.
 
 ---
 
@@ -74,13 +75,13 @@ Taking part (visits, fragments completed) · depth (share reaching branches and 
 |---|---|
 | Launch | Static splash → branded Replaceplace animation (≤ 2.5 s, skippable; full only on cold start) → first-launch welcome (2 cards + location explainer) |
 | Home: Map | Google base map (online); user puck; grove polygons; root, branch and leaf markers (100% playable now, 35% locked or out of window); recenter button; a session status chip; **Chronicle** (bottom left), **center button (TBD)**, **Journal** (bottom right); **Settings** (top right) |
-| Story playback | Proximity triggering with tier priority; tap-to-play in range; QR scan for physical markers; accessible play; Day/Night version selection; replay after a Story Contingency; the dark playing overlay; lock-screen controls |
+| Story playback | Automatic proximity triggering with tier priority, one fragment at a time; QR scan for physical markers (plays automatically on a successful scan); the accessible trigger; Day/Night version selection; replay after a Story Contingency; the dark playing overlay with pause; lock-screen controls |
 | Surroundings | Generative ambience from zones or land cover; Day/Night and month aware; wildlife-safe |
 | Soundtrack | Zone- and grove-based cues with story-state conditions and stems, Day/Night; crossfades |
 | Hush | Periodic silence with a "Listen." cue (setting, default on) |
 | Chronicle | Character cards (portrait, growing summary, groves, related fragments); completed fragments with replay per completed time version; related locked fragments with their teasers (spec rewritten before M8) |
 | Journal | Write or record thoughts about the story, private to Replaceplace staff; see what your ideas grew into; optional check-in (spec rewritten before M9) |
-| Settings | Text size; audio mixer (Story, Music, Surroundings); Hush on/off; arrival chime; playback speed; headphones tip; accessibility (accessible play, reduced motion, high-contrast markers); downloads; privacy (what we collect, Delete my data, Reset device ID); staff sign-in (preview mode); about |
+| Settings | Text size; audio mixer (Story, Music, Surroundings); Hush on/off; arrival chime; playback speed; headphones tip; accessibility (accessible trigger, reduced motion, high-contrast markers); downloads; privacy (what we collect, Delete my data, Reset device ID); staff sign-in (preview mode); about |
 | Downloads | Grove packs (manifest, narration, music, images) and the region pack (ambience library, landcover grid) are downloaded before a walk so playback is smooth with the screen locked. The base map is online only. |
 
 ### 3.2 Admin web app (Next.js, hosted)
@@ -112,7 +113,7 @@ AI generation of any kind; listener accounts or social features; public display 
 - **Marker states:** playable now (100% opacity, tier color); locked or outside its time window (35%, tier color); in range (pulsing halo, static with reduced motion); completed and changed-since-completed states are decided in DESIGN before M5; retired (hidden). Physical markers use a distinct glyph.
 - **Never drawn:** sound or music zones. Sound is felt, not mapped.
 - **Tapping a locked or out-of-window marker** opens a small text pop-up with its teaser only: no title, transcript or audio.
-- **Tapping a playable marker** opens the marker sheet: tier, title, distance in feet; **Play** if in range (or accessible play), otherwise "Walk here to listen"; for a physical marker, "Scan the marker to listen"; for completed fragments, "Open in Chronicle".
+- **Tapping a playable marker** opens the marker sheet: tier, title, distance in feet, and "Walk here to listen" (or "Scan the marker to listen" for a physical marker); for completed fragments, "Open in Chronicle". There's no Play button: narration starts by itself on arrival.
 - **Grove sheet:** name, premise, access notes, website link, and download size.
 
 ---
@@ -120,11 +121,11 @@ AI generation of any kind; listener accounts or social features; public display 
 ## 5. Core flows
 
 ### 5.1 Exploring
-1. Entering a grove polygon (or tapping Play in range, or scanning a physical marker) starts a session. Location runs in the background only during the session. Surroundings and soundtrack fade in.
-2. **Trigger:** two consecutive confirmed fixes inside the radius of a fragment that is unlocked, has a version for the current time window, and isn't completed for its latest Story Contingency. Then the chime and haptic, ducking, and the fragment plays. If the listener's Journal idea grew into this revision, a short growth moment plays first.
-3. **Physical markers:** scanning the QR code opens InTell at the fragment. If it's unlocked and has a version for the current window, it plays; otherwise its teaser pop-up appears.
+1. Entering a grove polygon (or scanning a physical marker) starts a session. Location runs in the background only during the session. Surroundings and soundtrack fade in.
+2. **Trigger (automatic):** two consecutive confirmed fixes inside the radius of a fragment that is unlocked, has a version for the current time window, and isn't completed for its latest Story Contingency. Then the chime and haptic, ducking, and the fragment plays by itself. If the listener's Journal idea grew into this revision, a short growth moment plays first.
+3. **Physical markers:** scanning the QR code opens InTell at the fragment. If it's unlocked and has a version for the current window, it plays automatically; otherwise its teaser pop-up appears.
 4. **Playing overlay:** a dark screen with the title, tier and pause, reading "Look up. We'll keep playing." After the fragment ends: an afterglow of 8 s, then newly unlocked markers brighten to 100% with "Something new has opened nearby".
-5. **Priority:** Root > Branch > Leaf, then nearest. Queue at most one.
+5. **One at a time:** only one story fragment ever plays. If another triggers (or is scanned) while one is playing, it waits in a queue of one and plays after the afterglow if the listener is still in its range (a scanned one always plays). It never interrupts or overlaps. When several trigger at once: Root > Branch > Leaf, then nearest.
 6. **End:** 15 minutes after leaving all groves, after 3 hours, or by tapping Stop.
 
 ### 5.2 Chronicle (spec rewritten before M8)
@@ -140,11 +141,11 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 |---|---|
 | FR-1 | Fragments live inside their grove polygon. Prerequisites may reference fragments in any grove and must be acyclic story-wide (DATA_MODEL §4, ADR 0003 as amended by ADR 0004). |
 | FR-2 | **Unlock:** a fragment is unlocked when every prerequisite group has at least one member the device has **completed for that member's latest Story Contingency** (any time version). No prerequisites ⇒ unlocked from the start. Unlocked fragments stay unlocked, even after a later contingency on a prerequisite. |
-| FR-3 | **Trigger:** 2 consecutive fixes within 60 s, inside the radius, with accuracy within a tolerance tuned in M6 field tests. Radius 15–35 ft, default 35 ft for every tier. |
+| FR-3 | **Trigger (automatic, hands-free):** 2 consecutive fixes within 60 s, inside the radius, with accuracy within a tolerance tuned in M6 field tests. Radius 15–35 ft, default 35 ft for every tier. No Play button. **Exactly one narration at a time** (queue of one, never overlapping). |
 | FR-4 | **Visibility** `standard` / `physical`. Physical fragments play only via QR scan (`https://{LINK_DOMAIN}/f/{code}` on replaceplace.com), matched by hash, never by proximity; a scan alone suffices, prerequisites and time windows still apply. |
 | FR-5 | **Story Contingency** makes a completed fragment not-completed until its new revision is completed on site; it then triggers again on approach. **Story Correction** carries completion forward with no replay. |
 | FR-6 | **Day / Night:** the current window comes from sunrise and sunset for the grove's region. A fragment plays the version for the current window; a fragment without one shows at 35%. The version is chosen at playback start. |
-| FR-7 | **Accessible play** (setting): a Play button for an unlocked standard fragment when the listener is **within 35 ft of its GPS point**, without waiting for the two-fix trigger. It needs location; there's no fallback when location is unavailable. It counts as on site. Physical markers still need a scan. |
+| FR-7 | **Accessible trigger** (setting): a more forgiving automatic trigger. An unlocked standard fragment starts on a **single** fix within **35 ft of its GPS point**, even if its own radius is smaller. Still automatic, still one at a time, still needs location (no fallback when location is off). It counts as on site. Physical markers still need a scan. |
 | FR-8 | Surroundings and soundtrack per AUDIO_SPEC §3–4 (geofenced zones, never GPS points); Hush per §5; buses and ducking per §2.3. Sound and music never gate the story: only root, branch and leaf fragments are in the logic chain. |
 | FR-9 | Wildlife calls never on the speaker; muted in nesting months. A grove's wildlife-speaker setting (off by default) silences all surroundings on the phone speaker inside that grove unless it's turned on. |
 | FR-10 | Playback works with the screen locked from downloaded packs. The base map, Journal submission and sync need signal. |
@@ -196,6 +197,6 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 7. Listener progress backup (device-only today): optional account sync or export/import? Decide before M5.
 8. Children and the Journal: confirm the under-13 rule and the children's-privacy approach with counsel before M9.
 9. Who triages Journal entries, and the target turnaround to "read" (recommended 14 days).
-10. Accessible play on or off by default.
+10. The accessible trigger on or off by default.
 11. The audio engine choice, pending the M1 device tests (ADR 0001).
 12. A printable grove guide (transcripts and a route map) as the business plan's non-phone way to take part: in v1 or later?

@@ -93,12 +93,13 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 ### 3.2 Session state machine
 ```
 idle
- ├─ fixInsideGrove | tapPlay(inRange|accessible) | scan(code) → exploring
+ ├─ fixInsideGrove | scan(code) → exploring
 exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt} }
- ├─ arrived(fragmentId)       → pick version for current window → (growthMoment?) → play | queue(1)
+ ├─ arrived(fragmentId)       → pick version for current window → (growthMoment?) → play if nothing is playing, else queue(1)
+ │                              (exactly one narration voice ever; a queued fragment never interrupts)
  ├─ scan(locked or no version for now) → teaser pop-up
  ├─ narrationEnded(natural)   → record completion (revision, window, on site) → unlock dependents → met characters → events
- ├─ narrationEnded            → afterglow 8 s → play queued if still in range
+ ├─ narrationEnded            → afterglow 8 s → play queued if still in range (or if it came from a scan)
  ├─ hushDue                   → hush (AUDIO_SPEC §5)
  ├─ stop | 15 min outside | 3 h → idle (write the visit record)
 ```
@@ -194,7 +195,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 |---|---|
 | App | `app_opened`, `pack_downloaded {scope, bytes}` |
 | Session | `grove_entered`, `session_started`, `session_ended {fragments_completed, minutes}` |
-| Story | `fragment_triggered {trigger: proximity|tap|scan|accessible, time_window}`, `fragment_completed {time_window, change_kind}`, `fragment_unlocked`, `teaser_opened`, `growth_moment_played` |
+| Story | `fragment_triggered {trigger: proximity|scan|accessible, time_window}`, `fragment_completed {time_window, change_kind}`, `fragment_unlocked`, `teaser_opened`, `growth_moment_played` |
 | Audio | `hush_started`, `hush_skipped`, `mixer_changed {bus}` (no values), `route_changed {route}` |
 | Chronicle | `chronicle_opened`, `character_opened`, `replay_played {scope, time_window}`, `show_on_map_tapped` |
 | Journal | `journal_opened`, `entry_submitted {kind, on_site, voice}`, `question_viewed`, `checkin_submitted`, `checkin_skipped` |

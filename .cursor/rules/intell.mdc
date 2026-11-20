@@ -10,7 +10,7 @@ alwaysApply: true
 The non-negotiables (full text in AGENTS.md §5; ADR 0004 beats older spec text):
 1. The place comes first: the core experience is being on site. Map home with Chronicle (bottom left), Journal (bottom right), a center button (TBD) and Settings (top right). No feeds, search, nearby lists, gamification or push notifications.
 2. No AI-generated text, narration, music or sound. Replaceplace staff produce everything that plays.
-3. In situ first: fragments are first heard only on site (proximity, physical-marker scan, accessible play within 35 ft) and are replayable in the Chronicle only after completion on site, per Day/Night version.
+3. Hands-free and in situ: narration starts automatically on arrival (no Play button), one story fragment at a time, never overlapping. Fragments are first heard only on site (proximity, the accessible trigger within 35 ft, or a physical-marker scan) and are replayable in the Chronicle only after completion on site, per Day/Night version.
 4. Locked fragments show at 35% with their teaser only; never their title, transcript or audio. Marker codes never leave Postgres.
 5. Location never leaves the device; "While Using" permission only.
 6. Play only what's in the current pack manifests; sync deletes everything else. Content reaches phones only through published releases.

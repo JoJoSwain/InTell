@@ -26,7 +26,7 @@ Data definitions are in `DATA_MODEL.md` §3–6.
 ## 2. Audio engine
 
 ### 2.1 Requirements
-- Several simultaneous sources: narration, up to 3 synced music stems, 1–2 ambience beds with crossfade, and up to 6 concurrent one-shots
+- Several simultaneous sources: **exactly one narration voice** (never two story fragments at once), up to 3 synced music stems, 1–2 ambience beds with crossfade, and up to 6 concurrent one-shots
 - Per-source gain automation (ramps), stereo pan, and playback-rate or pitch variation for one-shots
 - Sample-accurate synced looping for music stems with loop points
 - Continuous playback with the screen locked and the app in the background, on iOS and Android
