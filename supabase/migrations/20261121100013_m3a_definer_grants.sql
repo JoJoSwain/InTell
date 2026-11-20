@@ -70,7 +70,8 @@ revoke all on function public.fn_publish_check(uuid) from public, anon;
 grant execute on function public.fn_publish_check(uuid) to authenticated;
 grant execute on function public.fn_publish_check(uuid) to service_role;
 
--- Editor+ may invoke publish/unpublish commit from the admin (edge preferred; guard inside).
+-- Temporary: authenticated grants for publish/unpublish commit (guarded).
+-- F2 (20261121100014) revokes these — commit must go through edge/service_role only.
 grant execute on function public.fn_publish_commit(uuid) to authenticated;
 grant execute on function public.fn_unpublish_commit(text, uuid[]) to authenticated;
 

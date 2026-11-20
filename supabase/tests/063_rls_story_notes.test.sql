@@ -1,6 +1,7 @@
 -- Story Notes (Indigeny / thread+character notes): staff read; writer+ on fragments/threads/characters.
+-- F1: writers may only change Indigeny columns on fragments; characters.status is editor+/service only.
 begin;
-select plan(6);
+select plan(15);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -38,6 +39,57 @@ select lives_ok(
       set indigeny_earth = 'writer earth note'
     where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
   'writer can update fragment Indigeny notes'
+);
+
+-- F1: writer cannot change non-Indigeny fragment columns
+select throws_ok(
+  $$update public.fragments
+      set location = extensions.ST_Translate(location::extensions.geometry, 0.0001, 0)::extensions.geography
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  '42501', null, 'writer cannot update fragment location'
+);
+
+select throws_ok(
+  $$update public.fragments
+      set teaser = '{"en":"nope"}'::jsonb
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  '42501', null, 'writer cannot update fragment teaser'
+);
+
+select throws_ok(
+  $$update public.fragments
+      set visibility = 'physical'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  '42501', null, 'writer cannot update fragment visibility'
+);
+
+select throws_ok(
+  $$update public.fragments
+      set marker_code = 'WRITER-CODE'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  '42501', null, 'writer cannot update fragment marker_code'
+);
+
+select throws_ok(
+  $$update public.fragments
+      set status = 'draft'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  '42501', null, 'writer cannot update fragment status'
+);
+
+-- writer may edit character notes / draft fields, but not status
+select lives_ok(
+  $$update public.characters
+      set notes = 'writer character notes'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020'$$,
+  'writer can update character notes'
+);
+
+select throws_ok(
+  $$update public.characters
+      set status = 'draft'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020'$$,
+  '42501', null, 'writer cannot update characters.status'
 );
 
 reset role;
@@ -94,7 +146,7 @@ select pass('viewer cannot write threads');
 
 reset role;
 
--- editor can write groves
+-- editor can write groves and non-Indigeny fragment columns; may flip character status
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-630000000003', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
@@ -109,6 +161,21 @@ begin
   end if;
 end $$;
 select pass('editor can update groves');
+
+select lives_ok(
+  $$update public.fragments
+      set teaser = '{"en":"editor teaser"}'::jsonb,
+          trigger_radius_m = 9.14
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'$$,
+  'editor can update non-Indigeny fragment columns'
+);
+
+select lives_ok(
+  $$update public.characters
+      set status = 'draft'
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020'$$,
+  'editor can update characters.status'
+);
 
 reset role;
 

@@ -1,4 +1,5 @@
--- S2: fn_publish_commit / fn_unpublish_commit refused for non-editors; editor succeeds (release-scoped).
+-- F2: fn_publish_commit / fn_unpublish_commit have no EXECUTE for authenticated.
+-- Direct RPC is refused at the grant level for every staff role; editors publish via edge (integration).
 begin;
 select plan(8);
 
@@ -72,22 +73,22 @@ select throws_ok(
 );
 reset role;
 
--- editor succeeds
+-- editor: direct RPC refused (F2 — edge/service_role only)
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-520000000004', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
-select ok(
-  (public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')->>'committed')::boolean,
-  'editor can fn_publish_commit'
+select throws_ok(
+  $$select public.fn_publish_commit('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000082')$$,
+  '42501', null, 'editor cannot fn_publish_commit via direct RPC'
 );
 
-select ok(
-  (public.fn_unpublish_commit(
-    'fragment',
-    array['aaaaaaaa-bbbb-4ccc-8ddd-000000000036'::uuid]
-  )->>'ok')::boolean,
-  'editor can fn_unpublish_commit with stranded warning allowed'
+select throws_ok(
+  $$select public.fn_unpublish_commit(
+      'fragment',
+      array['aaaaaaaa-bbbb-4ccc-8ddd-000000000036'::uuid]
+    )$$,
+  '42501', null, 'editor cannot fn_unpublish_commit via direct RPC'
 );
 
 reset role;
