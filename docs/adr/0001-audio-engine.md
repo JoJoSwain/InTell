@@ -40,15 +40,14 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 **Verdict:** _Pending_
 
 ## Findings so far
-(Android device spike, before the 60-minute protocol run is complete.)
+(Status remains **Proposed**. Full T1–T9 protocol and iPhone testing are postponed.)
 
-- **JS timers pause in the background on Android; engine callbacks still reach JS.** With the screen locked, React Native `setInterval` / timer-driven work does not run (a 43 s locked period produced no 60-second diagnostics line until return to `active`). Native audio kept playing. Confirmed: `AudioBufferSourceNode` `onended` (`voiceEnded`) **does** reach JS while backgrounded, and can top up schedules and write diagnostics.
-- **Design rule:** schedule sound ahead on the **audio clock** (`start(when)`), and drive background logic from **engine callbacks** and **location events** — never from `setInterval` alone.
-- **Pre-schedule one-shots on the audio clock.** Seeded `OneShotWindowScheduler` in `@intell/shared` plans shots and schedules them with `start(when)` for a rolling **5-minute** horizon. The window is topped up on AppState / route / interruption / remote / notification / `onended`. Pending one-shots are cancelled on Stop (`reason: "cancelled"`).
-- **Spike ≠ product ambience params.** The spike uses a **fixed 8 s** one-shot interval and a **fixed −12 dB** gain. M4 shared ambience logic must implement the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC); do not copy the spike’s fixed values into product code.
-- **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start.
-  - **Growing positive gap** (wall ahead of the audio clock) indicates dropouts / audio clock starvation.
-  - **Slight negative drift** is a clock-rate difference between wall time and the audio clock, not a failure by itself.
+- **Pixel 11 smoke tests passed:** all layers (narration, 3-stem music, bed, one-shots), ducking, Bluetooth route detection, locked-screen playback with the lock-screen notification, and **~60.5 MB** decoded with **0** cache evictions.
+- **JS timers pause in the background on Android, but engine `onEnded` callbacks still reach JS.** A locked period froze `setInterval` (no 60-second diagnostics until return to `active`); native audio kept playing; `voiceEnded` fired while backgrounded and can top up schedules / write diagnostics.
+- **Design rule:** schedule sound ahead on the **audio clock** (`start(when)`); drive background logic from **engine callbacks** and **location events** — never from `setInterval` alone.
+- **Spike ≠ product ambience params.** The spike’s one-shot interval is a **fixed 8 s** and its gain is a **fixed −12 dB** (simplifications). M4 shared ambience logic must use the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC).
+- **Outstanding:** the T1–T9 device protocol on Pixel, and the iPhone build and test.
+- **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start. Growing positive gap ⇒ dropouts / audio-clock starvation; slight negative drift ⇒ clock-rate difference, not a failure by itself.
 
 ## Consequences
 - UI never imports `react-native-audio-api` (ESLint `no-restricted-imports`).
