@@ -93,8 +93,11 @@ pnpm dev:admin                                # http://localhost:3000
 pnpm dev:mobile                               # Expo dev server (dev client build required for native modules)
 pnpm --filter @intell/shared test
 ```
-**Windows notes** (the main dev machine is Windows):
-- Native Android builds can fail on long paths (seen under `react-native-reanimated` CMake). Enable Windows long paths, or build from a short drive: `subst R: C:\Users\jorda\source\Replaceplace`.
+**Windows setup** (the main dev machine is Windows):
+- Keep the repo at a short path like `C:\dev\intell`. Do **not** use `subst` drives — they break the Android build with a CMake “different roots” codegen error.
+- Enable Windows long paths (`LongPathsEnabled` = 1). See https://docs.expo.dev/troubleshooting/windows-long-paths/
+- Install Android SDK CMake **3.31.6**, and set `android.cmakeVersion=3.31.6` in the user-level `%USERPROFILE%\.gradle\gradle.properties` (also in `apps/mobile/android/gradle.properties` if Expo still picks 3.22.1; re-add after `prebuild --clean`).
+- Set `$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"` in the PowerShell session before `expo run:android`. Set `JAVA_HOME` to Android Studio’s JBR if needed.
 - In PowerShell, `>` redirection corrupts binary output. Capture screenshots with `adb exec-out screencap -p > shot.png` from **cmd.exe**, or use `adb shell screencap /sdcard/s.png` + `adb pull`.
 
 ## 9. Expo guidance (applies to apps/mobile)

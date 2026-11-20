@@ -35,6 +35,20 @@
           "resizeMode": "contain",
           "backgroundColor": "#F6F2EA"
         }
+      ],
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": true,
+          "androidForegroundService": true,
+          "androidFSTypes": ["mediaPlayback"],
+          "androidPermissions": [
+            "android.permission.MODIFY_AUDIO_SETTINGS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+            "android.permission.POST_NOTIFICATIONS"
+          ]
+        }
       ]
     ],
     "experiments": {

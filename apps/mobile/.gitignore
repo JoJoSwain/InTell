@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# M1 spike audio fixtures (generated; see tools/audio-fixtures)
+/assets/spike-audio/*.wav
+/assets/spike-audio/generated.json

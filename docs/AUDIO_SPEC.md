@@ -33,25 +33,19 @@ Data definitions are in `DATA_MODEL.md` §3–6.
 - Interruptions (calls, other apps): pause everything and resume politely
 
 ### 2.2 Recommended implementation
-- **Primary:** `react-native-audio-api` (Software Mansion; a Web Audio–style graph with `AudioBufferSourceNode`, `GainNode`, `StereoPannerNode` and scheduling). Wrap it behind our own `AudioEngine` interface in `apps/mobile/src/audio/engine/`.
+- **Primary:** `react-native-audio-api` (Software Mansion; a Web Audio–style graph with `AudioBufferSourceNode`, `GainNode`, `StereoPannerNode` and scheduling). Wrap it behind our own `AudioEngine` interface in **`packages/shared`** (types only); the mobile implementation lives in `apps/mobile/src/audio/engine/`.
 - **Mandatory spike (BUILD_PLAN M1):** prove on real iOS and Android devices that the library handles all of §2.1, especially background playback with the screen locked for 60 minutes, lock-screen controls and route detection. Record the results in `docs/adr/0001-audio-engine.md`.
 - **Fallback if the spike fails:** a custom Expo Module (Swift `AVAudioEngine` with `AVAudioPlayerNode`s; Kotlin Media3/ExoPlayer instances or Oboe) behind the same `AudioEngine` interface. Lock-screen metadata through `MPNowPlayingInfoCenter` and an Android `MediaSession`.
 - The UI chime and haptic feedback use the same engine (a bundled asset) and `expo-haptics`.
 
 ```ts
-// apps/mobile/src/audio/engine/AudioEngine.ts
+// packages/shared/src/audio/AudioEngine.ts — see that file for the concrete interface
+// (M1 brief + ADR 0001). Sketch below is illustrative only.
 export interface AudioEngine {
   init(opts: { mixWithOthers: false }): Promise<void>;
-  load(sha: string, uri: string): Promise<BufferHandle>;           // decoded, cached by sha (LRU, 64 MB)
+  load(sha: string, uri: string): Promise<BufferHandle>;
   playNarration(h: BufferHandle, meta: NowPlayingMeta, startAtMs?: number): VoiceHandle;
-  playOneShot(h: BufferHandle, p: { gainDb: number; pan: number; rate: number }): VoiceHandle;
-  startLoopGroup(stems: { h: BufferHandle; gainDb: number; loopStartMs: number; loopEndMs: number }[]): LoopGroupHandle;
-  setGain(target: VoiceHandle | LoopGroupHandle | BusId, gainDb: number, rampMs: number): void;
-  setStemGain(group: LoopGroupHandle, index: number, gainDb: number, rampMs: number): void;
-  stop(target: VoiceHandle | LoopGroupHandle, fadeMs: number): void;
-  onRouteChange(cb: (route: 'headphones' | 'bluetooth' | 'speaker') => void): Unsubscribe;
-  onInterruption(cb: (e: 'began' | 'ended') => void): Unsubscribe;
-  onNarrationProgress(cb: (p: { positionMs: number; durationMs: number }) => void): Unsubscribe;
+  // … pause/resume, one-shots, loop groups, bed crossfade, gains, route/interruption/remote …
 }
 ```
 
