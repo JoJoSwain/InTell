@@ -1,4 +1,4 @@
--- ADR 0003: prerequisite graph guards + ending_is_root check.
+-- ADR 0003 / M3a: story-wide cycle guard; cross-grove edges allowed (fn_prereq_guard).
 begin;
 select plan(7);
 
@@ -14,45 +14,24 @@ select throws_ok(
   'self-reference rejected'
 );
 
--- Cross-grove prerequisite rejected (second grove on placeholder site)
-insert into public.groves (
-  id, site_id, slug, name, boundary, status
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000011',
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000003',
-  'pgtap-other-grove',
-  '{"en":"Other Grove"}'::jsonb,
-  extensions.ST_GeogFromText(
-    'SRID=4326;POLYGON((-112.0 41.0,-111.99 41.0,-111.99 41.01,-112.0 41.01,-112.0 41.0))'
-  ),
-  'draft'
-);
-
-insert into public.fragments (
-  id, grove_id, tier, title, location, visibility,
-  trigger_radius_m, story_order, status
-) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000012',
-  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000011',
-  'root',
-  '{"en":"other root"}'::jsonb,
-  extensions.ST_GeogFromText('SRID=4326;POINT(-111.995 41.005)'),
-  'marked',
-  30,
-  1,
-  'draft'
-);
-
+-- Cross-grove prerequisite allowed (seed bridge → Farmington frag1 pattern)
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order)
 values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030', 98);
 
-select throws_ok(
+select lives_ok(
   $$insert into public.fragment_prereq_members (group_id, requires_fragment_id, sort_order)
-    values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013', 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000012', 0)$$,
-  'P0001',
-  'prerequisite must be in the same grove',
-  'cross-grove prerequisite rejected'
+    values (
+      'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013',
+      'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1',
+      0
+    )$$,
+  'cross-grove prerequisite allowed'
 );
+
+delete from public.fragment_prereq_members
+ where group_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013';
+delete from public.fragment_prereq_groups
+ where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013';
 
 -- 2-cycle rejected: A → B → A
 insert into public.fragments (
@@ -66,7 +45,7 @@ insert into public.fragments (
   '{"en":"cycle A"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked', 20, 901, 'draft'
+  'standard', 20, 901, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000022',
@@ -75,7 +54,7 @@ insert into public.fragments (
   '{"en":"cycle B"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked', 20, 902, 'draft'
+  'standard', 20, 902, 'draft'
 );
 
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order) values
@@ -105,7 +84,7 @@ insert into public.fragments (
   '{"en":"cycle3 A"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked', 20, 911, 'draft'
+  'standard', 20, 911, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000032',
@@ -114,7 +93,7 @@ insert into public.fragments (
   '{"en":"cycle3 B"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked', 20, 912, 'draft'
+  'standard', 20, 912, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000033',
@@ -123,7 +102,7 @@ insert into public.fragments (
   '{"en":"cycle3 C"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked', 20, 913, 'draft'
+  'standard', 20, 913, 'draft'
 );
 
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order) values
@@ -155,7 +134,7 @@ select throws_ok(
      '{"en":"ending leaf"}'::jsonb,
      (select extensions.ST_Centroid(boundary)::extensions.geography
         from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-     'marked',
+     'standard',
      20,
      920,
      'draft'
@@ -176,7 +155,7 @@ insert into public.fragments (
   '{"en":"leaf needs leaf"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'marked',
+  'standard',
   20,
   930,
   'draft'

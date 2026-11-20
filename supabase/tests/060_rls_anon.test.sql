@@ -1,4 +1,4 @@
--- R1: anon has no table/function privileges; no-staff authenticated sees nothing.
+-- R1: anon has no table privileges; no-staff authenticated sees nothing.
 begin;
 select plan(4);
 
@@ -13,7 +13,7 @@ select ok(
   'anon has SELECT=false on every public table'
 );
 
--- M2b C19: anon may execute get_pack_index only
+-- M3a: anon may execute get_pack_index only
 select is(
   (
     select count(*)::int
@@ -27,7 +27,6 @@ select is(
   'anon has EXECUTE on exactly one public function (get_pack_index)'
 );
 
--- authenticated user with no staff row
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -48,9 +47,9 @@ select is(
 );
 
 select is(
-  (select count(*)::int from public.groves),
+  (select count(*)::int from public.releases),
   0,
-  'authenticated with no staff cannot select groves'
+  'authenticated with no staff cannot select releases'
 );
 
 reset role;
