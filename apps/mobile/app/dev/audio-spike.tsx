@@ -21,6 +21,7 @@ import { SPIKE_ASSET_MODULES } from "../../src/audio/spike/assets";
 import { FIXTURES_MISSING_MESSAGE } from "../../src/audio/spike/fixturesReady";
 import {
   appendDiagnostics,
+  appendDiagnosticsIfDue,
   appendSpikeLog,
   resetDiagnosticsTickClock,
   shareSpikeLog,
@@ -28,6 +29,18 @@ import {
 
 /** Fixed seed so one-shot schedules are reproducible across runs. */
 const SPIKE_ONESHOT_SEED = hashSeed("intell-audio-spike");
+
+function clockFields(d: EngineDiagnostics): {
+  contextTimeMs: number | undefined;
+  wallElapsedMs: number | undefined;
+  clockGapMs: number | undefined;
+} {
+  return {
+    contextTimeMs: d.contextTimeMs,
+    wallElapsedMs: d.wallElapsedMs,
+    clockGapMs: d.clockGapMs,
+  };
+}
 
 /**
  * Hidden M1 spike screen. Dev-only; deep link: intell://dev/audio-spike
@@ -72,6 +85,7 @@ function AudioSpikeBody() {
       nowSec,
       ONESHOT_HORIZON_SEC,
     );
+    const diagSnap = engine.getDiagnostics();
     for (const plan of plans) {
       engine.playOneShot(
         { sha: plan.sha, durationMs: 1000 },
@@ -94,6 +108,7 @@ function AudioSpikeBody() {
         gainDb: plan.gainDb,
         appState: engine.getAppState(),
         contextTimeSec: nowSec,
+        ...clockFields(diagSnap),
       });
     }
     if (plans.length > 0) {
@@ -178,11 +193,17 @@ function AudioSpikeBody() {
         );
         unsubs.push(
           engine.onVoiceEnded((e) => {
+            const d = engine.getDiagnostics();
             void appendSpikeLog({
               type: "voiceEnded",
               voiceId: e.voiceId,
               kind: e.kind,
+              reason: e.reason,
               appState: e.appState,
+              ...clockFields(d),
+            });
+            void appendDiagnosticsIfDue(d, 60_000, {
+              trigger: "voiceEnded",
             });
             topUpOneShots("voiceEnded");
           }),

@@ -130,8 +130,15 @@ export class RNAudioApiEngine implements AudioEngine {
   private appStateSubs = new Set<(state: AppStateStatus) => void>();
   private notificationSubs = new Set<(visible: boolean) => void>();
   private voiceEndedSubs = new Set<
-    (e: { voiceId: string; kind: VoiceState["kind"]; appState: string }) => void
+    (e: {
+      voiceId: string;
+      kind: VoiceState["kind"];
+      appState: string;
+      reason: "ended" | "cancelled";
+    }) => void
   >();
+  /** Voice ids stopped via stop() / cancelScheduledOneShots (not natural end). */
+  private cancelledVoiceIds = new Set<string>();
 
   private systemSubs: AudioEventSubscription[] = [];
   private notifSubs: AudioEventSubscription[] = [];
@@ -234,6 +241,7 @@ export class RNAudioApiEngine implements AudioEngine {
       voiceId: string;
       kind: VoiceState["kind"];
       appState: string;
+      reason: "ended" | "cancelled";
     }) => void,
   ): Unsubscribe {
     this.voiceEndedSubs.add(cb);
@@ -252,12 +260,14 @@ export class RNAudioApiEngine implements AudioEngine {
   cancelScheduledOneShots(): void {
     for (const voice of [...this.voices.values()]) {
       if (voice.kind !== "oneshot") continue;
+      this.cancelledVoiceIds.add(voice.id);
       try {
         voice.source.stop();
       } catch {
-        // already stopped
+        // Never started or already stopped — emit cancelled immediately.
+        this.voices.delete(voice.id);
+        this.emitVoiceEnded(voice.id, voice.kind);
       }
-      this.voices.delete(voice.id);
     }
   }
 
@@ -609,11 +619,13 @@ export class RNAudioApiEngine implements AudioEngine {
 
     const voice = this.voices.get(target.id);
     if (!voice) return;
+    this.cancelledVoiceIds.add(voice.id);
     rampGain(voice.gain.gain, ctx, 0, fadeMs);
     try {
       voice.source.stop(ctx.currentTime + fadeMs / 1000 + 0.05);
     } catch {
-      // ignore
+      this.voices.delete(voice.id);
+      this.emitVoiceEnded(voice.id, voice.kind);
     }
     if (voice.kind === "narration") {
       this.narrationActive = false;
@@ -812,7 +824,14 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   private emitVoiceEnded(voiceId: string, kind: VoiceState["kind"]): void {
-    const payload = { voiceId, kind, appState: this.appState };
+    const reason = this.cancelledVoiceIds.has(voiceId) ? "cancelled" : "ended";
+    this.cancelledVoiceIds.delete(voiceId);
+    const payload = {
+      voiceId,
+      kind,
+      appState: this.appState,
+      reason: reason as "ended" | "cancelled",
+    };
     for (const cb of this.voiceEndedSubs) cb(payload);
   }
 

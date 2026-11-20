@@ -17,6 +17,12 @@ export function resetDiagnosticsTickClock(): void {
   lastDiagWallMs = null;
 }
 
+/** Wall ms since the previous diagnostics write, or null if none yet. */
+export function msSinceLastDiagnostics(): number | null {
+  if (lastDiagWallMs == null) return null;
+  return Date.now() - lastDiagWallMs;
+}
+
 export async function appendSpikeLog(
   entry: Record<string, unknown>,
 ): Promise<void> {
@@ -54,6 +60,21 @@ export async function appendDiagnostics(
     jsTickGapMs,
     ...extra,
   });
+}
+
+/**
+ * Write a full diagnostics line if at least `minGapMs` have passed since the
+ * last one (used from voiceEnded while locked, when setInterval is frozen).
+ */
+export async function appendDiagnosticsIfDue(
+  diagnostics: EngineDiagnostics,
+  minGapMs = 60_000,
+  extra?: Record<string, unknown>,
+): Promise<boolean> {
+  const gap = msSinceLastDiagnostics();
+  if (gap != null && gap < minGapMs) return false;
+  await appendDiagnostics(diagnostics, extra);
+  return true;
 }
 
 export async function shareSpikeLog(): Promise<void> {
