@@ -89,6 +89,7 @@ Verified on **Windows** (this machine). CI runs the same check + serve path.
 | **Failing step** | `pnpm test:integration` |
 | **Root cause** | (1) `tools/pack-integration/src/env.ts` hard-coded `shell: "powershell.exe"` → `ENOENT` on Linux runners. (2) `seed-tones/` is gitignored and was not generated in CI, so `db:setup-local` skipped uploads. |
 | **Fix** | Platform shell in `env.ts`; CI runs `pnpm db:seed-media-meta` before setup; `db:setup-local` generates tones if missing and fails hard on upload errors. |
+| **Determinism** | After `db:seed-media-meta`, CI runs `git diff --exit-code supabase/seed-media.json` so divergent shas/bytes fail the job. |
 
 ## Functions serve discovery (review #9)
 

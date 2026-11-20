@@ -35,6 +35,8 @@ jobs:
       - run: pnpm db:check-edge-shared
       # seed-tones/ is gitignored; generate before upload in db:setup-local
       - run: pnpm db:seed-media-meta
+      # Fail if regenerated shas/bytes diverge from committed metadata (Windows vs Linux)
+      - run: git diff --exit-code supabase/seed-media.json
       - run: pnpm exec supabase start
       - name: Setup local DB + Vault + seed media
         env:
