@@ -1,8 +1,8 @@
 # M3b hosted foundation — implementation report
 
 **Branch:** `m3b-hosted-foundation` (PR #8)  
-**Plan:** `docs/briefs/M3b-plan.md` · **Review (wins on conflict):** `docs/briefs/M3b-plan-review.md`  
-**Status:** Implementation complete; **stopped for architect review**. M3c not started.  
+**Plan:** `docs/briefs/M3b-plan.md` · **Plan review:** `M3b-plan-review.md` · **Impl review (wins):** `M3b-review.md`  
+**Status:** R1–R3 + N1–N3 applied; **stopped for architect verification**. M3c not started.  
 **Date:** 2026-11-20
 
 ---
@@ -10,6 +10,10 @@
 ## 1. `git log --oneline` (vs `origin/master`)
 
 ```
+fef9b9d fix(admin): M3b R1–R3 invite/confirm flow and review nits
+2644147 docs: add M3b implementation review
+f2425bd docs: confirm Vercel preview and CI on M3b report
+41a5064 docs: add M3b implementation report
 bcc1d22 feat(admin): M3b auth shell, regions, staff, audit, Playwright
 f9b3b45 feat(db): M3b staff guards, F1 allowlist, invite-staff edge
 44c352f fix(admin): upgrade Next.js to 15.5.29 for Vercel security gate
@@ -17,7 +21,7 @@ f9b3b45 feat(db): M3b staff guards, F1 allowlist, invite-staff edge
 5e89e1d docs: add M3b plan for review
 ```
 
-Rebased onto `origin/master` after PR #6 merge (`f40bb59`). Confirmed ancestors: `e39fef0` (F1/F2), `c7c8998` (M3a review).
+**Since `41a5064`:** `f2425bd`, `2644147`, `fef9b9d` (+ this report amend).
 
 ---
 
@@ -25,12 +29,25 @@ Rebased onto `origin/master` after PR #6 merge (`f40bb59`). Confirmed ancestors:
 
 | Command | Result |
 |---|---|
-| `pnpm db:setup-local` / `supabase db reset` | PASS (all migrations through `20261121120002_m3b_admin_region_rpc.sql` + seed) |
+| `pnpm db:setup-local` / `supabase db reset` | PASS (through `20261121120003_m3b_review_nits.sql` + seed) |
 | `pnpm exec supabase test db` | **PASS** — Files=24, Tests=130 |
 | `pnpm test:integration` | **PASS** — 16 tests |
-| Playwright (`pnpm --filter @intell/admin test:e2e`) | **PASS** — 2 tests (writer staff/publish gate; admin invite → staff row) |
+| Playwright | **PASS** — **6** tests |
+| Admin vitest (`sanitizeNext`) | **PASS** — 3 tests |
 | `pnpm lint && pnpm typecheck && pnpm test` | **PASS** |
 | `pnpm --filter @intell/admin build` | **PASS** (Next.js 15.5.29) |
+
+### Playwright / unit tests named (review fixes)
+
+| Test | File |
+|---|---|
+| invite email → set password → Home; reused link expires | `e2e/auth-email.spec.ts` |
+| recovery email → set password → sign in with new password | `e2e/auth-email.spec.ts` |
+| re-invite unconfirmed succeeds; confirmed address refused (409) | `e2e/auth-email.spec.ts` |
+| open redirect `next` values ignored by confirm | `e2e/auth-email.spec.ts` |
+| writer cannot open Staff; publish refused | `e2e/staff-gate.spec.ts` |
+| admin Staff invite creates staff row | `e2e/staff-gate.spec.ts` |
+| `sanitizeNext` rejects `//evil` / `https://evil` | `src/lib/auth-redirect.test.ts` |
 
 ---
 
@@ -129,23 +146,58 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 |---|---|
 | `fn_admin_upsert_region` helper | PostgREST cannot cast WKT/GeoJSON into `geography` cleanly from the admin; editor+ `SECURITY DEFINER` RPC with `has_role` guard (granted to `authenticated`, on the definer allowlist). |
 | React **19.2.4** (not latest 19.3.x) | Dual React copies (admin vs workspace) broke Next build (`useContext` on `/404`); root `pnpm.overrides` + pin 19.2.4 keeps a single tree. |
-| Staff active badge reuses `StatusBadge` labels `published`/`retired` | Temporary visual; no product copy claim. |
+---
+
+## 9. Open questions / JoJo follow-ups
+
+1. Staging dashboard: Auth redirect URLs (A3), paste email templates (R3), first-admin Create user + SQL (A4), `db push`, `functions deploy`. SMTP already done (2026-11-20).
+2. Exact Vercel preview hostname glob from the dashboard (README keeps `https://intell-admin-*.vercel.app/**` as expected form).
+3. Optional: confirm Functions region `cle1` in the Vercel UI.
 
 ---
 
-## 9. Open questions / JoJo follow-ups (not blockers for review)
+## 11. Review fixes (vs `M3b-review.md`)
 
-1. Staging dashboard: Auth redirect URLs (A3), SMTP, first-admin SQL (A4), `supabase db push` + `functions deploy`.
-2. A3 redirect glob: previews use both `intell-admin-git-m3b-hosted-foundation-replaceplace.vercel.app` and `intell-admin-*-replaceplace.vercel.app` — adjust Supabase Redirect URLs to the team’s exact pattern (likely `https://intell-admin-*-replaceplace.vercel.app/**` rather than `https://intell-admin-*.vercel.app/**`).
-3. Optional: confirm in the Vercel project UI that Functions region is `cle1` (deploy succeeded with `vercel.json` set).
+### Commits since `41a5064`
+
+```
+fef9b9d fix(admin): M3b R1–R3 invite/confirm flow and review nits
+2644147 docs: add M3b implementation review
+f2425bd docs: confirm Vercel preview and CI on M3b report
+```
+
+(+ report amend commit after this section).
+
+### Required
+
+- **R1:** `/auth/confirm` verifies `token_hash` + `type` ∈ {invite,recovery}; templates `supabase/templates/invite.html` + `recovery.html` wired in `config.toml`; forgot-password uses `redirectTo: origin`; deleted `/auth/callback`; set-password shows “Link required” without session; re-invite unconfirmed + 409 for confirmed; Mailpit Playwright for invite, recovery, expired link.
+- **R2:** `sanitizeNext` — only paths starting with `/` that are not `//` or `/\`; unit + Playwright open-redirect coverage.
+- **R3:** README A4 is Create user + Auto Confirm (no email); Auth dashboard step to paste templates; SMTP names-only.
+
+### README diff for R3 (summary)
+
+- A4: Add user → Create new user → password ≥10 + Auto Confirm → SQL insert.
+- New Auth step: paste invite/recovery templates into dashboard Emails.
+- Site URL note: preview invites land on production admin (shared staging DB).
+- SMTP remains provider-agnostic, no values.
+
+### Nits
+
+| Nit | Status |
+|---|---|
+| N1 last-admin `FOR UPDATE` | **Fixed** (`20261121120003_m3b_review_nits.sql`) |
+| N2 skip `service_role` staff audit | **Fixed** (same migration) |
+| N3 Active / Inactive labels | **Fixed** (staff list) |
+
+### CI / Vercel
+
+Local suite green after fixes. PR #8 CI + Vercel preview status for the push containing `fef9b9d` / this report: recorded after checks finish (previous head `41a5064` / `f2425bd` were green; `cle1` not blocked by Hobby).
 
 ---
 
-## 10. Explicit non-goals (held)
+## 12. Explicit non-goals (held)
 
-- M3c (Maps, media library, Grove editor) not started.
+- M3c not started.
 - No secret values written or requested.
-- Production Supabase project not created.
-- Sentry / Maps keys remain empty-safe.
 
-**Stop for architect review of this report. Do not start M3c.**
+**Stop for architect verification. Do not start M3c.**
