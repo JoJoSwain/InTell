@@ -84,7 +84,7 @@ Taking part (visits, fragments completed) · depth (share reaching branches and 
 | Downloads | Grove packs (manifest, narration, music, images) and the region pack (ambience library, landcover grid) are downloaded before a walk so playback is smooth with the screen locked. The base map is online only. |
 
 ### 3.2 Admin web app (Next.js, hosted)
-Staff sign-in and invites · regions · groves (polygon, access notes, fragments, prerequisites across groves, story order, teasers, physical markers with printable QR codes) · revisions (Day/Night versions, transcripts, Story Contingency or Correction) · releases (batch publish, scheduling, the publish checklist) · Story Notes (threads, private character notes, Indigeny notes) · characters (public intro, portrait, card lines) · audio and image library with loudness and format checks · ambience profiles, layers and zones · music zones, cues and stems with a condition builder · **Listening Simulator** (AUDIO_SPEC §8) · Journal inbox and questions (M9) · dashboard · audit log · staff.
+Staff sign-in and invites · regions · groves (polygon, access notes, fragments, prerequisites across groves, story order, teasers, physical markers with printable QR codes) · revisions (Day/Night versions, transcripts, Story Contingency or Correction) · releases (batch publish, scheduling, the publish checklist) · Story Notes (threads, private character notes, Indigeny notes) · characters (public intro, portrait, card lines) · audio and image library with loudness and format checks · ambience profiles, layers and zones · music zones, cues and stems with a condition builder · **Listening Simulator** (AUDIO_SPEC §8) · Journal inbox and questions (M9) · dashboard · archive export (revisions, transcripts, Story Notes and metadata, so the content is preserved independently of the app) · audit log · staff.
 
 ### 3.3 Not in v1
 AI generation of any kind; listener accounts or social features; public display of Journal entries; public credits for listeners; rings or story seasons; crossroads votes; leaderboards or gamification; push notifications; in-app payments; turn-by-turn navigation; binaural or 3D audio; bar-synced musical transitions; offline maps; languages other than English for content.
@@ -141,11 +141,11 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 | FR-1 | Fragments live inside their grove polygon. Prerequisites may reference fragments in any grove and must be acyclic story-wide (DATA_MODEL §4, ADR 0003 as amended by ADR 0004). |
 | FR-2 | **Unlock:** a fragment is unlocked when every prerequisite group has at least one member the device has **completed for that member's latest Story Contingency** (any time version). No prerequisites ⇒ unlocked from the start. Unlocked fragments stay unlocked, even after a later contingency on a prerequisite. |
 | FR-3 | **Trigger:** 2 consecutive fixes within 60 s, inside the radius, with accuracy within a tolerance tuned in M6 field tests. Radius 15–35 ft, default 35 ft for every tier. |
-| FR-4 | **Visibility** `standard` / `physical`. Physical fragments play via QR scan (`https://{LINK_DOMAIN}/f/{code}` on replaceplace.com), matched by hash; a scan alone suffices, prerequisites still apply. |
+| FR-4 | **Visibility** `standard` / `physical`. Physical fragments play only via QR scan (`https://{LINK_DOMAIN}/f/{code}` on replaceplace.com), matched by hash, never by proximity; a scan alone suffices, prerequisites and time windows still apply. |
 | FR-5 | **Story Contingency** makes a completed fragment not-completed until its new revision is completed on site; it then triggers again on approach. **Story Correction** carries completion forward with no replay. |
 | FR-6 | **Day / Night:** the current window comes from sunrise and sunset for the grove's region. A fragment plays the version for the current window; a fragment without one shows at 35%. The version is chosen at playback start. |
 | FR-7 | **Accessible play** (setting): play any unlocked fragment within 150 m, or anywhere inside the grove when location is unavailable. It counts as on site. |
-| FR-8 | Surroundings and soundtrack per AUDIO_SPEC §3–4; Hush per §5; buses and ducking per §2.3 |
+| FR-8 | Surroundings and soundtrack per AUDIO_SPEC §3–4 (geofenced zones, never GPS points); Hush per §5; buses and ducking per §2.3. Sound and music never gate the story: only root, branch and leaf fragments are in the logic chain. |
 | FR-9 | Wildlife calls never on the speaker; muted in nesting months. A grove's wildlife-speaker setting (off by default) silences all surroundings on the phone speaker inside that grove unless it's turned on. |
 | FR-10 | Playback works with the screen locked from downloaded packs. The base map, Journal submission and sync need signal. |
 | FR-11 | Sync deletes any local asset not in the current manifests |
@@ -198,3 +198,4 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 9. Who triages Journal entries, and the target turnaround to "read" (recommended 14 days).
 10. Accessible play on or off by default.
 11. The audio engine choice, pending the M1 device tests (ADR 0001).
+12. A printable grove guide (transcripts and a route map) as the business plan's non-phone way to take part: in v1 or later?

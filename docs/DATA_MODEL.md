@@ -446,7 +446,7 @@ create table jobs (                                -- outbox; triggers/functions
 );
 -- pg_cron every minute → pg_net → `run-jobs` (idempotent, retries/backoff, max 5 attempts).
 ```
-**What a snapshot holds.** `grove`: name, premise, access notes, links, wildlife-speaker setting, boundary, growth cue. `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, intro, portrait. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
+**What a snapshot holds.** `grove`: name, premise, access notes, links, wildlife-speaker setting, boundary, growth cue. `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, intro, portrait. `image`: sha, ext, alt text. Sound entities (`ambience_profile` with its layers and assets, `ambience_zone`, `music_zone`, `music_cue` with its stems, `ui_cue`): their publishable fields, so M4's sound tools publish through releases too. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
 
 ---
 
@@ -593,6 +593,7 @@ Removed in v3: `private-docs` (no approval or consent documents) and the PII col
 | `packs (scope, id, version, manifest_json, installed_at)` | Installed manifests |
 | `assets (sha, ext, bytes, local_uri, last_used_at)` | Content-addressed audio and image cache |
 | `completions (fragment_id, revision_no, time_window, completed_at, on_site, trigger, session_id)` | Unlock state and Chronicle replay. A row exists only when playback reached the end on site. |
+| `unlocks (fragment_id, unlocked_at)` | Fragments this device has unlocked. Written the first time a fragment's prerequisites are satisfied, and never removed, so an unlocked fragment stays unlocked after a later Story Contingency on one of its prerequisites (ADR 0004 §13). |
 | `progress (fragment_id, revision_no, time_window, max_progress_ms, updated_at)` | Partly played ("started") fragments, display only |
 | `visits (session_id, grove_id, started_at, ended_at, fragments_completed, time_window)` | Visit history |
 | `met_characters (character_id, met_at, fragment_id)` | Chronicle character cards |
@@ -600,7 +601,7 @@ Removed in v3: `private-docs` (no approval or consent documents) and the PII col
 | `preview (release_id, manifest_json, fetched_at)` | Staff preview content, cleared on sign-out |
 | `event_queue`, `checkin_queue`, `kv` | |
 
-**Rules computed on the device** (pure functions in `packages/shared`): a fragment's prerequisite member is satisfied if `completions` has a row for it with `revision_no ≥ contingencyRevisionNo`. A fragment is replayable in the Chronicle for time window *w* if `completions` has an on-site row for its **current** revision's contingency epoch with `time_window = w`. Whether listener progress can be backed up is an open question (ADR 0004).
+**Rules computed on the device** (pure functions in `packages/shared`): a fragment's prerequisite member is satisfied if `completions` has a row for it with `revision_no ≥ contingencyRevisionNo`. A fragment is **unlocked** if it has a row in `unlocks`, or if every prerequisite group is satisfied now (then write the `unlocks` row). A fragment is replayable in the Chronicle for time window *w* if `completions` has an on-site row for its **current** revision's contingency epoch with `time_window = w`. Whether listener progress can be backed up is an open question (ADR 0004).
 
 ---
 

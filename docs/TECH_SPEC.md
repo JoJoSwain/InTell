@@ -85,7 +85,7 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
        │                      ▼  │                     │
        └──────────────► MapLayers (100% / 35% markers, halos)   PackStore (SQLite + files)
 ```
-- **PackStore:** installed manifests, asset cache, `completions`, `visits` and so on (DATA_MODEL §14).
+- **PackStore:** installed manifests, asset cache, `completions`, `unlocks`, `visits` and so on (DATA_MODEL §14).
 - **SessionStore** (Zustand, persisted to `kv`): the session state machine (§3.2) and `StoryState` (AUDIO_SPEC §4.1).
 - **AudioDirector:** ticks every 1 s plus on state changes. Calls `ambience.evaluate`, `music.select`, `hush.step` and applies their outputs to the engine with ramps. It owns ducking.
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
@@ -158,6 +158,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `purge-assets` | Internal | Reconciles public media to the live manifests |
 | `run-jobs` | pg_cron via pg_net | The outbox worker: scheduled releases, rebuilds, reconciles |
 | `invite-staff` | Admin (admin role) | Invites a staff member by email and creates their `staff` row; deactivates staff |
+| `export-archive` | Admin (editor+) | A zip of revisions, transcripts, Story Notes and metadata for preservation outside InTell (M11) |
 | `preview` | Staff (signed in on the phone) | Returns a preview manifest for a draft release with short-lived signed URLs (DATA_MODEL §12.5) |
 | `register-device` | Mobile | Upsert a device (platform, version, language, age gate) |
 | `ingest-events` | Mobile | Batched events (≤ 200), idempotent, 600/h |
@@ -165,7 +166,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `submit-checkin` | Mobile | Optional connection check-in, 5/day |
 | `delete-device-data` | Mobile | Cascades a device's events, Journal entries (and voice files) and check-ins; returns counts |
 
-Every mobile endpoint is zod-validated, rate limited per `device_id`, and returns only that device's data. **The service role key never ships to clients.** Removed in v3: `attest`, `vote`, `my-votes`, `plant-seed`, `seed-addendum`, `my-seeds`, `export-archive`.
+Every mobile endpoint is zod-validated, rate limited per `device_id`, and returns only that device's data. **The service role key never ships to clients.** Removed in v3: `attest`, `vote`, `my-votes`, `plant-seed`, `seed-addendum`, `my-seeds`.
 
 ---
 
@@ -192,7 +193,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 | Area | Events (props) |
 |---|---|
 | App | `app_opened`, `pack_downloaded {scope, bytes}` |
-| Session | `grove_entered`, `session_started`, `session_ended {fragments_heard, minutes}` |
+| Session | `grove_entered`, `session_started`, `session_ended {fragments_completed, minutes}` |
 | Story | `fragment_triggered {trigger: proximity|tap|scan|accessible, time_window}`, `fragment_completed {time_window, change_kind}`, `fragment_unlocked`, `teaser_opened`, `growth_moment_played` |
 | Audio | `hush_started`, `hush_skipped`, `mixer_changed {bus}` (no values), `route_changed {route}` |
 | Chronicle | `chronicle_opened`, `character_opened`, `replay_played {scope, time_window}`, `show_on_map_tapped` |

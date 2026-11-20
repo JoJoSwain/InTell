@@ -69,7 +69,7 @@ Delivered as four PRs; see `docs/briefs/M3-admin.md`.
 Crossroads and attestation were removed by ADR 0004. The number is kept so later milestones keep their names.
 
 ## M11 — Analytics and dashboard
-**Build:** the event queue and `ingest-events`; every event in TECH_SPEC §8; dashboard views and pages (TECH_SPEC §9) with CSV; `delete-device-data`.
+**Build:** the event queue and `ingest-events`; every event in TECH_SPEC §8; dashboard views and pages (TECH_SPEC §9) with CSV; `delete-device-data`; `export-archive`.
 **Accept when:** dashboard numbers match a fixture dataset, including the contribution-return comparison; delete removes every server row and voice file for the device.
 
 ## M12 — Hardening, accessibility and field test

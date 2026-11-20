@@ -59,6 +59,7 @@ M2 shipped the database, playability, packs and the publish pipeline from the v2
 - Listener progress lives only on the phone. Is that acceptable for a long-running story, or do we add optional account sync or export/import (decide before M5)?
 - Journal entries from children under 13: the age gate stays, and the children's-privacy approach needs counsel review before M9.
 - The center home-screen button.
+- A printable grove guide as a non-phone way to take part (v1 or later). The archive export is kept (M11) so content is preserved independently of the app.
 
 ## Consequences
 - **M3 starts with a schema realignment PR** that brings the merged M2 schema, functions, packs, tests and seed in line with this ADR (new migrations only; merged migrations aren't edited). See `docs/briefs/M3-admin.md`.
