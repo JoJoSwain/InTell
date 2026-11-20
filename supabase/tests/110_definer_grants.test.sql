@@ -23,6 +23,7 @@ select is(
     ) s
   ),
   array[
+    'fn_admin_upsert_region(p_id uuid, p_name text, p_slug text, p_timezone text, p_sun_wkt text, p_bounds_geojson text)',
     'fn_publish_check(p_release_id uuid)',
     'fn_require_editor_or_service()',
     'fn_snapshot_projection_guarded(p_entity text, p_entity_id uuid)',

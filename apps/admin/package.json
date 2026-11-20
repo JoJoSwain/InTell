@@ -8,11 +8,16 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"admin: no unit tests in M0\""
+    "test": "echo \"admin: no unit tests in M0; use test:e2e\"",
+    "e2e:prepare": "node scripts/e2e-prepare.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@intell/shared": "workspace:*",
     "@radix-ui/react-slot": "^1.5.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.49.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.76.0",
@@ -24,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.65.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

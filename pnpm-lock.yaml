@@ -30,6 +30,12 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.5.0
         version: 1.5.0(@types/react@19.3.0)(react@19.2.4)
+      '@supabase/ssr':
+        specifier: ^0.12.7
+        version: 0.12.7(@supabase/supabase-js@2.119.2)
+      '@supabase/supabase-js':
+        specifier: ^2.49.1
+        version: 2.119.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -41,7 +47,7 @@ importers:
         version: 1.76.0(@types/react@19.3.0)(react@19.2.4)
       next:
         specifier: 15.5.29
-        version: 15.5.29(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 15.5.29(@playwright/test@1.65.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -58,6 +64,9 @@ importers:
       '@eslint/eslintrc':
         specifier: ^3
         version: 3.3.7
+      '@playwright/test':
+        specifier: ^1.65.1
+        version: 1.65.1
       '@types/node':
         specifier: ^20
         version: 20.19.43
@@ -1350,6 +1359,11 @@ packages:
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
 
+  '@playwright/test@1.65.1':
+    resolution: {integrity: sha512-y+NCIRm2LvY4slUVWvGh1nujJ8RF/hEisIsq2mtUPgdQC4L701bq5hZGMhrpeXjACvwvO9tj5dJqhvM6TP9lbw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@radix-ui/primitive@1.2.0':
     resolution: {integrity: sha512-KABY+VMIRPJL+Vyzv/335FEhXXD/xDv8BMb1kl48/aXJZMH0LtHCTx5ga5RnxaEP3nZHtmTLf1P9vanmFX46bw==}
 
@@ -1790,6 +1804,11 @@ packages:
   '@supabase/realtime-js@2.119.2':
     resolution: {integrity: sha512-1xHRbZ8RgKq8Qn50uNJMnBdkuzK35GQTo1hx2+bC3QvCxbzXnFkbmq2ZyT9xSjOCuLBfD5ve3ZKxJcbWefL3ow==}
     engines: {node: '>=22.0.0'}
+
+  '@supabase/ssr@0.12.7':
+    resolution: {integrity: sha512-wiBtEie1KkRJi9RrZWY3R2imRhX1JY7qMyUCH2z9AUk15gQebNEplM+urbCKamdxaTJLXUU6LlpkJsaxhojCEg==}
+    peerDependencies:
+      '@supabase/supabase-js': ^2.114.0
 
   '@supabase/storage-js@2.119.2':
     resolution: {integrity: sha512-dbzPuYKYc3/HGz+cRXAK45zR5FWMEH6lr2Is13ZOExhOBCM3F0iO96Z9VuhlLA64vPLeSQP24O/jesWg1QY6fw==}
@@ -2456,6 +2475,10 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  cookie@1.1.1:
+    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
+    engines: {node: '>=18'}
 
   core-js-compat@3.51.0:
     resolution: {integrity: sha512-52r6fkXgxv4GLMjmFcMWRx7X9bw071xTTdrDcdyPGRqU2oE+9pCG0bAOMifSBdLw0JRBZKEF0q3B55qPlLuE8g==}
@@ -4022,6 +4045,16 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
+
+  playwright-core@1.65.1:
+    resolution: {integrity: sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.65.1:
+    resolution: {integrity: sha512-vJ1FuoOrNwOKHUIVEvSt3jT1L+wjjDpwhwIstKtfvTh8XIG4FG4bIFuvNdMxi81LGfAhUgUZleVFaOLY4RIUUw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   plist@3.1.1:
     resolution: {integrity: sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA==}
@@ -6230,6 +6263,10 @@ snapshots:
 
   '@oxc-project/types@0.154.0': {}
 
+  '@playwright/test@1.65.1':
+    dependencies:
+      playwright: 1.65.1
+
   '@radix-ui/primitive@1.2.0': {}
 
   '@radix-ui/react-collection@1.2.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
@@ -6635,6 +6672,11 @@ snapshots:
     dependencies:
       '@supabase/phoenix': 0.4.5
       tslib: 2.8.1
+
+  '@supabase/ssr@0.12.7(@supabase/supabase-js@2.119.2)':
+    dependencies:
+      '@supabase/supabase-js': 2.119.2
+      cookie: 1.1.1
 
   '@supabase/storage-js@2.119.2':
     dependencies:
@@ -7349,6 +7391,8 @@ snapshots:
   content-type@2.1.0: {}
 
   convert-source-map@2.0.0: {}
+
+  cookie@1.1.1: {}
 
   core-js-compat@3.51.0:
     dependencies:
@@ -9116,7 +9160,7 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  next@15.5.29(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@15.5.29(@playwright/test@1.65.1)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 15.5.29
       '@swc/helpers': 0.5.15
@@ -9134,6 +9178,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 15.5.29
       '@next/swc-win32-arm64-msvc': 15.5.29
       '@next/swc-win32-x64-msvc': 15.5.29
+      '@playwright/test': 1.65.1
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.35.5(@types/node@20.19.43)
     transitivePeerDependencies:
@@ -9315,6 +9360,12 @@ snapshots:
   picomatch@4.0.7: {}
 
   pirates@4.0.7: {}
+
+  playwright-core@1.65.1: {}
+
+  playwright@1.65.1:
+    dependencies:
+      playwright-core: 1.65.1
 
   plist@3.1.1:
     dependencies:
