@@ -15,14 +15,14 @@ select throws_ok(
        from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
      'physical',
-     25,
+     10.67,
      null,
      993,
      'draft'
    )$$,
-  '23514',
-  null,
-  'physical without marker_code fails check constraint'
+  'P0001',
+  'physical fragment requires marker_code',
+  'physical without marker_code rejected by fn_fragment_guard'
 );
 
 select ok(

@@ -1,6 +1,6 @@
 -- Seeded v3 graph + release-scoped fn_publish_check + boundary containment.
 begin;
-select plan(7);
+select plan(8);
 
 -- frag5 Parking Lot 2: two groups {frag2}, {frag3}
 select is(

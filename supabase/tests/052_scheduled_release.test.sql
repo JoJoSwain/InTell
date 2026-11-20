@@ -50,7 +50,10 @@ insert into public.release_items (release_id, entity, entity_id) values
 update public.image_assets set alt_text = '{}'::jsonb
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000140';
 
-select public.fn_publish_check('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000053');
+select ok(
+  (public.fn_publish_check('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000053')->>'ok')::boolean is false,
+  'fn_publish_check fails release with empty alt text image'
+);
 
 update public.releases
    set status = 'failed'

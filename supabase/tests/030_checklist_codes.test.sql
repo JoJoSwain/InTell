@@ -1,6 +1,6 @@
 -- Crafted cases for fn_publish_check(p_release_id) codes (DATA_MODEL §11, M3a R2).
 begin;
-select plan(20);
+select plan(16);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
 
@@ -105,9 +105,12 @@ update public.fragments
    set teaser = '{"en":"Beginning teaser."}'::jsonb
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030';
 
--- PHYSICAL_NO_CODE
+-- PHYSICAL_NO_CODE: guards + check block null marker; disable briefly to simulate bad row (rollback restores)
+alter table public.fragments drop constraint physical_requires_marker_code;
+alter table public.fragments disable trigger user;
 update public.fragments set marker_code = null
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038';
+alter table public.fragments enable trigger user;
 
 select ok(
   exists (
@@ -120,8 +123,13 @@ select ok(
   'PHYSICAL_NO_CODE fires'
 );
 
+alter table public.fragments disable trigger user;
 update public.fragments set marker_code = 'DEMO-001'
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038';
+alter table public.fragments enable trigger user;
+alter table public.fragments
+  add constraint physical_requires_marker_code
+  check (visibility <> 'physical' or marker_code is not null);
 
 -- NO_ALT_TEXT
 update public.image_assets set alt_text = '{}'::jsonb
@@ -142,7 +150,15 @@ update public.image_assets
    set alt_text = '{"en":"Portrait A alt"}'::jsonb
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000140';
 
--- PREREQ_UNPUBLISHED: unpublish both OR members of frag10 → fails
+-- PREREQ_UNPUBLISHED: OR members must be published or in release (not just listed in release_items)
+delete from public.release_items
+ where release_id = 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0'
+   and entity = 'fragment'
+   and entity_id in (
+     'aaaaaaaa-bbbb-4ccc-8ddd-000000000037',
+     'aaaaaaaa-bbbb-4ccc-8ddd-000000000038'
+   );
+
 update public.published_snapshots
    set data = jsonb_set(data, '{status}', '"unpublished"')
  where entity = 'fragment'
@@ -201,8 +217,11 @@ select ok(
 delete from public.fragment_prereq_groups
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000050';
 
--- DEPENDENCY_UNPUBLISHED: revision without fragment in release
+-- DEPENDENCY_UNPUBLISHED: revision without fragment in release or published
 delete from public.release_items where release_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090';
+update public.published_snapshots
+   set data = jsonb_set(data, '{status}', '"unpublished"')
+ where entity = 'fragment' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030';
 insert into public.release_items (release_id, entity, entity_id) values
   ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090', 'revision', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000040');
 
@@ -219,8 +238,15 @@ select ok(
   'DEPENDENCY_UNPUBLISHED: revision needs fragment in release or published'
 );
 
+update public.published_snapshots
+   set data = jsonb_set(data, '{status}', '"published"')
+ where entity = 'fragment' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030';
+
 -- DEPENDENCY_UNPUBLISHED: fragment without grove
 delete from public.release_items where release_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090';
+update public.published_snapshots
+   set data = jsonb_set(data, '{status}', '"unpublished"')
+ where entity = 'grove' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010';
 insert into public.release_items (release_id, entity, entity_id) values
   ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090', 'fragment', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030');
 
@@ -236,6 +262,10 @@ select ok(
   'DEPENDENCY_UNPUBLISHED: fragment needs grove in release or published'
 );
 
+update public.published_snapshots
+   set data = jsonb_set(data, '{status}', '"published"')
+ where entity = 'grove' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010';
+
 -- DEPENDENCY_UNPUBLISHED: fragment missing linked character
 delete from public.release_items where release_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090';
 insert into public.release_items (release_id, entity, entity_id) values
@@ -244,7 +274,7 @@ insert into public.release_items (release_id, entity, entity_id) values
 
 update public.published_snapshots
    set data = jsonb_set(data, '{status}', '"unpublished"')
- where entity = 'character' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020';
+ where entity = 'character' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000021';
 
 select ok(
   exists (
@@ -260,7 +290,7 @@ select ok(
 
 update public.published_snapshots
    set data = jsonb_set(data, '{status}', '"published"')
- where entity = 'character' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020';
+ where entity = 'character' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000021';
 
 -- DEPENDENCY_UNPUBLISHED: character portrait image
 delete from public.release_items where release_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000090';

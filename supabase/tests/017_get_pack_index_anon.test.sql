@@ -29,13 +29,14 @@ select is(
 
 -- Non-live build is invisible
 insert into public.pack_builds (
-  scope, scope_id, version, manifest_path, manifest_sha256, bytes_total, live
+  scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total, live
 ) values (
   'grove',
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   99,
   'packs/grove/test/nonlive.json',
   repeat('a', 64),
+  '{}',
   1,
   false
 );
@@ -48,7 +49,7 @@ select is(
 
 -- Live grove build included when grove snapshot is published
 insert into public.pack_builds (
-  scope, scope_id, version, manifest_path, manifest_sha256, bytes_total,
+  scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total,
   live, release_id
 ) values (
   'grove',
@@ -56,6 +57,7 @@ insert into public.pack_builds (
   100,
   'packs/grove/test/live.json',
   repeat('b', 64),
+  '{}',
   2,
   true,
   'aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0'

@@ -1,6 +1,6 @@
 -- Story Notes (Indigeny / thread+character notes): staff read; writer+ on fragments/threads/characters.
 begin;
-select plan(7);
+select plan(6);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,

@@ -8,7 +8,7 @@ insert into public.releases (id, name, status)
 values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054', 'two-grove golive', 'publishing');
 
 insert into public.pack_builds (
-  scope, scope_id, version, manifest_path, manifest_sha256, bytes_total,
+  scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total,
   live, release_id
 ) values
   (
@@ -17,6 +17,7 @@ insert into public.pack_builds (
     201,
     'packs/grove/farm/live.json',
     repeat('c', 64),
+    '{}',
     10,
     false,
     'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'
@@ -27,6 +28,7 @@ insert into public.pack_builds (
     202,
     'packs/grove/nearby/live.json',
     repeat('d', 64),
+    '{}',
     11,
     false,
     'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'
@@ -37,6 +39,7 @@ insert into public.pack_builds (
     203,
     'packs/region/wasatch/live.json',
     repeat('e', 64),
+    '{}',
     12,
     false,
     'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'

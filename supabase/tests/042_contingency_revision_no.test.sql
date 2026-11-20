@@ -23,7 +23,7 @@ insert into public.fragments (
   '{"en":"contingency lab"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 940, 'published'
+  'standard', 10.67, 940, 'published'
 );
 
 insert into public.fragment_revisions (

@@ -14,15 +14,28 @@ select throws_ok(
   'self-reference rejected'
 );
 
--- Cross-grove prerequisite allowed (seed bridge → Farmington frag1 pattern)
+-- Cross-grove prerequisite allowed (grove2 leaf → Farmington frag2; seed already has 0c1 → 030)
+insert into public.fragments (
+  id, grove_id, tier, title, location, visibility,
+  trigger_radius_m, story_order, status
+) values (
+  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000012',
+  'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0',
+  'leaf',
+  '{"en":"cross-grove lab"}'::jsonb,
+  (select extensions.ST_Centroid(boundary)::extensions.geography
+     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0'),
+  'standard', 10.67, 899, 'draft'
+);
+
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order)
-values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030', 98);
+values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013', 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000012', 0);
 
 select lives_ok(
   $$insert into public.fragment_prereq_members (group_id, requires_fragment_id, sort_order)
     values (
       'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013',
-      'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1',
+      'aaaaaaaa-bbbb-4ccc-8ddd-000000000031',
       0
     )$$,
   'cross-grove prerequisite allowed'
@@ -32,6 +45,8 @@ delete from public.fragment_prereq_members
  where group_id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013';
 delete from public.fragment_prereq_groups
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000013';
+delete from public.fragments
+ where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000012';
 
 -- 2-cycle rejected: A → B → A
 insert into public.fragments (
@@ -45,7 +60,7 @@ insert into public.fragments (
   '{"en":"cycle A"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 901, 'draft'
+  'standard', 10.67, 901, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000022',
@@ -54,7 +69,7 @@ insert into public.fragments (
   '{"en":"cycle B"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 902, 'draft'
+  'standard', 10.67, 902, 'draft'
 );
 
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order) values
@@ -84,7 +99,7 @@ insert into public.fragments (
   '{"en":"cycle3 A"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 911, 'draft'
+  'standard', 10.67, 911, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000032',
@@ -93,7 +108,7 @@ insert into public.fragments (
   '{"en":"cycle3 B"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 912, 'draft'
+  'standard', 10.67, 912, 'draft'
 ),
 (
   'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000033',
@@ -102,7 +117,7 @@ insert into public.fragments (
   '{"en":"cycle3 C"}'::jsonb,
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
-  'standard', 20, 913, 'draft'
+  'standard', 10.67, 913, 'draft'
 );
 
 insert into public.fragment_prereq_groups (id, fragment_id, sort_order) values
@@ -135,7 +150,7 @@ select throws_ok(
      (select extensions.ST_Centroid(boundary)::extensions.geography
         from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
      'standard',
-     20,
+     10.67,
      920,
      'draft'
    )$$,
@@ -156,7 +171,7 @@ insert into public.fragments (
   (select extensions.ST_Centroid(boundary)::extensions.geography
      from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
   'standard',
-  20,
+  10.67,
   930,
   'draft'
 );

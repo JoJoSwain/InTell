@@ -19,7 +19,7 @@ select throws_ok(
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
      'standard',
-     25,
+     10.67,
      90,
      'draft'
    )$$,
@@ -45,7 +45,7 @@ select lives_ok(
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
      'standard',
-     25,
+     10.67,
      91,
      'draft'
    )$$,
@@ -67,7 +67,7 @@ select lives_ok(
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
      'standard',
-     25,
+     10.67,
      92,
      'draft'
    )$$,

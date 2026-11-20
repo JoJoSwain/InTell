@@ -6,7 +6,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 
 select ok(
   (
-    select teaser->>'en'
+    select data->'teaser'->>'en'
     from public.published_snapshots
     where entity = 'fragment'
       and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'
@@ -21,7 +21,7 @@ update public.fragments
 
 select ok(
   (
-    select teaser->>'en'
+    select data->'teaser'->>'en'
       <> (select teaser->>'en' from public.fragments
            where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030')
     from public.published_snapshots

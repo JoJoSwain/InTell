@@ -28,11 +28,10 @@ select is(
     'fn_publish_check(p_release_id uuid)',
     -- Admin publish/unpublish commit (fn_require_editor_or_service inside).
     'fn_publish_commit(p_release_id uuid)',
-    'fn_unpublish_commit(p_entity text, p_ids uuid[])',
     -- Publish commit and unpublish call this guard.
     'fn_require_editor_or_service()',
-    -- R1 "Unreleased changes" projection for editors.
     'fn_snapshot_projection_guarded(p_entity text, p_entity_id uuid)',
+    'fn_unpublish_commit(p_entity text, p_ids uuid[])',
     -- Devices discover live packs (DATA_MODEL §12.3); anon + staff.
     'get_pack_index()',
     -- RLS policies resolve staff roles.
