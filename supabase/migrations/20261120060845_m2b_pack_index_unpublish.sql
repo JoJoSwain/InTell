@@ -223,3 +223,17 @@ $$;
 
 revoke all on function public.fn_enqueue_purge_reconcile(text, jsonb) from public, anon;
 grant execute on function public.fn_enqueue_purge_reconcile(text, jsonb) to service_role, authenticated;
+
+-- Staff gate helpers for edge functions (avoid PostgREST array-enum binding issues)
+create or replace function public.fn_is_editor_or_admin()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select public.has_role(array['editor','admin']::public.staff_role[]);
+$$;
+
+revoke all on function public.fn_is_editor_or_admin() from public, anon;
+grant execute on function public.fn_is_editor_or_admin() to authenticated, service_role;

@@ -26,7 +26,7 @@ export const GrovePackFragment = z
     requires: z.array(z.array(Uuid)),
     title: L10n,
     visibility: z.enum(["marked", "unmarked", "protected"]),
-    storyOrder: z.number().int(),
+    storyOrder: z.number(),
     gapHint: L10n.nullable().optional(),
     retired: z.boolean(),
     lat: z.number().optional(),
@@ -53,7 +53,7 @@ export const GrovePack = z
     schema: z.literal(1),
     groveId: Uuid,
     packVersion: z.number().int().nonnegative(),
-    builtAt: z.string().datetime({ offset: true }),
+    builtAt: z.string().min(1),
     grove: z
       .object({
         id: Uuid,
@@ -80,9 +80,9 @@ export const GrovePack = z
           name: L10n,
           themeNote: L10n.nullable().optional(),
           status: z.string(),
-          plantingOpensAt: z.string().datetime({ offset: true }).nullable().optional(),
-          plantingClosesAt: z.string().datetime({ offset: true }).nullable().optional(),
-          releasedAt: z.string().datetime({ offset: true }).nullable().optional(),
+          plantingOpensAt: z.string().nullable().optional(),
+          plantingClosesAt: z.string().nullable().optional(),
+          releasedAt: z.string().nullable().optional(),
           writerNoteSha: Sha256.optional(),
         })
         .strict(),
@@ -105,7 +105,7 @@ export const GrovePack = z
           fragmentId: Uuid,
           revisionNo: z.number().int(),
           ringId: Uuid,
-          publishAt: z.string().datetime({ offset: true }),
+          publishAt: z.string().min(1),
           contentNote: L10n.nullable().optional(),
           changeNote: L10n.nullable().optional(),
           versions: z.array(
@@ -138,13 +138,13 @@ export const GrovePack = z
       z
         .object({
           id: Uuid,
-          ringId: Uuid,
+          ringId: Uuid.optional(),
           text: L10n,
           anchorFragmentId: Uuid.optional(),
           anchorCharacterId: Uuid.optional(),
           requiresHeard: z.boolean(),
-          opensAt: z.string().datetime({ offset: true }).nullable().optional(),
-          closesAt: z.string().datetime({ offset: true }).nullable().optional(),
+          opensAt: z.string().nullable().optional(),
+          closesAt: z.string().nullable().optional(),
         })
         .strict(),
     ),
@@ -157,8 +157,8 @@ export const GrovePack = z
           prompt: L10n,
           teaserSha: Sha256.optional(),
           voteRadiusM: z.number(),
-          opensAt: z.string().datetime({ offset: true }),
-          closesAt: z.string().datetime({ offset: true }),
+          opensAt: z.string().min(1),
+          closesAt: z.string().min(1),
           status: z.string(),
           options: z.array(
             z
@@ -280,7 +280,7 @@ export const RegionPack = z
     schema: z.literal(1),
     regionId: Uuid,
     packVersion: z.number().int().nonnegative(),
-    builtAt: z.string().datetime({ offset: true }),
+    builtAt: z.string().min(1),
     ambienceProfiles: z.array(
       z
         .object({

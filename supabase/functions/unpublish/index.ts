@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAuthHeader, userClient } from "../_shared/clients.ts";
+import { getAuthHeader, serviceClient, userClient } from "../_shared/clients.ts";
 import { json } from "../_shared/http.ts";
 
 const Body = z.object({
@@ -21,10 +21,12 @@ Deno.serve(async (req) => {
   if (!auth) return json({ error: "unauthorized" }, 401);
 
   const caller = userClient(auth);
-  const { data: allowed, error: roleErr } = await caller.rpc("has_role", {
-    roles: ["editor", "admin"],
-  });
-  if (roleErr || !allowed) return json({ error: "editor required" }, 403);
+  const { data: allowed, error: roleErr } = await caller.rpc(
+    "fn_is_editor_or_admin",
+  );
+  if (roleErr || !allowed) {
+    return json({ error: "editor required", detail: roleErr?.message }, 403);
+  }
 
   let body: z.infer<typeof Body>;
   try {
@@ -33,7 +35,8 @@ Deno.serve(async (req) => {
     return json({ error: "invalid body" }, 400);
   }
 
-  const { data, error } = await caller.rpc("fn_unpublish_commit", {
+  const svc = serviceClient();
+  const { data, error } = await svc.rpc("fn_unpublish_commit", {
     p_entity: body.entity,
     p_ids: body.ids,
   });

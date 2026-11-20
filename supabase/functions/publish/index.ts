@@ -15,10 +15,12 @@ Deno.serve(async (req) => {
   if (!auth) return json({ error: "unauthorized" }, 401);
 
   const caller = userClient(auth);
-  const { data: allowed, error: roleErr } = await caller.rpc("has_role", {
-    roles: ["editor", "admin"],
-  });
-  if (roleErr || !allowed) return json({ error: "editor required" }, 403);
+  const { data: allowed, error: roleErr } = await caller.rpc(
+    "fn_is_editor_or_admin",
+  );
+  if (roleErr || !allowed) {
+    return json({ error: "editor required", detail: roleErr?.message }, 403);
+  }
 
   let body: z.infer<typeof Body>;
   try {

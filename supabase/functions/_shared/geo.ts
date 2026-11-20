@@ -9,7 +9,12 @@ export function asPolygon(raw: unknown): GeoPolygon {
   if (raw && typeof raw === "object") {
     const g = raw as { type?: string; coordinates?: unknown };
     if (g.type === "Polygon" && Array.isArray(g.coordinates)) {
-      return { type: "Polygon", coordinates: g.coordinates as [number, number][][] };
+      const coordinates = (g.coordinates as number[][][]).map((ring) =>
+        ring.map(
+          (pt) => [roundCoord(pt[0]!), roundCoord(pt[1]!)] as [number, number],
+        ),
+      );
+      return { type: "Polygon", coordinates };
     }
   }
   throw new Error("expected GeoJSON Polygon");

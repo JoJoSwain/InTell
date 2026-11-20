@@ -56,9 +56,7 @@ export async function requireStaffEditor(req: Request): Promise<StaffAuth> {
   const userClient = createClient(url, anon, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-  const { data: allowed, error } = await userClient.rpc("has_role", {
-    roles: ["editor", "admin"],
-  });
+  const { data: allowed, error } = await userClient.rpc("fn_is_editor_or_admin");
   if (error || !allowed) {
     return { ok: false, response: errorResponse("editor role required", 403) };
   }

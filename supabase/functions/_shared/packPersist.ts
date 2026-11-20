@@ -2,7 +2,11 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { canonicalJson, contentSha256 } from "./from-shared/canonicalJson.ts";
 import { GrovePack, RegionPack } from "./from-shared/packs.ts";
 import { sha256Hex } from "./digest.ts";
-import { deletePublicPrefixExcept, uploadManifest } from "./storage.ts";
+import {
+  copyStagingToPublic,
+  deletePublicPrefixExcept,
+  uploadManifest,
+} from "./storage.ts";
 
 type Scope = "grove" | "region";
 
@@ -100,6 +104,22 @@ export async function persistPackIfChanged(
 
   const prefix = `packs/${input.scope}/${input.scopeId}`;
   await deletePublicPrefixExcept(client, prefix, new Set([path]));
+
+  // Ensure every referenced asset exists in public-media (staging → public upsert)
+  for (const sha of input.assetShas) {
+    const { data: asset } = await client
+      .from("audio_assets")
+      .select("ext")
+      .eq("sha256", sha)
+      .maybeSingle();
+    if (!asset?.ext) continue;
+    try {
+      await copyStagingToPublic(client, sha, asset.ext as string);
+    } catch (e) {
+      // Already-public objects or missing staging — continue; reconciler owns deletes
+      console.error(`copy asset ${sha}: ${e}`);
+    }
+  }
 
   await client.rpc("fn_enqueue_purge_reconcile", {
     p_reason: "rebuild",

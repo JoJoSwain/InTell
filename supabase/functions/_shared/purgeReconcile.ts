@@ -34,7 +34,7 @@ export async function reconcilePublicAudio(client: SupabaseClient): Promise<{
     }
   }
 
-  const listed = await listPublicAudioShas(client);
+  const publicShas = await listPublicAudioShas(client);
   let deleted = 0;
   const { data: files } = await client.storage.from("public-media").list("a", { limit: 10000 });
   for (const f of files ?? []) {
@@ -47,7 +47,7 @@ export async function reconcilePublicAudio(client: SupabaseClient): Promise<{
     if (rm) throw new Error(rm.message);
     deleted += 1;
   }
-  void listed;
+  void publicShas;
 
   const { data: pubRows } = await client
     .from("audio_assets")

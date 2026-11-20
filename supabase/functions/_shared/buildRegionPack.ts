@@ -167,22 +167,24 @@ export async function buildRegionPack(
 
   const profileSlugById = new Map((profiles ?? []).map((p) => [p.id as string, p.slug as string]));
 
+  // Nullable when the region has no landcover_grids row (review #12)
   let landcoverOut = null;
-  if (landcover) {
-    const classes = (landcoverClasses ?? [])
-      .filter((c) => c.profile_id && profileSlugById.has(c.profile_id as string))
-      .map((c) => ({
-        code: String(c.code),
-        profileSlug: profileSlugById.get(c.profile_id as string) as string,
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code));
-    const gridSha = (landcover.file_path as string).replace(/^.*\//, "").replace(/\.bin$/, "") ||
-      "0000000000000000000000000000000000000000000000000000000000000000";
-    landcoverOut = {
-      gridSha,
-      h3Resolution: landcover.h3_resolution,
-      classes,
-    };
+  if (landcover && typeof landcover.file_path === "string") {
+    const m = /([a-f0-9]{64})/i.exec(landcover.file_path as string);
+    if (m) {
+      const classes = (landcoverClasses ?? [])
+        .filter((c) => c.profile_id && profileSlugById.has(c.profile_id as string))
+        .map((c) => ({
+          code: String(c.code),
+          profileSlug: profileSlugById.get(c.profile_id as string) as string,
+        }))
+        .sort((a, b) => a.code.localeCompare(b.code));
+      landcoverOut = {
+        gridSha: m[1]!.toLowerCase(),
+        h3Resolution: landcover.h3_resolution,
+        classes,
+      };
+    }
   }
 
   const watermarks: (string | null | undefined)[] = [region.updated_at as string];
@@ -196,22 +198,38 @@ export async function buildRegionPack(
     builtAt,
     ambienceProfiles: profileOut,
     landcover: landcoverOut,
-    ambienceZones: (zones ?? [])
-      .map((z) => ({
-        id: z.id,
-        boundary: asPolygon(z.boundary),
-        profileSlug: profileSlugById.get(z.profile_id as string) ?? z.name,
-        priority: z.priority,
-        edgeFadeM: z.edge_fade_m,
-      }))
-      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
-    musicZones: (musicZones ?? [])
-      .map((z) => ({
-        id: z.id,
-        boundary: asPolygon(z.boundary),
-        edgeFadeM: z.edge_fade_m,
-      }))
-      .sort((a, b) => String(a.id).localeCompare(String(b.id))),
+    ambienceZones: await (async () => {
+      const out = [];
+      for (const z of zones ?? []) {
+        const { data: bj } = await client.rpc("fn_pack_geog_geojson", {
+          p_scope: "ambience_zone",
+          p_id: z.id,
+        });
+        out.push({
+          id: z.id,
+          boundary: asPolygon(bj),
+          profileSlug: profileSlugById.get(z.profile_id as string) ?? String(z.name),
+          priority: z.priority,
+          edgeFadeM: z.edge_fade_m,
+        });
+      }
+      return out.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    })(),
+    musicZones: await (async () => {
+      const out = [];
+      for (const z of musicZones ?? []) {
+        const { data: bj } = await client.rpc("fn_pack_geog_geojson", {
+          p_scope: "music_zone",
+          p_id: z.id,
+        });
+        out.push({
+          id: z.id,
+          boundary: asPolygon(bj),
+          edgeFadeM: z.edge_fade_m,
+        });
+      }
+      return out.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    })(),
     musicCues: packCues,
     uiCues: (uiCues ?? [])
       .map((u) => {

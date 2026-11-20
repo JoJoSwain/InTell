@@ -59,8 +59,16 @@ select vault.create_secret('${esc(serviceKey)}', 'run_jobs_service_key', 'M2a lo
 const tmp = path.join(os.tmpdir(), "intell-vault-setup.sql");
 fs.writeFileSync(tmp, sql, "utf8");
 try {
-  run(
-    `docker exec -i supabase_db_Replaceplace psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
+  // Pipe the SQL file — do not pass multiline via -c (Windows escapes `\n` literally).
+  execSync(
+    `docker exec -i supabase_db_Replaceplace psql -U postgres -d postgres -v ON_ERROR_STOP=1`,
+    {
+      stdio: ["pipe", "inherit", "inherit"],
+      encoding: "utf8",
+      env: process.env,
+      shell: true,
+      input: sql,
+    },
   );
 } finally {
   try {
