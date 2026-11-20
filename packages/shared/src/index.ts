@@ -33,3 +33,10 @@ export {
   DuckingPolicy,
   SPEAKER_SURROUNDINGS_EXTRA_DB,
 } from "./audio/DuckingPolicy";
+
+export {
+  DECODE_CACHE_CAP_BYTES,
+  DecodedBufferLruAccounting,
+  estimateDecodedPcmBytes,
+  estimateDecodedPcmBytesAtRate,
+} from "./audio/decodeCache";

@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import { Redirect } from "expo-router";
 import type {
-  AudioEngine,
   EngineDiagnostics,
   LoopGroupHandle,
   VoiceHandle,
@@ -33,7 +32,7 @@ export default function AudioSpikeScreen() {
 }
 
 function AudioSpikeBody() {
-  const engineRef = useRef<AudioEngine | null>(null);
+  const engineRef = useRef<RNAudioApiEngine | null>(null);
   const bedRef = useRef<VoiceHandle | null>(null);
   const loopRef = useRef<LoopGroupHandle | null>(null);
   const narrationRef = useRef<VoiceHandle | null>(null);
@@ -52,6 +51,7 @@ function AudioSpikeBody() {
     let cancelled = false;
     const engine = new RNAudioApiEngine();
     engineRef.current = engine;
+    const unsubs: (() => void)[] = [];
 
     (async () => {
       try {
@@ -75,19 +75,38 @@ function AudioSpikeBody() {
         }
         if (cancelled) return;
 
-        engine.onRouteChange((route) => {
-          void appendSpikeLog({
-            type: "routeChange",
-            route,
-            raw: (engine as RNAudioApiEngine).lastDevicesInfo,
-          });
-        });
-        engine.onInterruption((e) => {
-          void appendSpikeLog({ type: "interruption", event: e });
-        });
-        engine.onRemoteCommand((c) => {
-          void appendSpikeLog({ type: "remoteCommand", command: c });
-        });
+        unsubs.push(
+          engine.onRouteChange((route) => {
+            void appendSpikeLog({
+              type: "routeChange",
+              route,
+              raw: engine.lastDevicesInfo,
+            });
+          }),
+        );
+        unsubs.push(
+          engine.onInterruption((e) => {
+            void appendSpikeLog({ type: "interruption", event: e });
+          }),
+        );
+        unsubs.push(
+          engine.onRemoteCommand((c) => {
+            void appendSpikeLog({ type: "remoteCommand", command: c });
+          }),
+        );
+        unsubs.push(
+          engine.onAppStateChange((state) => {
+            void appendSpikeLog({ type: "appState", state });
+          }),
+        );
+        unsubs.push(
+          engine.onNotificationVisibilityChange((visible) => {
+            void appendSpikeLog({
+              type: visible ? "notificationShow" : "notificationHide",
+              visible,
+            });
+          }),
+        );
 
         setReady(true);
         setStatus("ready");
@@ -95,7 +114,7 @@ function AudioSpikeBody() {
         await appendSpikeLog({
           type: "init",
           ...engine.getDiagnostics(),
-          rawDevices: (engine as RNAudioApiEngine).lastDevicesInfo,
+          rawDevices: engine.lastDevicesInfo,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -113,6 +132,7 @@ function AudioSpikeBody() {
       clearInterval(uiTimer);
       if (oneshotTimer.current) clearInterval(oneshotTimer.current);
       if (logTimer.current) clearInterval(logTimer.current);
+      for (const u of unsubs) u();
       void engine.dispose();
       engineRef.current = null;
     };
@@ -123,6 +143,7 @@ function AudioSpikeBody() {
     if (!engine || !ready) return;
     try {
       setStatus("starting");
+      await engine.prepareMixStart();
       narrationRef.current = engine.playNarration(
         { sha: "narration", durationMs: 90_000 },
         { title: "InTell audio spike", artist: "Test" },

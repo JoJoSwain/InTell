@@ -105,7 +105,7 @@ export class RNAudioApiEngine implements AudioEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private buses: Partial<Record<BusId, GainNode>> = {};
-  private cache = new BufferLruCache();
+  private cache: BufferLruCache | null = null;
   private voices = new Map<string, VoiceState>();
   private loops = new Map<string, LoopGroupState>();
   private buffers = new Map<string, InternalBuffer>();
@@ -127,6 +127,8 @@ export class RNAudioApiEngine implements AudioEngine {
   private remoteSubs = new Set<
     (c: "play" | "pause" | "skipForward" | "skipBackward" | "next") => void
   >();
+  private appStateSubs = new Set<(state: AppStateStatus) => void>();
+  private notificationSubs = new Set<(visible: boolean) => void>();
 
   private systemSubs: AudioEventSubscription[] = [];
   private notifSubs: AudioEventSubscription[] = [];
@@ -173,6 +175,7 @@ export class RNAudioApiEngine implements AudioEngine {
     this.context = context;
     this.master = master;
     this.buses = buses;
+    this.cache = new BufferLruCache(context.sampleRate);
     this.initWallMs = Date.now();
     this.disposed = false;
 
@@ -193,14 +196,39 @@ export class RNAudioApiEngine implements AudioEngine {
 
     this.appStateSub = AppState.addEventListener("change", (next) => {
       this.appState = next;
+      for (const cb of this.appStateSubs) cb(next);
     });
 
     this.progressTimer = setInterval(() => this.emitNarrationProgress(), 500);
   }
 
+  /**
+   * Call once at the start of a full-mix run: resume if suspended, then reset
+   * the wall/context clock baseline so clockGapMs is not carried over.
+   */
+  async prepareMixStart(): Promise<void> {
+    const ctx = this.requireContext();
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    this.mixWallStartMs = Date.now();
+    this.mixContextStartSec = ctx.currentTime;
+  }
+
+  onAppStateChange(cb: (state: AppStateStatus) => void): Unsubscribe {
+    this.appStateSubs.add(cb);
+    return () => this.appStateSubs.delete(cb);
+  }
+
+  onNotificationVisibilityChange(cb: (visible: boolean) => void): Unsubscribe {
+    this.notificationSubs.add(cb);
+    return () => this.notificationSubs.delete(cb);
+  }
+
   async load(sha: string, uri: string): Promise<BufferHandle> {
     this.requireContext();
-    const cached = this.cache.get(sha);
+    const cache = this.requireCache();
+    const cached = cache.get(sha);
     if (cached) {
       const handle: InternalBuffer = {
         sha,
@@ -214,7 +242,7 @@ export class RNAudioApiEngine implements AudioEngine {
     // uri may be a file path, remote URL, or Metro asset module id (number as string).
     const input: string | number = /^\d+$/.test(uri) ? Number(uri) : uri;
     const buffer = await this.context!.decodeAudioData(input);
-    this.cache.set(sha, buffer);
+    cache.set(sha, buffer);
     const handle: InternalBuffer = {
       sha,
       durationMs: buffer.duration * 1000,
@@ -264,7 +292,6 @@ export class RNAudioApiEngine implements AudioEngine {
     };
     this.voices.set(voice.id, voice);
     this.narrationActive = true;
-    this.markMixStart();
     this.applyDucking(DuckingPolicy.DUCK_ATTACK_MS);
     void this.showNotification(meta, "playing", offsetSec * 1000, internal.durationMs);
 
@@ -329,7 +356,6 @@ export class RNAudioApiEngine implements AudioEngine {
       looping: false,
     };
     this.voices.set(voice.id, voice);
-    this.markMixStart();
     source.onended = () => {
       this.voices.delete(voice.id);
     };
@@ -385,7 +411,6 @@ export class RNAudioApiEngine implements AudioEngine {
       startedAtContextTime: when,
     };
     this.loops.set(groupId, group);
-    this.markMixStart();
     return { id: groupId, stemCount: stemStates.length };
   }
 
@@ -473,7 +498,6 @@ export class RNAudioApiEngine implements AudioEngine {
       looping: true,
     };
     this.voices.set(voice.id, voice);
-    this.markMixStart();
     return { id: voice.id };
   }
 
@@ -639,8 +663,8 @@ export class RNAudioApiEngine implements AudioEngine {
       narrationPositionMs,
       // underruns: library exposes no signal (review §6.8)
       route: this.route,
-      decodedBytes: this.cache.decodedBytes,
-      cacheEvictions: this.cache.cacheEvictions,
+      decodedBytes: this.cache?.decodedBytes ?? 0,
+      cacheEvictions: this.cache?.cacheEvictions ?? 0,
       contextTimeMs,
       wallElapsedMs,
       clockGapMs,
@@ -667,7 +691,7 @@ export class RNAudioApiEngine implements AudioEngine {
     } catch {
       // ignore
     }
-    this.notificationVisible = false;
+    this.setNotificationVisible(false);
 
     for (const voice of this.voices.values()) {
       try {
@@ -687,7 +711,8 @@ export class RNAudioApiEngine implements AudioEngine {
       }
     }
     this.loops.clear();
-    this.cache.clear();
+    this.cache?.clear();
+    this.cache = null;
     this.buffers.clear();
 
     if (this.context) {
@@ -711,9 +736,16 @@ export class RNAudioApiEngine implements AudioEngine {
     return this.context;
   }
 
+  private requireCache(): BufferLruCache {
+    if (!this.cache) {
+      throw new Error("AudioEngine not initialized");
+    }
+    return this.cache;
+  }
+
   private requireBuffer(sha: string): InternalBuffer {
     const b = this.buffers.get(sha) ?? (() => {
-      const cached = this.cache.get(sha);
+      const cached = this.requireCache().get(sha);
       if (!cached) return undefined;
       const handle: InternalBuffer = {
         sha,
@@ -727,11 +759,10 @@ export class RNAudioApiEngine implements AudioEngine {
     return b;
   }
 
-  private markMixStart(): void {
-    if (this.mixWallStartMs == null && this.context) {
-      this.mixWallStartMs = Date.now();
-      this.mixContextStartSec = this.context.currentTime;
-    }
+  private setNotificationVisible(visible: boolean): void {
+    if (this.notificationVisible === visible) return;
+    this.notificationVisible = visible;
+    for (const cb of this.notificationSubs) cb(visible);
   }
 
   private applyDucking(rampMs: number): void {
@@ -908,10 +939,10 @@ export class RNAudioApiEngine implements AudioEngine {
         state,
         skipInterval: 10,
       });
-      this.notificationVisible = true;
+      this.setNotificationVisible(true);
     } catch (err) {
       console.warn("[audio-spike] notification show failed", err);
-      this.notificationVisible = false;
+      this.setNotificationVisible(false);
     }
   }
 
