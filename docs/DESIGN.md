@@ -125,6 +125,6 @@ Status badges: Draft gray, Scheduled blue, Published green, Failed red, Retired 
 - [ ] Journal tree has a list equivalent; the storybook reads as continuous text
 - [ ] Hold-to-record has a tap-to-start/stop alternative
 - [ ] Every heard fragment has a transcript; Echo has lock-screen controls
-- [ ] Accessible play works with location off
+- [ ] Accessible play works within 35 ft of the fragment's point (it needs location)
 - [ ] 200% text, reduced motion, contrast tests pass
 - [ ] The mixer is operable by screen reader (adjustable sliders with values)
