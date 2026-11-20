@@ -6,12 +6,12 @@ Read the root `AGENTS.md` first. Its hard constraints apply here. This file adds
 ```
 apps/mobile/app/          Expo Router routes ONLY (every file is a screen; _layout.tsx defines navigators)
   index.tsx               the map home
-  journal/ grow/ settings/  the three sub-screens (modal stacks)
+  chronicle/ journal/ settings/  the sub-screens (modal stacks; Settings opens from the top right)
   welcome.tsx             first-launch flow
-  f/[code].tsx            QR universal link → protected fragment
-apps/mobile/src/          everything else: map/, audio/, location/, session/, packs/, journal/, grow/,
-                          recording/, analytics/, api/, ui/, i18n/
-apps/mobile/assets/       fonts, images, animation, map-style, bundled UI sounds
+  f/[code].tsx            QR universal link → physical-marker fragment
+apps/mobile/src/          everything else: map/, audio/, location/, session/, packs/, chronicle/, journal/,
+                          preview/, recording/, analytics/, api/, ui/, i18n/
+apps/mobile/assets/       fonts, images, animation, bundled UI sounds
 ```
 Pure decision logic doesn't go here. It belongs in `packages/shared` so the admin Listening Simulator can use the same code.
 
@@ -43,4 +43,4 @@ Run lint and typecheck before declaring any task done.
 - Coordinates never leave the device.
 
 ## Map
-The map provider is pending **ADR 0002**. Don't add marker systems, map layers or offline tile code until it's Accepted.
+**ADR 0002 is Accepted: Google Maps, online**, via `react-native-maps` with `PROVIDER_GOOGLE` on both platforms. No offline tiles. Build on `preview/m5-google-map-home` in M5. Markers: 100% opacity when playable now, 35% when locked or outside their time window, tier colors from tokens; tapping a locked marker shows only its teaser (ADR 0004). Wait for DESIGN's mobile rewrite (before M5) for exact marker visuals.

@@ -1,12 +1,14 @@
-# InTell — Audio Spec: Three Layers, One Mix (v2)
+# InTell — Audio Spec: Three Layers, One Mix (v3)
+
+v3 incorporates ADR 0004: all audio is produced by Replaceplace; every fragment version, ambience layer and music cue is tagged **Day** or **Night**; rings and crossroads are removed.
 
 InTell is mostly heard, not seen. Three layers play together, mixed on the device:
 
 | Layer | What | Driven by | Data |
 |---|---|---|---|
-| **Story** (narration) | Root, Branch and Leaf fragments | Proximity to a fragment point, plus unlock state | `fragments`, `fragment_revisions`, `revision_versions` |
-| **Surroundings** (ambience) | Randomized sound effects and beds that match the setting: birds at the refuge, wind in mountain aspens, traffic hum in town | Which ambience zone you're in (or land cover as a fallback), time of day, season, headphones vs speaker | `ambience_profiles`, `ambience_layers`, `ambience_zones`, landcover grid |
-| **Soundtrack** (music) | Looping music, optionally in stems, that changes with place and story | Music zones and Groves, plus story state (which thread or tier you're in, what you've heard, Crossroads outcomes) | `music_zones`, `music_cues`, `music_cue_stems` |
+| **Story** (narration) | Root, Branch and Leaf fragments, each with a Day and/or Night version | Proximity to a fragment point (or a physical-marker scan), unlock state, Day or Night | `fragments`, `fragment_revisions`, `revision_versions` |
+| **Surroundings** (ambience) | Randomized sound effects and beds that match the setting: birds at the refuge, wind in mountain aspens, traffic hum in town | Which ambience zone you're in (or land cover as a fallback), Day or Night, month, headphones vs speaker | `ambience_profiles`, `ambience_layers`, `ambience_zones`, landcover grid |
+| **Soundtrack** (music) | Looping music, optionally in stems, that changes with place and story | Music zones and Groves, Day or Night, plus story state (which thread or tier you're in, what you've completed) | `music_zones`, `music_cues`, `music_cue_stems` |
 
 Data definitions are in `DATA_MODEL.md` §3–6.
 
@@ -15,8 +17,8 @@ Data definitions are in `DATA_MODEL.md` §3–6.
 ## 1. Principles for the sound design
 1. **Accompany the real world; don't replace it.** Synthetic surroundings are a frame that turns attention outward. Mix them low, leave gaps, and make room for real sound.
 2. **Hush moments.** Periodically, every synthetic layer fades out completely and a single whispered cue ("Listen.") invites the listener to hear what's actually there (§5). This is a signature of the experience. It's on by default and can be turned off.
-3. **Do no harm to wildlife or neighbors.** Wildlife calls never play through the phone speaker, because playback can disturb animals. They're muted during nesting months the sound designer sets. On speaker, the app plays only `speaker_safe` layers at reduced volume. Site approvals can forbid speaker wildlife sounds entirely.
-4. **Real sounds of the place first.** Prefer field recordings from the actual site, including recordings contributed by listeners (PARTICIPATION_SPEC §3.6). "Synthetic" here means *randomly arranged*, not artificially generated: no AI-generated audio.
+3. **Do no harm to wildlife or neighbors.** Wildlife calls never play through the phone speaker, because playback can disturb animals. They're muted during nesting months the sound designer sets. On speaker, the app plays only `speaker_safe` layers at reduced volume. A grove's wildlife-speaker setting (`allows_speaker_wildlife_sounds`, off by default) silences surroundings on the speaker entirely inside that grove.
+4. **Real sounds of the place first.** Prefer field recordings Replaceplace makes at the actual place. All audio (narration, music, effects) is produced by Replaceplace. "Synthetic" here means *randomly arranged*, not artificially generated: no AI-generated audio.
 5. **The narrator is always intelligible.** Narration is the top priority. Everything else ducks under it.
 
 ---
@@ -73,9 +75,9 @@ Run on every location fix and at least every 5 s, as a pure function in `package
 4. Output: `[{profileSlug, weight}]`, at most 2 entries, weights summing to 1. Profile changes crossfade over 4–8 s.
 
 ### 3.2 Context filters (every layer, every evaluation)
-- **Time window** from the local sun position (`suncalc`): `dawn` = civil dawn to sunrise + 45 min; `day`; `dusk` = sunset - 45 min to civil dusk; `night`. Skip layers whose `time_windows` exclude the current window.
+- **Time window** (shared by all three layers, `packages/shared/src/time/timeWindow.ts`): `day` from sunrise to sunset, `night` otherwise, computed with `suncalc` at the **region's** `sunReference` in the region's timezone. Skip layers whose `timeWindow` isn't the current window. Where the sun doesn't rise or set (polar regions), fall back to `day` 06:00–18:00 local time.
 - **Month:** skip layers whose `months` exclude it. Skip `wildlife_call` layers in `nesting_mute_months`.
-- **Route:** if on speaker, skip `wildlife_call` and non-`speaker_safe` layers. Skip them all when the site approval has `allows_speaker_wildlife_sounds=false`.
+- **Route:** if on speaker, skip `wildlife_call` and non-`speaker_safe` layers. Inside a grove whose `allowsSpeakerWildlifeSounds` is false, skip every surroundings layer on the speaker.
 - **Hush active:** skip everything (§5).
 
 ### 3.3 Beds
@@ -109,10 +111,8 @@ type StoryState = {
   lastFragmentId?: string;          // most recently completed
   lastTier?: 'root'|'branch'|'leaf';
   lastThreadIds: string[];
-  heard: Set<string>;               // fragment ids completed (played to the end; ADR 0003)
-  ringId?: string;                  // the grove's current released ring
-  outcomes: Record<string, string>; // crossroadsId → winning optionId (decided only)
-  timeWindow: 'dawn'|'day'|'dusk'|'night';
+  heard: Set<string>;               // fragment ids completed for their latest contingency (ADR 0003, 0004)
+  timeWindow: 'day'|'night';
   narrationPlaying: boolean;
 };
 ```
@@ -125,15 +125,12 @@ const MusicCondition = z.object({
   heardAll:    z.array(z.string().uuid()).optional(),
   heardAny:    z.array(z.string().uuid()).optional(),
   notHeard:    z.array(z.string().uuid()).optional(),
-  ringIds:     z.array(z.string().uuid()).optional(),
-  outcome:     z.object({ crossroadsId: z.string().uuid(), optionId: z.string().uuid() }).optional(),
-  timeWindows: z.array(z.enum(['dawn','day','dusk','night'])).optional(),
   narrationPlaying: z.boolean().optional(),
 }).strict();   // every present key must match (AND); empty object = always
 ```
 
 ### 4.3 Selection (pure function `packages/shared/audio/music.ts`)
-1. Candidate cues: those whose zone polygon contains the user (or grove boundary when `useGroveBoundary`) and whose `conditions` match `StoryState`.
+1. Candidate cues: those whose `timeWindow` is the current window, whose zone polygon contains the user (or grove boundary when `useGroveBoundary`), and whose `conditions` match `StoryState`. (Day/Night is a required field on the cue, not a condition.)
 2. Pick the highest `priority`. **Hysteresis:** keep the current cue while it is still a candidate and has played for less than `min_dwell_s`, or if its priority equals the best.
 3. When the cue changes, crossfade over `crossfade_ms` (equal-power). The new cue starts at bar 1 of its loop. (Musical bar-synced transitions are out of scope for v1.)
 4. **Stems:** all stems start together, sample-aligned. Each stem's gain = `gainDb` plus the first matching rule in `state_gains`, re-evaluated on every state change with a 2 s ramp. Example: a strings layer fades up only while a Branch plays.
@@ -141,10 +138,11 @@ const MusicCondition = z.object({
 
 ### 4.4 Example
 ```
-Cue "Salt Marsh – Theme"     grove=Salt Marsh, priority 100, conditions {}
-Cue "Salt Marsh – Mara"      grove=Salt Marsh, priority 200, conditions {threadIds:[mara]}
+Cue "Salt Marsh – Theme (Day)"    grove=Salt Marsh, day,   priority 100, conditions {}
+Cue "Salt Marsh – Theme (Night)"  grove=Salt Marsh, night, priority 100, conditions {}
+Cue "Salt Marsh – Mara"           grove=Salt Marsh, day,   priority 200, conditions {threadIds:[mara]}
   stems: base (0 dB), strings (state_gains: [{when:{tiers:['branch']}, gain_db:0}], default -60)
-Cue "Salt Marsh – After the Flood" priority 300, conditions {outcome:{crossroadsId:X, optionId:stay}}
+Cue "Salt Marsh – After the Flood" grove=Salt Marsh, night, priority 300, conditions {heardAll:[frag10]}
 ```
 
 ---
@@ -167,10 +165,11 @@ Cue "Salt Marsh – After the Flood" priority 300, conditions {outcome:{crossroa
 | sfx_oneshot | AAC mono or stereo, 128 kbps | -24 LUFS short-term peak region | ≤ 12 s; 50 ms fades |
 | sfx_bed | AAC stereo, 128 kbps | -30 LUFS | 30–120 s, seamless loop points |
 | music_stem | AAC stereo, 160 kbps | -23 LUFS (sum of stems ≈ -20) | All stems in a cue the same length; loop points set |
-| voice_cue / writer_note | AAC mono, 96 kbps | -18 LUFS | |
+| voice_cue / growth_cue | AAC mono, 96 kbps | -18 LUFS | |
 
-- Loudness is measured at upload in the browser (an ITU-R BS.1770 implementation in `packages/shared/src/audio/loudness.ts`, run via Web Audio in the admin) and stored in `audio_assets.loudness_lufs`.
-- **Licensing:** every non-original asset needs `asset_rights`. CC0 or owned recordings are preferred. Record attribution for CC-BY. Never upload commercial library sounds without a license document.
+- **Staff export phone-ready files** to this table before uploading. There's no server-side transcoding. Masters stay in Replaceplace's own archive, outside InTell.
+- Loudness and true peak are measured at upload in the browser (an ITU-R BS.1770-4 implementation in `packages/shared/src/audio/loudness.ts`, run via Web Audio in the admin) and stored in `audio_assets.loudness_lufs` / `true_peak_dbtp`. Format, channels and bitrate are checked too. Deviations are publish **warnings** (`LOUDNESS`, `AUDIO_FORMAT`).
+- **All audio is produced by Replaceplace.** There are no third-party or licensed sounds, so there are no rights records.
 
 ---
 
@@ -180,16 +179,16 @@ Cue "Salt Marsh – After the Flood" priority 300, conditions {outcome:{crossroa
 | Region ambience library | ≤ 40 MB (shared by all groves; downloaded once) |
 | Grove: narration (current revisions, one language) | ≤ 60 MB |
 | Grove: music | ≤ 30 MB |
-| Grove: map tiles z12–18 | ≤ 25 MB |
+| Grove: images (portraits) | ≤ 5 MB |
 
-Download the Grove pack and its tiles first. Fetch the region library in the background on Wi-Fi.
+Day and Night versions both count toward the narration budget. The base map is online (ADR 0002), so there are no tile downloads. Download the Grove pack first; fetch the region library in the background on Wi-Fi.
 
 ---
 
 ## 8. Admin: the Listening Simulator
 A browser tool (`/simulate/[groveId]`) that runs **the same pure functions** (`ambience.ts`, `music.ts`, `trigger.ts`, `unlock.ts`) with Web Audio:
 - Drag a "walker" pin on the map. The trigger radii, zones, edge fades and the H3 landcover overlay are visible.
-- A story-state panel: toggle heard fragments, choose a crossroads outcome, a time window and a month, and headphones or speaker.
+- A story-state panel: toggle completed fragments, choose Day or Night and a month, and headphones or speaker.
 - A live readout of the active profile weights, scheduled one-shots (a timeline), the music cue and stem gains, and Hush countdowns.
 - Bus meters and mute/solo per layer.
 - A "Record walk" mode that replays a GPX file at 1× or 4× for review sessions with the story team.
@@ -199,7 +198,8 @@ The simulator lets the sound designer and writers tune the whole experience with
 ---
 
 ## 9. Tests (shared logic must be fully unit-tested)
-- **Ambience:** zone priority and edge blending; landcover fallback with neighbor smoothing; time and month filters; speaker filtering; wildlife nesting mute; density cap during narration; seeded determinism.
-- **Music:** condition matching for every key; priority and hysteresis; dwell; stem rule evaluation; edge fade; silence outside zones.
+- **Time window:** day/night boundaries at sunrise and sunset for several dates and latitudes; the polar fallback.
+- **Ambience:** zone priority and edge blending; landcover fallback with neighbor smoothing; Day/Night and month filters; speaker filtering; wildlife nesting mute; density cap during narration; seeded determinism.
+- **Music:** Day/Night filtering; condition matching for every key; priority and hysteresis; dwell; stem rule evaluation; edge fade; silence outside zones.
 - **Hush:** scheduling, cancellation by a trigger, never during narration.
 - **Engine (device tests):** 60-minute locked-screen run with all layers on iOS and Android; route switch mid-play; phone-call interruption and resume; memory stays under 150 MB.

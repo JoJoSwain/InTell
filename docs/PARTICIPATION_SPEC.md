@@ -1,5 +1,8 @@
 # InTell — Participation Spec: Growing the Story Together (v2)
 
+> **Superseded by ADR 0004 (2026-11-20).** "Grow" and "seeds" become the **Journal**: listeners write or record thoughts that Replaceplace's writers read and author from (Journal-informed authoring, human only). Removed: Rings, Crossroads (votes and attestation), the Ledger and all public credit names, Echo Leaves, sound seeds, memory seeds becoming storyteller fragments, and Story Circles as a ring stage. Kept: Journal entries (text or voice, private to staff), questions, lineage ("your idea grew") and the optional check-in. This file will be rewritten as the Journal spec before M9. Treat it as background only.
+
+
 **Goal:** make shaping the story the most exciting part of InTell, so that people who walk a Grove feel the story is *theirs*, collectively, and keep coming back to see what they grew.
 
 **Constraint we keep:** people write and record every word that plays as story. There is no AI generation. Listeners plant, choose, notice, record and gather. The story team weaves. Staff time is the scarce resource, so every mechanic is designed to make weaving efficient and visible.

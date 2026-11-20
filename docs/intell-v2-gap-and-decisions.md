@@ -1,5 +1,7 @@
 # InTell — Gap vs v0 Demo, Ambiguities & Next Steps (v2)
 
+> **Historical (v2).** Superseded by ADR 0004 (2026-11-20) and the v3 specs. Kept for context only.
+
 **Audience:** JoJo  
 **Date:** 2026-11-19  
 **Companion:** [`intell-v2-architecture.md`](./intell-v2-architecture.md)  

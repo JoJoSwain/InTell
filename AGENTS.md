@@ -4,13 +4,15 @@ Instructions for every coding agent working in this repo: Cursor, Claude Code, c
 
 ## 1. What we're building
 
-**InTell** is Replaceplace's native, map-first audio app for the InDigeny story pathway. Three audio layers play together on the phone:
+**InTell** is Replaceplace's native, map-first audio app for the InDigeny story pathway. It exists to bring forward **Indigeny**, the embodied struggle between Earth (the physical environment) and World (cultural practice, history, social norms), so people explore themselves and their relationship with Place through stories met in real places (ADR 0004).
 
-1. **Story:** narrated Root → Branch → Leaf fragments anchored to GPS points inside Grove polygons, played by proximity
-2. **Surroundings:** randomly arranged sound effects and beds that match the setting
-3. **Soundtrack:** music tied to geofenced zones and story state
+**The core experience** is being physically present in a real place. Three audio layers play together on the phone:
 
-Listeners grow the story through Seeds, Crossroads and Rings. **People write and record everything that plays.** The interface is deliberately minimal so people pay attention to the place, not the screen.
+1. **Story:** narrated Root, Branch and Leaf fragments anchored to GPS points inside Grove polygons, played by proximity (or by scanning a physical marker), unlocked through a logic chain of prerequisites that can span groves
+2. **Surroundings:** randomly arranged sound effects and beds, played by geofenced zones, Day or Night
+3. **Soundtrack:** music tied to geofenced zones and story state, Day or Night
+
+The **Chronicle** (look back at what you've encountered, navigated by character) and the **Journal** (share thoughts that Replaceplace's writers draw on) are supporting features. **Replaceplace staff write, record and compose everything that plays.** The interface is deliberately minimal so people pay attention to the place, not the screen.
 
 ## 2. Source of truth
 
@@ -22,9 +24,9 @@ The specs live in `docs/` (one copy only; don't create duplicates):
 | `docs/DATA_MODEL.md` | schema, packs, storage, RLS |
 | `docs/AUDIO_SPEC.md` | sound layers, engine, mixing, Hush |
 | `docs/TECH_SPEC.md` | implementation and stack |
-| `docs/JOURNAL_SPEC.md`, `docs/PARTICIPATION_SPEC.md`, `docs/DESIGN.md` | their areas |
+| `docs/JOURNAL_SPEC.md`, `docs/PARTICIPATION_SPEC.md`, `docs/DESIGN.md` | their areas, **except where marked superseded by ADR 0004** |
 | `docs/BUILD_PLAN.md` | milestone order and acceptance criteria |
-| `docs/adr/*` | decisions that amend the specs (an *Accepted* ADR beats the spec it names) |
+| `docs/adr/*` | decisions that amend the specs (an *Accepted* ADR beats the spec it names). **ADR 0004 (product realignment) beats every older spec text it contradicts.** |
 | `docs/briefs/*` | the task brief for the current milestone |
 
 **Spec changes flow one way:** the product owner and architect decide → docs are updated → then code changes. If the code needs to differ from the spec, stop and say so. Don't silently diverge.
@@ -43,8 +45,8 @@ The specs live in `docs/` (one copy only; don't create duplicates):
 ```
 apps/mobile      Expo Router app. Routes live in apps/mobile/app/ (NOT src/app/); non-route code in apps/mobile/src/
 apps/admin       Next.js App Router staff tools (src/app/)
-packages/shared  zod schemas + ALL pure decision logic (unlock, trigger, ambience, music, hush,
-                 tree layout, storybook, eligibility, geo), unit-tested with Vitest
+packages/shared  zod schemas + ALL pure decision logic (unlock, trigger, timeWindow, ambience, music, hush,
+                 chronicle, eligibility, geo), unit-tested with Vitest
 supabase/        migrations, edge functions, seed.sql
 tools/landcover  NLCD → H3 grid builder (staff tool)
 docs/            specs, ADRs, briefs
@@ -53,16 +55,18 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
 
 ## 5. Hard constraints (never violate)
 
-- **Minimal UI.** Home is the map, plus three sub-screens (Journal, Grow, Settings) opened from the bottom bar. No extra tabs, feeds, search, lists of nearby content, percentages, streaks, badges, leaderboards or push notifications. Sound and music zones are never drawn on the map.
-- **No AI generation** of text, narration, music or sound anywhere: not in the app, the admin or the publish pipeline.
-- **On site only.** New fragments play only by proximity, QR or accessible play. Crossroads votes need the anchor fragment heard, presence within the vote radius, and device attestation. The Journal replays only revisions the device has heard; off site it plays narration only (Echo).
-- **Never reveal unrevealed content.** No transcript, title or location of an unrevealed fragment. Never expose protected-fragment coordinates or marker codes anywhere (packs, logs, Sentry, client). Match QR codes by sha256 hash.
-- **Location never leaves the device.** Request "While Using" permission only, never "Always" or Android `ACCESS_BACKGROUND_LOCATION`. Background location only during an exploring session. Seeds and votes send anchor ids, never coordinates.
-- **Rights gate playback.** Play only assets and revisions present in the currently installed pack manifests. Sync must delete every local asset whose sha isn't in a current manifest.
+- **The place comes first.** Every feature serves the on-site encounter. The Chronicle and the Journal support it and never substitute for it.
+- **Minimal UI.** Home is the map with Chronicle (bottom left), Journal (bottom right), one center button (to be decided) and Settings (top right). No extra tabs, feeds, search, lists of nearby content, percentages, streaks, badges, leaderboards or push notifications. Sound and music zones are never drawn on the map.
+- **No AI generation** of text, narration, music or sound anywhere: not in the app, the admin or the publish pipeline. Journal-informed authoring is done by Replaceplace's human writers.
+- **Replaceplace-only content.** Everything that plays is produced by Replaceplace staff. Nothing a listener submits is ever played, shown to other users or credited.
+- **In situ first.** A fragment is first heard only on site: by proximity, by scanning its physical marker, or by accessible play inside its grove. It becomes replayable in the Chronicle (anywhere, narration only off site) only after it has been **completed** on site, and only for the time version (Day or Night) that was completed.
+- **Locked means teaser only.** Locked and out-of-window fragments appear on the map at 35% opacity. Tapping one shows only its authored teaser: never its title, transcript or audio. Marker codes never leave Postgres (packs carry only their sha256 hash) and are never logged.
+- **Location never leaves the device.** Request "While Using" permission only, never "Always" or Android `ACCESS_BACKGROUND_LOCATION`. Background location only during an exploring session. Journal entries send anchor ids, never coordinates.
+- **Packs gate playback.** Play only assets and revisions present in the currently installed pack manifests. Sync must delete every local asset whose sha isn't in a current manifest. Only published releases reach phones; drafts reach only a signed-in staff device in preview mode.
 - **Wildlife safety.** Layers flagged `wildlife_call` never play through the phone speaker and are muted in nesting months.
-- **Anonymous clients** may call only `get_pack_index`, public storage and the edge functions. Never ship the Supabase service role key or any secret to mobile or browser code. `device_id` is a bearer secret: never display or fully log it, and endpoints return only that device's data.
-- **Participation safety.** Enforce the age gate (no seeds under 13; no published voice under 18). Strip PII server-side. Seed text and voice are never shown to other users. Credit names appear publicly only after moderation.
-- **Accessibility and i18n.** Every narration version has a transcript. Every control and map marker has an accessibility label. All user-facing strings go through i18n. Respect reduced motion.
+- **Anonymous clients** may call only `get_pack_index`, public storage and the device edge functions. Never ship the Supabase service role key or any secret to mobile or browser code. `device_id` is a bearer secret: never display or fully log it, and endpoints return only that device's data.
+- **Journal safety.** Enforce the age gate (no Journal entries under 13). Strip PII server-side. Entries are private to Replaceplace staff.
+- **Accessibility and i18n.** Every narration version has a transcript. Every control and map marker has an accessibility label. Every image has alt text. All user-facing strings go through i18n. Respect reduced motion. Distances are shown in feet and miles.
 - **No outcome claims** in copy (no "reduce screen time" or "improve wellbeing").
 - **Secrets.** `.env` files are gitignored; never commit keys. Add new variables to the matching `.env.example` with an empty value.
 
@@ -71,19 +75,20 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
 - TypeScript strict with `noUncheckedIndexedAccess`. No `any` without a comment explaining why.
 - zod schemas in `packages/shared/src/schemas`, reused by mobile, admin and edge functions.
 - **Mobile:**
-  - Expo Router; Zustand for the session and mixer; TanStack Query for network data; SQLite as the offline source of truth
+  - Expo Router; Zustand for the session and mixer; TanStack Query for network data; SQLite as the on-device source of truth (installed packs, completions, Chronicle)
   - Audio only through the `AudioEngine` interface; UI code never calls the audio library directly
-  - Map markers as style-driven layers, not one React component per marker (see ADR 0002 for the map provider)
-- **Admin:** Next.js App Router, server actions, shadcn/ui, Leaflet + Geoman, and a Web Audio `AudioEngine` for the Listening Simulator. RLS enforces roles; hiding UI is not security.
+  - Google Maps through `react-native-maps` (ADR 0002). Keep markers cheap: memoized marker views with `tracksViewChanges` off once rendered, clustering only if 300 markers don't pan smoothly
+- **Admin:** Next.js App Router, server actions, shadcn/ui, the Google Maps JavaScript API with Terra Draw for drawing polygons (Google's own drawing library is discontinued), and a Web Audio `AudioEngine` for the Listening Simulator. RLS enforces roles; hiding UI is not security.
 - Database changes only through `supabase/migrations/*.sql`; regenerate types after each one.
 - Design tokens only (`apps/mobile/src/ui/tokens.ts`, mirrored in admin Tailwind); no raw hex values in components.
 - Telemetry never includes coordinates, free text, credit names or audio.
 
 ## 7. Open decisions (don't build past them)
 
-- **ADR 0002 (map provider) is Proposed.** Until it's Accepted, don't add new map features, marker systems or offline tile work. Bug fixes to the existing demo are fine.
+- **ADR 0002 (map provider) is Accepted: Google Maps, online.** Phones use `react-native-maps` with Google; the admin uses the Google Maps JavaScript API. No offline map tiles.
 - **ADR 0001 (audio engine)** is produced by Milestone 1. No audio-layer code beyond the M1 spike until it's Accepted.
-- Product open questions: PRODUCT_SPEC §9 and `docs/intell-v2-gap-and-decisions.md` §4.
+- **ADR 0004 open questions** (character-card grove listing, the "changed since you heard it" marker, night-version hints in the Chronicle, listener progress backup, children and the Journal, the center home button). Don't decide these in code; ask.
+- Product open questions: PRODUCT_SPEC §9.
 
 ## 8. Commands
 ```bash
@@ -112,6 +117,6 @@ More rules for the mobile app are in `apps/mobile/AGENTS.md`.
 
 - Strict types; decision logic lives in `packages/shared` with tests
 - No location, free text or audio in telemetry; no new data-collecting SDKs
-- Strings in i18n; accessibility labels; reduced motion respected
+- Strings in i18n; accessibility labels and image alt text; reduced motion respected; distances in feet and miles
 - Docs or ADRs updated if behavior or stack changed
 - A report covering changes, commands run and results, and open questions

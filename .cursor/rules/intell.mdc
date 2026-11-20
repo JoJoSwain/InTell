@@ -7,14 +7,15 @@ alwaysApply: true
 
 **Before any task, read `AGENTS.md` at the repo root in full.** It holds the workflow, repo layout, conventions and open decisions. For the mobile app, also read `apps/mobile/AGENTS.md`. If a brief exists in `docs/briefs/` for your task, follow its scope exactly.
 
-The non-negotiables (full text in AGENTS.md §5):
-1. Map home plus Journal, Grow and Settings only. No feeds, search, nearby lists, gamification or push notifications.
-2. No AI-generated text, narration, music or sound.
-3. New fragments only on site (proximity, QR, accessible play); never reveal unrevealed or protected content.
-4. Location never leaves the device; "While Using" permission only.
-5. Play only what's in the current pack manifests; sync deletes everything else.
-6. No secrets or service role key in client code; `device_id` is secret.
-7. Age gate, PII stripping, moderated credits for participation.
-8. Transcripts, accessibility labels, i18n and reduced motion, always.
+The non-negotiables (full text in AGENTS.md §5; ADR 0004 beats older spec text):
+1. The place comes first: the core experience is being on site. Map home with Chronicle (bottom left), Journal (bottom right), a center button (TBD) and Settings (top right). No feeds, search, nearby lists, gamification or push notifications.
+2. No AI-generated text, narration, music or sound. Replaceplace staff produce everything that plays.
+3. In situ first: fragments are first heard only on site (proximity, physical-marker scan, accessible play) and are replayable in the Chronicle only after completion on site, per Day/Night version.
+4. Locked fragments show at 35% with their teaser only; never their title, transcript or audio. Marker codes never leave Postgres.
+5. Location never leaves the device; "While Using" permission only.
+6. Play only what's in the current pack manifests; sync deletes everything else. Content reaches phones only through published releases.
+7. No secrets or service role key in client code (mobile or admin); `device_id` is secret.
+8. Age gate and PII stripping for Journal entries; entries are private to staff.
+9. Transcripts, accessibility labels, alt text, i18n, reduced motion, feet and miles, always.
 
-Plan before coding, list spec ambiguities, one milestone per branch, and keep `pnpm lint && pnpm typecheck && pnpm test` green. Don't build past a *Proposed* ADR (map provider: ADR 0002).
+Plan before coding, list spec ambiguities, one milestone per branch, and keep `pnpm lint && pnpm typecheck && pnpm test` green. Don't build past a *Proposed* ADR (audio engine: ADR 0001) or an open question in ADR 0004.

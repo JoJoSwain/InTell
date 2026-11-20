@@ -1,10 +1,12 @@
-# InTell — Design Spec (v2)
+# InTell — Design Spec (v2, partly superseded)
+
+> **Superseded in part by ADR 0004 (2026-11-20).** §5 (admin) is updated for M3. The mobile sections (§1.2 map style, §3 components, §4 screens) still describe v2 and will be rewritten with Ashley (Creative Director) before M5. Until then, ADR 0004 wins: Google Maps online (ADR 0002); markers at 100% when playable and 35% when locked or out of their time window, colored by tier; a teaser pop-up for locked markers; Chronicle (bottom left), a center button (TBD) and Journal (bottom right) with Settings top right; no Grow, Rings, Crossroads, Ledger, Fork sheet or seeds.
 
 **The design goal:** the phone is a quiet companion. Sound does the work; the map orients; every screen is easy to leave. Screen-level detail for the Journal is in `JOURNAL_SPEC.md` and for Grow in `PARTICIPATION_SPEC.md` §5. This doc holds the system they share.
 
 ---
 
-## 1. Tokens (`apps/mobile/src/ui/tokens.ts`; mirrored in admin Tailwind and the MapLibre style)
+## 1. Tokens (`apps/mobile/src/ui/tokens.ts`; mirrored in admin Tailwind and the Google cloud map style)
 
 ### 1.1 Color
 | Token | Light | Dark (overlay, night) | Use |
@@ -107,14 +109,14 @@ Map markers are MapLibre style layers, not React components.
 ---
 
 ## 5. Admin design
-shadcn/ui, light theme, same tokens. Sidebar groups:
-- **Story:** Groves, Rings, Story bible
-- **Sound:** Assets, Ambience, Music, Simulator
-- **Community:** Seeds, Ring board, Crossroads, Questions, Ledger
-- **Rights:** Contributors, Consents, Approvals
-- **Ops:** Dashboard, Exports, Audit, Staff
+shadcn/ui, light theme, same tokens. Distances in feet. Sidebar groups:
+- **Story:** Groves, Characters, Story Notes, Releases
+- **Media:** Audio, Images
+- **Sound** (M4): Ambience, Music, Simulator
+- **Journal** (M9): Inbox, Questions
+- **Ops:** Regions, Dashboard, Audit, Staff
 
-Status badges: Draft gray, In review amber, Approved blue, Published green, Retired gray outline, Unpublished red outline.
+Status badges: Draft gray, Scheduled blue, Published green, Failed red, Retired gray outline, Unpublished red outline. Revisions show a **Story Contingency** or **Story Correction** chip; versions show **Day** or **Night** chips. Fragments with unreleased edits show an "Unreleased changes" marker.
 
 ---
 
