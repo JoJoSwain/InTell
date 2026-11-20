@@ -15,6 +15,10 @@ export default function RootLayout() {
         <Stack.Screen name="grow/index" options={{ presentation: "modal", title: "Grow" }} />
         <Stack.Screen name="settings/index" options={{ presentation: "modal", title: "Settings" }} />
         <Stack.Screen name="f/[code]" options={{ title: "Fragment" }} />
+        <Stack.Screen
+          name="dev/audio-spike"
+          options={{ title: "Audio spike", headerShown: true }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </>
