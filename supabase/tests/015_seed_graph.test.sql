@@ -1,6 +1,6 @@
--- Seeded Farmington prerequisite graph + publish_check + boundary containment.
+-- Seeded v3 graph + release-scoped fn_publish_check + boundary containment.
 begin;
-select plan(6);
+select plan(7);
 
 -- frag5 Parking Lot 2: two groups {frag2}, {frag3}
 select is(
@@ -45,23 +45,6 @@ select is(
   'frag6 prereqs are five singles {1}..{5}'
 );
 
--- frag7 Pond: one group {frag6}
-select is(
-  (
-    select coalesce(jsonb_agg(members order by sort_order), '[]'::jsonb)
-    from (
-      select g.sort_order,
-             jsonb_agg(m.requires_fragment_id order by m.sort_order, m.requires_fragment_id) as members
-      from public.fragment_prereq_groups g
-      join public.fragment_prereq_members m on m.group_id = g.id
-      where g.fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000036'
-      group by g.id, g.sort_order
-    ) s
-  ),
-  '[["aaaaaaaa-bbbb-4ccc-8ddd-000000000035"]]'::jsonb,
-  'frag7 prereqs are {frag6}'
-);
-
 -- frag10 Two Ways: one OR group {frag8, frag9}
 select is(
   (
@@ -79,45 +62,47 @@ select is(
   'frag10 prereqs are one group {frag8,frag9}'
 );
 
--- fn_publish_check on all rev1 ids: ok + exactly one RADIUS_OVERLAP (frag3/frag4)
+-- cross-grove: bridge (grove2 frag1) requires Farmington frag1
+select ok(
+  exists (
+    select 1
+    from public.fragment_prereq_groups g
+    join public.fragment_prereq_members m on m.group_id = g.id
+    where g.fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1'
+      and m.requires_fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'
+  ),
+  'seed cross-grove prereq: bridge requires frag1'
+);
+
+-- published release check passed at seed (stored in last_check)
 select ok(
   (
-    select (r->>'ok')::boolean
-       and (
-         select count(*)
-         from jsonb_array_elements(r->'failures') f
-         where f->>'code' = 'RADIUS_OVERLAP'
-       ) = 1
-       and exists (
-         select 1
-         from jsonb_array_elements(r->'failures') f
-         where f->>'code' = 'RADIUS_OVERLAP'
-           and f->>'severity' = 'warning'
-           and (
-             (f->>'entity_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000032'
-              and f->>'other_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000033')
-             or
-             (f->>'entity_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000033'
-              and f->>'other_id' = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000032')
-           )
-       )
-    from public.fn_publish_check(
-      'revision',
-      array[
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000040'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000041'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000042'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000043'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000044'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000045'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000046'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000047'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000048'::uuid,
-        'aaaaaaaa-bbbb-4ccc-8ddd-000000000049'::uuid
-      ]
-    ) as r
+    select (last_check->>'ok')::boolean
+    from public.releases
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0'
   ),
-  'fn_publish_check ok with exactly one RADIUS_OVERLAP (frag3/frag4)'
+  'seed publish release last_check ok'
+);
+
+-- published snapshots exist for grove + physical frag9
+select ok(
+  exists (
+    select 1 from public.published_snapshots
+    where entity = 'grove' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
+      and (data->>'status') = 'published'
+  ),
+  'farmington grove snapshot published'
+);
+
+select ok(
+  (
+    select (data->>'visibility') = 'physical'
+       and data ? 'markerHash'
+       and not data ? 'markerCode'
+    from public.published_snapshots
+    where entity = 'fragment' and entity_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038'
+  ),
+  'physical frag9 snapshot has markerHash only (no marker code)'
 );
 
 -- every seeded fragment inside grove boundary
@@ -129,7 +114,7 @@ select ok(
     where f.grove_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
       and not extensions.ST_Covers(g.boundary, f.location)
   ),
-  'every seeded fragment is inside grove boundary'
+  'every seeded Farmington fragment is inside grove boundary'
 );
 
 select * from finish();

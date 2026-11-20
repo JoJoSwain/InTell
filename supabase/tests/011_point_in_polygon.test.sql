@@ -18,7 +18,7 @@ select throws_ok(
        from public.groves
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
-     'marked',
+     'standard',
      25,
      90,
      'draft'
@@ -44,7 +44,7 @@ select lives_ok(
        from public.groves
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
-     'marked',
+     'standard',
      25,
      91,
      'draft'
@@ -66,7 +66,7 @@ select lives_ok(
        from public.groves
        where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
      ),
-     'marked',
+     'standard',
      25,
      92,
      'draft'
