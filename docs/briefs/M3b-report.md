@@ -162,11 +162,13 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 ### Commits since `41a5064`
 
 ```
+4cc50ea docs: fix M3b report section numbering
 17576b9 docs: M3b report Review fixes for R1–R3
 fef9b9d fix(admin): M3b R1–R3 invite/confirm flow and review nits
 2644147 docs: add M3b implementation review
 f2425bd docs: confirm Vercel preview and CI on M3b report
 ```
+(+ this CI confirm commit).
 
 
 ### Required
@@ -192,7 +194,7 @@ f2425bd docs: confirm Vercel preview and CI on M3b report
 
 ### CI / Vercel
 
-Local suite green after fixes. PR #8 CI + Vercel preview status for the push containing `fef9b9d` / this report: recorded after checks finish (previous head `41a5064` / `f2425bd` were green; `cle1` not blocked by Hobby).
+Local suite green after fixes. PR #8 head `4cc50ea`: GitHub CI **6/6 green**; Vercel preview **Deployment has completed** (success). `cle1` not blocked by Hobby.
 
 ---
 
