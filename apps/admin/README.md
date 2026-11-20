@@ -44,7 +44,7 @@ See `apps/admin/.env.example` and the root `.env.example`. Required for the admi
    - Minimum password length **10**.
    - Leaked-password protection, session timeouts and backups: **not on Free** — turn on when staging upgrades to Pro, before real content.
    - Site URL: production admin URL (`https://intell-admin.vercel.app`).
-   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob for this project (`https://intell-admin-*.vercel.app/**`, adjusted to the exact pattern Vercel shows for the team).
+   - **Redirect URLs (A3):** production admin URL, `http://localhost:3000/**`, and the Vercel preview glob for this project (`https://intell-admin-*-replaceplace.vercel.app/**`, plus any branch-style host Vercel shows such as `https://intell-admin-git-*-replaceplace.vercel.app/**`).
    - SMTP (provider-agnostic): either a dedicated sending mailbox (e.g. `no-reply@replaceplace.com`) on `smtp.gmail.com` port 465 with an app password, or the Workspace SMTP relay (`smtp-relay.gmail.com`). Configure values only in the dashboard.
 6. **Bootstrap the first admin (A4)** — no service-key script:
    1. Supabase dashboard → **Authentication → Users → Invite user** (yourself).

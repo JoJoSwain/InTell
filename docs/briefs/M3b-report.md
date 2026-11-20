@@ -42,7 +42,9 @@ Rebased onto `origin/master` after PR #6 merge (`f40bb59`). Confirmed ancestors:
 | `eslint-config-next` | **15.5.29** |
 | `react` / `react-dom` | **19.2.4** (also pinned via root `pnpm.overrides`) |
 
-**Vercel preview:** First commit (`44c352f`) was the Next upgrade + `apps/admin/vercel.json` `"regions": ["cle1"]` to clear the vulnerable-Next gate. Confirm the PR #8 preview builds/deploys after this push (CI + Vercel check on the PR). Hobby custom-region: if Vercel rejects `cle1`, leave default and treat as non-blocker per review — report outcome from the preview deploy log once it finishes.
+**Vercel preview (confirmed on `41a5064`):** Status `Deployment has completed` (success). Preview host seen in checks: `intell-admin-fxo70a2du-replaceplace.vercel.app` (also earlier branch-style `intell-admin-git-m3b-hosted-foundation-replaceplace.vercel.app`). Next 15.5.29 cleared the vulnerable-Next gate. `vercel.json` requests `"regions": ["cle1"]`; Hobby did not block the deploy — treat region as accepted unless JoJo sees a dashboard warning otherwise.
+
+**CI on `41a5064`:** all 6 checks green (`check`, `db` ×2 workflow runs + Vercel).
 
 ---
 
@@ -133,9 +135,9 @@ None to PRODUCT_SPEC / DATA_MODEL. Deploy docs live in `apps/admin/README.md` (l
 
 ## 9. Open questions / JoJo follow-ups (not blockers for review)
 
-1. Confirm Vercel Hobby accepted `cle1` (or left default) on the PR preview.
-2. Staging dashboard: Auth redirect URLs (A3), SMTP, first-admin SQL (A4), `supabase db push` + `functions deploy`.
-3. Exact Vercel preview hostname glob if it differs from `https://intell-admin-*.vercel.app/**`.
+1. Staging dashboard: Auth redirect URLs (A3), SMTP, first-admin SQL (A4), `supabase db push` + `functions deploy`.
+2. A3 redirect glob: previews use both `intell-admin-git-m3b-hosted-foundation-replaceplace.vercel.app` and `intell-admin-*-replaceplace.vercel.app` — adjust Supabase Redirect URLs to the team’s exact pattern (likely `https://intell-admin-*-replaceplace.vercel.app/**` rather than `https://intell-admin-*.vercel.app/**`).
+3. Optional: confirm in the Vercel project UI that Functions region is `cle1` (deploy succeeded with `vercel.json` set).
 
 ---
 
