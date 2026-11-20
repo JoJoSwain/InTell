@@ -261,7 +261,10 @@ begin
       if exists (
         select 1 from public.image_assets i
         where i.id = item.entity_id
-          and coalesce(i.alt_text, '{}'::jsonb) = '{}'::jsonb
+          and (
+            coalesce(i.alt_text, '{}'::jsonb) = '{}'::jsonb
+            or coalesce(nullif(btrim(i.alt_text->>'en'), ''), null) is null
+          )
       ) then
         failures := failures || jsonb_build_array(jsonb_build_object(
           'code','NO_ALT_TEXT','severity','error','message','alt text required',
@@ -642,25 +645,25 @@ security definer
 set search_path = ''
 as $$
 declare
-  id uuid;
+  v_id uuid;
   warnings jsonb := '[]'::jsonb;
   grove_id uuid;
   region_id uuid;
 begin
   perform public.fn_require_editor_or_service();
 
-  foreach id in array p_ids loop
+  foreach v_id in array p_ids loop
     if p_entity = 'revision' then
-      update public.fragment_revisions set status = 'unpublished' where fragment_revisions.id = id;
+      update public.fragment_revisions set status = 'unpublished' where fragment_revisions.id = v_id;
       select f.grove_id into grove_id
       from public.fragment_revisions r join public.fragments f on f.id = r.fragment_id
-      where r.id = id;
+      where r.id = v_id;
     elsif p_entity = 'fragment' then
-      update public.fragments set status = 'unpublished' where fragments.id = id;
+      update public.fragments set status = 'unpublished' where fragments.id = v_id;
       update public.published_snapshots
          set data = jsonb_set(data, '{status}', '"unpublished"')
-       where entity = 'fragment' and entity_id = id;
-      select fragments.grove_id into grove_id from public.fragments where fragments.id = id;
+       where entity = 'fragment' and entity_id = v_id;
+      select fragments.grove_id into grove_id from public.fragments where fragments.id = v_id;
       -- stranded prereq warning
       warnings := warnings || coalesce((
         select jsonb_agg(jsonb_build_object(
@@ -671,23 +674,23 @@ begin
         from public.fragments f
         join public.fragment_prereq_groups g on g.fragment_id = f.id
         join public.fragment_prereq_members m on m.group_id = g.id
-        where m.requires_fragment_id = id
+        where m.requires_fragment_id = v_id
       ), '[]'::jsonb);
     elsif p_entity = 'grove' then
-      update public.groves set status = 'unpublished' where groves.id = id;
+      update public.groves set status = 'unpublished' where groves.id = v_id;
       update public.published_snapshots
          set data = jsonb_set(data, '{status}', '"unpublished"')
-       where entity = 'grove' and entity_id = id;
-      grove_id := id;
-      select groves.region_id into region_id from public.groves where groves.id = id;
+       where entity = 'grove' and entity_id = v_id;
+      grove_id := v_id;
+      select groves.region_id into region_id from public.groves where groves.id = v_id;
     else
       update public.published_snapshots
          set data = jsonb_set(data, '{status}', '"unpublished"')
-       where entity = p_entity and entity_id = id;
+       where entity = p_entity and entity_id = v_id;
     end if;
 
     insert into public.audit_log (actor, action, entity, entity_id, detail)
-    values (auth.uid(), 'unpublish', p_entity, id, '{}'::jsonb);
+    values (auth.uid(), 'unpublish', p_entity, v_id, '{}'::jsonb);
 
     if grove_id is not null then
       insert into public.jobs (kind, payload)

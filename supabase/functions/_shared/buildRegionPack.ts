@@ -207,25 +207,30 @@ export async function buildRegionPack(
 
   let landcoverOut: Record<string, unknown> | null = null;
   if (landcover) {
-    const classes = [];
-    for (const c of landcoverClasses ?? []) {
-      const { data: prof } = c.profile_id
-        ? await client
-            .from("ambience_profiles")
-            .select("slug")
-            .eq("id", c.profile_id)
-            .maybeSingle()
-        : { data: null };
-      classes.push({
-        code: String(c.code),
-        profileSlug: prof?.slug ?? "",
-      });
+    // Prefer a real content sha when present; M2 seed stored a path, not a sha256.
+    const rawSha = String(landcover.sha ?? "");
+    const gridSha = /^[0-9a-f]{64}$/i.test(rawSha) ? rawSha.toLowerCase() : null;
+    if (gridSha) {
+      const classes = [];
+      for (const c of landcoverClasses ?? []) {
+        const { data: prof } = c.profile_id
+          ? await client
+              .from("ambience_profiles")
+              .select("slug")
+              .eq("id", c.profile_id)
+              .maybeSingle()
+          : { data: null };
+        classes.push({
+          code: String(c.code),
+          profileSlug: prof?.slug ?? "",
+        });
+      }
+      landcoverOut = {
+        gridSha,
+        h3Resolution: landcover.h3_resolution,
+        classes,
+      };
     }
-    landcoverOut = {
-      gridSha: landcover.sha ?? landcover.file_path,
-      h3Resolution: landcover.h3_resolution,
-      classes,
-    };
   }
 
   const assets = [...assetMap.values()].sort((a, b) => a.sha.localeCompare(b.sha));
