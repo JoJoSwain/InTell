@@ -168,7 +168,8 @@ create table characters (
 
 create table fragments (
   id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
-  tier tier not null, parent_id uuid references fragments(id) on delete restrict,
+  tier tier not null,                               -- weight and priority only (ADR 0003)
+  is_ending boolean not null default false,         -- Root End
   title jsonb not null,
   location geography(Point,4326) not null,          -- staff only
   visibility fragment_visibility not null default 'marked',
@@ -179,11 +180,25 @@ create table fragments (
   introduced_in_ring_id uuid references rings(id),
   status publish_status not null default 'draft',   -- 'retired' hides from map, keeps Journal
   …ts,
-  constraint tier_parent check ((tier='root') = (parent_id is null))
+  check (not is_ending or tier = 'root')
 );
 create index on fragments using gist (location);
--- trigger fn_fragment_guard: parent in same grove; branch→root parent; leaf→branch parent;
---   ST_Covers(grove.boundary, location); protected ⇒ marker_code not null
+-- trigger fn_fragment_guard: ST_Covers(grove.boundary, location); protected ⇒ marker_code not null
+
+-- Prerequisites (ADR 0003): revealed ⇔ EVERY group has ≥1 member the device has completed.
+-- No groups ⇒ revealed from the start. Layout parent (Journal) = lowest-sort member of lowest-sort group.
+create table fragment_prereq_groups (
+  id uuid pk, fragment_id uuid not null references fragments(id) on delete cascade,
+  sort_order int not null default 0,
+  …ts
+);
+create table fragment_prereq_members (
+  group_id uuid not null references fragment_prereq_groups(id) on delete cascade,
+  requires_fragment_id uuid not null references fragments(id) on delete restrict,
+  sort_order int not null default 0,
+  primary key (group_id, requires_fragment_id)
+);
+-- trigger fn_prereq_guard: required fragment in the same grove; not itself; no cycles
 
 create table fragment_threads    (fragment_id uuid references fragments(id) on delete cascade,
                                   thread_id uuid references threads(id) on delete cascade,
@@ -541,10 +556,11 @@ A grove may remain `published` with zero playable revisions after a later revoca
 | `CONSENT_APP` | Every revision contributor has consent covering `app` |
 | `SITE_APPROVAL` | The grove's site is approved |
 | `OUTSIDE_GROVE` | The fragment is inside the grove polygon |
-| `PARENT_UNPUBLISHED` | The parent fragment is published, or in the same batch |
-| `NO_ROOT` | The grove has at least one published root |
+| `PREREQ_UNPUBLISHED` | Every prerequisite group has ≥1 member that is `published` or `retired`, or in the same batch |
+| `EMPTY_PREREQ_GROUP` | Every prerequisite group has at least one member |
+| `NO_START` | The grove has at least one published fragment with no prerequisite groups |
 | `PROTECTED_NO_CODE` | Protected fragments have a `marker_code` |
-| `RADIUS_OVERLAP` (warning) | Two marked or unmarked fragments' radii overlap |
+| `RADIUS_OVERLAP` (warning) | Two marked or unmarked fragments' radii overlap, unless one must precede the other (ADR 0003 §4) |
 | `STEM_MISMATCH` | Cue stems differ in duration or loop points |
 | `LOUDNESS` (warning) | An asset deviates from its target LUFS by more than ±2 LU (AUDIO_SPEC §6) |
 | `WILDLIFE_SPEAKER` | A layer with `wildlife_call=true` and `speaker_safe=true` is not allowed |
@@ -564,7 +580,8 @@ A grove may remain `published` with zero playable revisions after a later revoca
            growthCueAssetSha?: string },
   rings: [{ id, ringNo, name, themeNote, status, plantingOpensAt, plantingClosesAt, releasedAt, writerNoteSha? }],
   characters: [{ id, publicName, publicBio, introducedByFragmentIds: string[] }],   // public fields only
-  fragments: [{ id, tier, parentId, title, visibility, storyOrder, gapHint, retired,
+  fragments: [{ id, tier, isEnding, requires: string[][],   // AND of OR groups (ADR 0003); unknown ids = never completed
+                title, visibility, storyOrder, gapHint, retired,
                 lat?, lng?, radiusM?,          // omitted when protected
                 markerHash?,                    // sha256(marker_code) when protected
                 threadIds, characterIds }],
@@ -634,7 +651,7 @@ A grove may remain `published` with zero playable revisions after a later revoca
 |---|---|
 | `packs (scope, id, version, manifest_json, installed_at)` | Installed manifests |
 | `assets (sha, ext, bytes, local_uri, last_used_at)` | Content-addressed audio cache |
-| `heard (fragment_id, revision_id, first_heard_at, last_heard_at, max_progress, heard_on_site, time_window, session_id)` | Unlock state and Journal |
+| `heard (fragment_id, revision_id, first_heard_at, last_heard_at, max_progress, completed_at, heard_on_site, time_window, session_id)` | Unlock state and Journal. Only `completed_at is not null` counts as heard (ADR 0003 §3) |
 | `visits (session_id, grove_id, started_at, ended_at, fragments_heard, seeds_planted, time_window)` | Journal Visits view |
 | `field_notes (id, fragment_id, text, voice_uri, created_at)` | Private notes (JOURNAL_SPEC §5) |
 | `my_seeds (client_seed_id, grove_id, anchor_fragment_id, kind, body, voice_uri, credit_name, status, links_json, planted_at, synced)` | Your seeds and their lineage |
@@ -648,13 +665,12 @@ Journal export and import: an encrypted JSON file (AES-GCM with a user passphras
 
 ## 15. Seed data (`supabase/seed.sql`)
 - Region `wasatch-front`; three real sites in `draft` with **TODO placeholder** coordinates.
-- **Demo Park (test only):**
+- **Test grove at the Farmington Bird Refuge (test content only):** geometry, fragments and prerequisites come from `supabase/fixtures/farmington-bird-refuge.json` (JoJo's test chain, Frags 1–7, plus Frags 8–10 covering unmarked, protected `DEMO-001`, an OR group and an outcome-gated revision)
   - one published grove; Ring 1 `planting`
-  - 1 root, 2 branches (one unmarked), 3 leaves (one protected `DEMO-001`, one whose revision `requires_outcome_option_id`)
   - 2 characters, 1 open question, 1 open crossroads anchored on a branch
   - 2 ambience profiles (Marsh, Urban), each with a bed and 2 oneshot layers using CC0 test sounds; a marsh ambience zone over the grove
   - a music zone with 2 cues (default; `tiers:['branch']`), each with a base and a layer stem
   - test-tone narration, a demo contributor and consent, an active site approval, `seed_terms` v1
-- A landcover fixture grid for Demo Park.
-- `apps/mobile/e2e/demo-route.gpx` passing every marked and unmarked fragment and crossing the zone edges.
+- A landcover fixture grid for the test grove.
+- `apps/mobile/e2e/demo-route.gpx`, generated from the same fixture: it visits the fragments in an order that satisfies every prerequisite, **dwells at each one for its narration length + 5 s** (completion needs the whole fragment), never enters the protected fragment's radius, and crosses the zone edges.
 - **Never seed real stories or real wildlife recordings without a license.**

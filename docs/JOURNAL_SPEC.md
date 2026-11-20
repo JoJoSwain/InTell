@@ -57,18 +57,18 @@ Empty state: "Stories you hear will gather here," above an illustration of a sin
 ## 3. The Grove page
 
 ### 3.1 Tree view (default)
-A living diagram of the story's structure, drawn bottom-up like a real tree: Roots at the base, Branches above them, Leaves at the tips.
+A living diagram of the story's structure, drawn bottom-up like a real tree: Roots at the base, Branches above them, Leaves at the tips. The story is a graph, not a strict tree (ADR 0003), so each fragment hangs from its **layout parent** and its other prerequisites are drawn as thin secondary connectors.
 
-- **Layout:** a deterministic tidy-tree layout (Reingold–Tilford style) from the pack's parent links, with Roots along the bottom and children ordered by `storyOrder`. Rotate it so it grows upward. Pinch to zoom and pan when large.
+- **Layout:** a deterministic tidy-tree layout (Reingold–Tilford style) from layout parents (the first member of the first group in `requires`; fragments with no prerequisites are Roots of the layout), with Roots along the bottom and children ordered by `storyOrder`. Rotate it so it grows upward. Pinch to zoom and pan when large.
 - **Nodes:**
 
 | State | Look |
 |---|---|
 | Heard | Filled in its tier color, with the title label |
 | Heard; newer version waiting | Filled, with an accent halo and a small ⟳ |
-| Partially heard (< 80%) | A ring filled to the progress value |
+| Started, not finished | A ring filled to the progress value; it doesn't count as heard and unlocks nothing |
 | Revealed, not heard | Outline only, with the title (you've seen it on the map) |
-| Not yet revealed | Faint silhouette dot, **no title**; shown only one level beyond what you've revealed, so the tree hints at more without exposing its full size |
+| Not yet revealed | Faint silhouette dot, **no title**; shown only for fragments with at least one completed prerequisite member, so the tree hints at more without exposing its full size |
 | Retired | Heard ones stay, dashed, labeled "retired from the Grove" |
 | Crossroads | A small fork glyph on the branch where a crossroads is anchored. After it's decided: "Listeners chose: {outcome}" |
 | Grown from your seed | A tiny sprout mark beside the node (private to you) |
@@ -138,7 +138,7 @@ If the fragment's consent has been revoked, the Moment shows only the title, dat
 | Case | Behavior |
 |---|---|
 | New revision published for a heard fragment | Node gets ⟳; the Moment shows "waiting at this spot"; the map marker shows the updated state; the next proximity visit auto-plays it once |
-| A fragment's parent is retired | Children stay reachable in the Tree under a dashed parent |
+| A fragment's layout parent is retired | Dependants stay reachable in the Tree under a dashed parent |
 | Consent revoked | Content removed at sync; a placeholder remains (§4) |
 | A crossroads outcome makes new revisions playable | Treated as new growth; the status line on the Grove card |
 | The user deletes the app | Journal lost unless exported; Settings → Privacy explains this plainly |

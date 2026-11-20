@@ -109,7 +109,7 @@ type StoryState = {
   lastFragmentId?: string;          // most recently completed
   lastTier?: 'root'|'branch'|'leaf';
   lastThreadIds: string[];
-  heard: Set<string>;               // fragment ids heard (≥80%)
+  heard: Set<string>;               // fragment ids completed (played to the end; ADR 0003)
   ringId?: string;                  // the grove's current released ring
   outcomes: Record<string, string>; // crossroadsId → winning optionId (decided only)
   timeWindow: 'dawn'|'day'|'dusk'|'night';

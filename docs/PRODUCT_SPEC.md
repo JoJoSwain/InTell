@@ -27,7 +27,9 @@ InTell augments a place rather than replacing it. You walk, the place speaks, an
 |---|---|
 | **Grove** | A polygon holding one connected storyline (e.g. "Salt Marsh" at Farmington Bay) |
 | **Fragment** | A narrated audio clip anchored to a GPS point, which plays within its trigger radius |
-| **Root / Branch / Leaf** | Fragment tiers. Roots are always visible. A Branch is revealed after its Root is heard. A Leaf is revealed after its Branch is heard. |
+| **Root / Branch / Leaf** | Fragment tiers: narrative weight, trigger priority and marker style (ADR 0003). A **Root Start** opens a thread of the story; a **Root End** (`is_ending`) closes one. |
+| **Prerequisites** | What must be heard before a fragment is revealed: groups that are all required, where any one member satisfies a group (AND of ORs). Fragments with no prerequisites are revealed from the start. Taking one route never closes another; the story is non-linear. |
+| **Heard** | Completed: the listener has played the whole fragment. Partly played fragments are "started" and unlock nothing. |
 | **Surroundings** | Randomly arranged sound effects and beds that match where you are (birds at the refuge, wind in the aspens, a city murmur downtown) |
 | **Soundtrack** | Music tied to geofenced zones and Groves that shifts with which part of the story you're in |
 | **Hush** | A moment when all synthetic sound fades and a whispered "Listen." invites you to hear what's really there |
@@ -124,8 +126,8 @@ The Ring status, crossroads, questions, your seeds, canon, the Ledger, Story Cir
 ## 6. Functional requirements (summary; details in the linked specs)
 | ID | Requirement |
 |---|---|
-| FR-1 | Fragments live inside their Grove polygon; tier/parent rules hold (DATA_MODEL §4) |
-| FR-2 | Unlock: Root always; a child is revealed when its parent is heard (≥ 80%). Only revealed fragments trigger. |
+| FR-1 | Fragments live inside their Grove polygon; prerequisites are in the same Grove and acyclic (DATA_MODEL §4, ADR 0003) |
+| FR-2 | Unlock: a fragment is revealed when every one of its prerequisite groups has at least one member the device has **completed** (played to the end). No prerequisites ⇒ revealed from the start. Revealed fragments stay revealed. Only revealed fragments trigger. |
 | FR-3 | Trigger: 2 consecutive fixes within 60 s, inside the radius, accuracy ≤ radius + 15 m; defaults Root 30 m, Branch 25 m, Leaf 20 m |
 | FR-4 | Visibility `marked` / `unmarked` / `protected`; protected plays via QR only (`https://{LINK_DOMAIN}/f/{code}`), matched by hash |
 | FR-5 | A heard fragment auto-replays once only when a newer current revision exists |
