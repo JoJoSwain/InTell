@@ -4,14 +4,17 @@ select plan(1);
 
 select throws_ok(
   $$insert into public.fragments (
-     grove_id, tier, parent_id, title, location, visibility,
+     grove_id, tier, title, location, visibility,
      trigger_radius_m, marker_code, story_order, status
    ) values (
      'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
      'leaf',
-     'aaaaaaaa-bbbb-4ccc-8ddd-000000000031',
      '{"en":"no code"}'::jsonb,
-     extensions.ST_GeogFromText('SRID=4326;POINT(-111.9000 40.9000)'),
+     (
+       select extensions.ST_Centroid(boundary)::extensions.geography
+       from public.groves
+       where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
+     ),
      'protected',
      25,
      null,

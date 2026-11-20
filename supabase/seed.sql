@@ -1,17 +1,40 @@
--- M2a demo seed (DATA_MODEL §15 + architect B7/B8).
+-- M2a demo seed (DATA_MODEL §15 + ADR 0003 + Farmington fixture).
+-- Geometry comes from supabase/seed-geometry.sql (sql_paths runs it first).
 -- Synthetic test tones only — never real stories or wildlife recordings.
 -- Audio metadata must match supabase/seed-media.json exactly (C23).
+
+-- Helper: one prerequisite group + its OR members (ANY member satisfies the group).
+create or replace function pg_temp.add_prereq_group(
+  p_id uuid,
+  p_fragment_id uuid,
+  p_sort_order int,
+  p_members uuid[]
+) returns void
+language plpgsql
+as $$
+declare
+  i int;
+begin
+  insert into public.fragment_prereq_groups (id, fragment_id, sort_order)
+  values (p_id, p_fragment_id, p_sort_order);
+
+  for i in 1 .. coalesce(array_length(p_members, 1), 0) loop
+    insert into public.fragment_prereq_members (group_id, requires_fragment_id, sort_order)
+    values (p_id, p_members[i], i - 1);
+  end loop;
+end;
+$$;
 
 do $seed$
 declare
   ---------------------------------------------------------------------------
   -- Fixed UUIDs (RFC 4122 v4-shaped) for pgTAP / pack tests
+  -- Pattern: aaaaaaaa-bbbb-4ccc-8ddd-0000000000NN
   ---------------------------------------------------------------------------
   c_region_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000001';
   c_site_demo_id           constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000002';
-  c_site_ogden_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000003';
-  c_site_todo2_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000004';
-  c_site_todo3_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000005';
+  c_site_todo2_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000003';
+  c_site_todo3_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000004';
   c_site_approval_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000006';
 
   c_grove_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010';
@@ -20,19 +43,28 @@ declare
   c_char_a_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020';
   c_char_b_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000021';
 
-  c_frag_root_id           constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030';
-  c_frag_branch_a_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000031';
-  c_frag_branch_b_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000032'; -- unmarked
-  c_frag_leaf_a_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000033';
-  c_frag_leaf_b_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000034'; -- protected DEMO-001
-  c_frag_leaf_c_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000035'; -- outcome-gated
+  c_frag1_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030';
+  c_frag2_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000031';
+  c_frag3_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000032';
+  c_frag4_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000033';
+  c_frag5_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000034';
+  c_frag6_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000035'; -- Root End
+  c_frag7_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000036';
+  c_frag8_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000037'; -- unmarked
+  c_frag9_id               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038'; -- protected DEMO-001
+  c_frag10_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000039';
 
-  c_rev_root_id            constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000040';
-  c_rev_branch_a_id        constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000041';
-  c_rev_branch_b_id        constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000042';
-  c_rev_leaf_a_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000043';
-  c_rev_leaf_b_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000044';
-  c_rev_leaf_c_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000045';
+  c_rev_f1_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000040';
+  c_rev_f2_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000041';
+  c_rev_f3_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000042';
+  c_rev_f4_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000043';
+  c_rev_f5_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000044';
+  c_rev_f6_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000045';
+  c_rev_f7_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000046';
+  c_rev_f8_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000047';
+  c_rev_f9_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000048';
+  c_rev_f10_r1_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000049';
+  c_rev_f10_r2_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-00000000004a'; -- outcome-gated
 
   c_contributor_id         constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000050';
   c_consent_id             constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000051';
@@ -62,12 +94,33 @@ declare
 
   c_ui_cue_id              constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000a0';
 
-  c_asset_narr_root_id     constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000100';
-  c_asset_narr_ba_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000101';
-  c_asset_narr_bb_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000102';
-  c_asset_narr_la_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000103';
-  c_asset_narr_lb_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000104';
-  c_asset_narr_lc_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000105';
+  -- Prerequisite group ids (14 groups)
+  c_pg_f2_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b0';
+  c_pg_f3_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b1';
+  c_pg_f4_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b2';
+  c_pg_f5_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b3';
+  c_pg_f5_1                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b4';
+  c_pg_f6_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b5';
+  c_pg_f6_1                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b6';
+  c_pg_f6_2                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b7';
+  c_pg_f6_3                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b8';
+  c_pg_f6_4                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000b9';
+  c_pg_f7_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000ba';
+  c_pg_f8_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000bb';
+  c_pg_f9_0                constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000bc';
+  c_pg_f10_0               constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000bd';
+
+  c_asset_narr_f1_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000100';
+  c_asset_narr_f2_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000101';
+  c_asset_narr_f3_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000102';
+  c_asset_narr_f4_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000103';
+  c_asset_narr_f5_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000104';
+  c_asset_narr_f6_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000105';
+  c_asset_narr_f7_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000106';
+  c_asset_narr_f8_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000107';
+  c_asset_narr_f9_id       constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000108';
+  c_asset_narr_f10_id      constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000109';
+  c_asset_narr_f10_r2_id   constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-00000000010a';
   c_asset_bed_marsh_id     constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000110';
   c_asset_bed_urban_id     constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000111';
   c_asset_os_marsh1_id     constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000112';
@@ -81,72 +134,39 @@ declare
   c_asset_hush_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000130';
 
   ---------------------------------------------------------------------------
-  -- Demo Park geometry (fictional ~300 m × 300 m square)
-  -- TODO(JoJo): placeholder coordinates — replace with a walkable public site
+  -- Geometry from public._seed_geometry (Farmington Bird Refuge fixture)
   ---------------------------------------------------------------------------
-  c_park_lon      constant double precision := -111.9000;
-  c_park_lat      constant double precision := 40.9000;
-  c_park_half_deg constant double precision := 0.0015; -- ~150 m → ~300 m square
-
-  v_park_poly       extensions.geography(Polygon, 4326);
+  v_grove_boundary  extensions.geography(Polygon, 4326);
   v_region_bounds   extensions.geography(Polygon, 4326);
   v_ambience_poly   extensions.geography(Polygon, 4326);
   v_music_poly      extensions.geography(Polygon, 4326);
 
-  v_pt_root         extensions.geography(Point, 4326);
-  v_pt_branch_a     extensions.geography(Point, 4326);
-  v_pt_branch_b     extensions.geography(Point, 4326);
-  v_pt_leaf_a       extensions.geography(Point, 4326);
-  v_pt_leaf_b       extensions.geography(Point, 4326);
-  v_pt_leaf_c       extensions.geography(Point, 4326);
+  v_pt_frag1        extensions.geography(Point, 4326);
+  v_pt_frag2        extensions.geography(Point, 4326);
+  v_pt_frag3        extensions.geography(Point, 4326);
+  v_pt_frag4        extensions.geography(Point, 4326);
+  v_pt_frag5        extensions.geography(Point, 4326);
+  v_pt_frag6        extensions.geography(Point, 4326);
+  v_pt_frag7        extensions.geography(Point, 4326);
+  v_pt_frag8        extensions.geography(Point, 4326);
+  v_pt_frag9        extensions.geography(Point, 4326);
+  v_pt_frag10       extensions.geography(Point, 4326);
 begin
-  -- Grove / Demo Park polygon (CCW ring)
-  v_park_poly := extensions.ST_GeogFromText(format(
-    'SRID=4326;POLYGON((%s %s,%s %s,%s %s,%s %s,%s %s))',
-    c_park_lon - c_park_half_deg, c_park_lat - c_park_half_deg,
-    c_park_lon + c_park_half_deg, c_park_lat - c_park_half_deg,
-    c_park_lon + c_park_half_deg, c_park_lat + c_park_half_deg,
-    c_park_lon - c_park_half_deg, c_park_lat + c_park_half_deg,
-    c_park_lon - c_park_half_deg, c_park_lat - c_park_half_deg
-  ));
+  select geog into strict v_grove_boundary from public._seed_geometry where key = 'grove_boundary';
+  select geog into strict v_region_bounds  from public._seed_geometry where key = 'region_bounds';
+  select geog into strict v_ambience_poly  from public._seed_geometry where key = 'ambience_marsh';
+  select geog into strict v_music_poly     from public._seed_geometry where key = 'music_zone';
 
-  -- Region bounds: padded box around the demo park
-  v_region_bounds := extensions.ST_GeogFromText(format(
-    'SRID=4326;POLYGON((%s %s,%s %s,%s %s,%s %s,%s %s))',
-    c_park_lon - 0.0200, c_park_lat - 0.0200,
-    c_park_lon + 0.0200, c_park_lat - 0.0200,
-    c_park_lon + 0.0200, c_park_lat + 0.0200,
-    c_park_lon - 0.0200, c_park_lat + 0.0200,
-    c_park_lon - 0.0200, c_park_lat - 0.0200
-  ));
-
-  -- Marsh ambience zone: slightly larger than the grove
-  v_ambience_poly := extensions.ST_GeogFromText(format(
-    'SRID=4326;POLYGON((%s %s,%s %s,%s %s,%s %s,%s %s))',
-    c_park_lon - 0.0017, c_park_lat - 0.0017,
-    c_park_lon + 0.0017, c_park_lat - 0.0017,
-    c_park_lon + 0.0017, c_park_lat + 0.0017,
-    c_park_lon - 0.0017, c_park_lat + 0.0017,
-    c_park_lon - 0.0017, c_park_lat - 0.0017
-  ));
-
-  -- Music zone: shifted west so a walk can cross both zone edges
-  v_music_poly := extensions.ST_GeogFromText(format(
-    'SRID=4326;POLYGON((%s %s,%s %s,%s %s,%s %s,%s %s))',
-    c_park_lon - 0.0020, c_park_lat - 0.0015,
-    c_park_lon + 0.0010, c_park_lat - 0.0015,
-    c_park_lon + 0.0010, c_park_lat + 0.0015,
-    c_park_lon - 0.0020, c_park_lat + 0.0015,
-    c_park_lon - 0.0020, c_park_lat - 0.0015
-  ));
-
-  -- Fragment points (all inside v_park_poly for fn_fragment_guard)
-  v_pt_root     := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon,          c_park_lat));
-  v_pt_branch_a := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon,          c_park_lat + 0.00050));
-  v_pt_branch_b := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon,          c_park_lat - 0.00050));
-  v_pt_leaf_a   := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon + 0.00050, c_park_lat + 0.00070));
-  v_pt_leaf_b   := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon - 0.00050, c_park_lat + 0.00070));
-  v_pt_leaf_c   := extensions.ST_GeogFromText(format('SRID=4326;POINT(%s %s)', c_park_lon + 0.00050, c_park_lat - 0.00070));
+  select geog into strict v_pt_frag1  from public._seed_geometry where key = 'frag1';
+  select geog into strict v_pt_frag2  from public._seed_geometry where key = 'frag2';
+  select geog into strict v_pt_frag3  from public._seed_geometry where key = 'frag3';
+  select geog into strict v_pt_frag4  from public._seed_geometry where key = 'frag4';
+  select geog into strict v_pt_frag5  from public._seed_geometry where key = 'frag5';
+  select geog into strict v_pt_frag6  from public._seed_geometry where key = 'frag6';
+  select geog into strict v_pt_frag7  from public._seed_geometry where key = 'frag7';
+  select geog into strict v_pt_frag8  from public._seed_geometry where key = 'frag8';
+  select geog into strict v_pt_frag9  from public._seed_geometry where key = 'frag9';
+  select geog into strict v_pt_frag10 from public._seed_geometry where key = 'frag10';
 
   ---------------------------------------------------------------------------
   -- Region + sites
@@ -162,14 +182,12 @@ begin
   );
 
   insert into public.sites (id, region_id, slug, name) values
-    (c_site_demo_id,  c_region_id, 'demo-park',            'Demo Park'),
-    -- B7 placeholders for three real sites (draft content; no grove yet)
+    (c_site_demo_id,  c_region_id, 'farmington-bird-refuge', 'Farmington Bird Refuge'),
+    -- B7 placeholders (draft content; no grove yet)
     -- TODO(JoJo): placeholder coordinates
-    (c_site_ogden_id, c_region_id, 'ogden-nature-center',  'TODO: placeholder'),
+    (c_site_todo2_id, c_region_id, 'todo-site-2',            'TODO: placeholder'),
     -- TODO(JoJo): placeholder coordinates
-    (c_site_todo2_id, c_region_id, 'todo-site-2',          'TODO: placeholder'),
-    -- TODO(JoJo): placeholder coordinates
-    (c_site_todo3_id, c_region_id, 'todo-site-3',          'TODO: placeholder');
+    (c_site_todo3_id, c_region_id, 'todo-site-3',            'TODO: placeholder');
 
   insert into public.site_approvals (
     id, site_id, status, approved_by, scope,
@@ -179,7 +197,7 @@ begin
     c_site_demo_id,
     'active',
     'seed',
-    'Demo Park test grove — synthetic audio only',
+    'FIXTURE: Farmington Bird Refuge test grove from supabase/fixtures/farmington-bird-refuge.json — synthetic audio only',
     false,
     current_date - 30,
     null
@@ -225,37 +243,62 @@ begin
     loudness_lufs, loop_start_ms, loop_end_ms, title, tags, source, staging_path, is_public
   ) values
     -- narration (source original)
-    (c_asset_narr_root_id, 'narration',
+    (c_asset_narr_f1_id, 'narration',
      '3576ba8f5052331dca2a180f299e084d0b3ef891e0a7ebe711cd54f38981e88b',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration root', '{}', 'original',
+     'TEST tone — narration frag1', '{}', 'original',
      'staging-audio/3576ba8f5052331dca2a180f299e084d0b3ef891e0a7ebe711cd54f38981e88b.wav', false),
-    (c_asset_narr_ba_id, 'narration',
-     'a1a13dc4a469641c6304dc6bcadd323ad1a79c6a8ecb31c008b85b7973000ed9',
+    (c_asset_narr_f2_id, 'narration',
+     '70f1e568e7c75e66b93ef5963d048761e111333e1f67becb5663c766f74c2ae7',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration branch A', '{}', 'original',
-     'staging-audio/a1a13dc4a469641c6304dc6bcadd323ad1a79c6a8ecb31c008b85b7973000ed9.wav', false),
-    (c_asset_narr_bb_id, 'narration',
-     '8038bba56706193394e57d0253266b17a06a0abfec0c7687e6dacba39481cad2',
+     'TEST tone — narration frag2', '{}', 'original',
+     'staging-audio/70f1e568e7c75e66b93ef5963d048761e111333e1f67becb5663c766f74c2ae7.wav', false),
+    (c_asset_narr_f3_id, 'narration',
+     'd3a8ae92d84c428d70cda57916fc6597fbae5b5953953fb2679b7f54833155a3',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration branch B', '{}', 'original',
-     'staging-audio/8038bba56706193394e57d0253266b17a06a0abfec0c7687e6dacba39481cad2.wav', false),
-    (c_asset_narr_la_id, 'narration',
-     '54deb5d22d1c7c78b66c977afea348a7c55f3e3a834b11878b8dc309cf102d80',
+     'TEST tone — narration frag3', '{}', 'original',
+     'staging-audio/d3a8ae92d84c428d70cda57916fc6597fbae5b5953953fb2679b7f54833155a3.wav', false),
+    (c_asset_narr_f4_id, 'narration',
+     '56bf2aee6f44f93dacfad0bbb51b522b0becad55d0a3aa01108f9f6fc8440b59',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration leaf A', '{}', 'original',
-     'staging-audio/54deb5d22d1c7c78b66c977afea348a7c55f3e3a834b11878b8dc309cf102d80.wav', false),
-    (c_asset_narr_lb_id, 'narration',
-     '0c2af2ec982be27376eba4bd5c00f849925e98bb639a94659a2725b5c1e61233',
+     'TEST tone — narration frag4', '{}', 'original',
+     'staging-audio/56bf2aee6f44f93dacfad0bbb51b522b0becad55d0a3aa01108f9f6fc8440b59.wav', false),
+    (c_asset_narr_f5_id, 'narration',
+     'c7474307853655023e674929b79ee85253523e5f5996e36c6e02c0550a1ce586',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration leaf B (protected)', '{}', 'original',
-     'staging-audio/0c2af2ec982be27376eba4bd5c00f849925e98bb639a94659a2725b5c1e61233.wav', false),
-    (c_asset_narr_lc_id, 'narration',
-     '6e5140a3a332d60438ed93cca1db04729d9c54947091fe04e91ad827288ac334',
+     'TEST tone — narration frag5', '{}', 'original',
+     'staging-audio/c7474307853655023e674929b79ee85253523e5f5996e36c6e02c0550a1ce586.wav', false),
+    (c_asset_narr_f6_id, 'narration',
+     '8979653040ba033d7fb66c8a178b6c2572fbb7a814f9ed0ec68485e2cad72b02',
      'wav', 176444, 2000, 1, 44100, -16, null, null,
-     'TEST tone — narration leaf C (outcome-gated)', '{}', 'original',
-     'staging-audio/6e5140a3a332d60438ed93cca1db04729d9c54947091fe04e91ad827288ac334.wav', false),
-    -- sfx (source public_domain)
+     'TEST tone — narration frag6', '{}', 'original',
+     'staging-audio/8979653040ba033d7fb66c8a178b6c2572fbb7a814f9ed0ec68485e2cad72b02.wav', false),
+    (c_asset_narr_f7_id, 'narration',
+     '6ff8280f32a08dcb5b7b39dd4f9f3a96ffd74b85f14aae2af985a04fa2186efe',
+     'wav', 176444, 2000, 1, 44100, -16, null, null,
+     'TEST tone — narration frag7', '{}', 'original',
+     'staging-audio/6ff8280f32a08dcb5b7b39dd4f9f3a96ffd74b85f14aae2af985a04fa2186efe.wav', false),
+    (c_asset_narr_f8_id, 'narration',
+     '430feddba090436faf8c6f7e3a986c0b76c309b523533ba8011aa4a4db8af217',
+     'wav', 176444, 2000, 1, 44100, -16, null, null,
+     'TEST tone — narration frag8', '{}', 'original',
+     'staging-audio/430feddba090436faf8c6f7e3a986c0b76c309b523533ba8011aa4a4db8af217.wav', false),
+    (c_asset_narr_f9_id, 'narration',
+     'c7ab860a7db67c8d298af3b2758291499acbcf5cb520f3dbb66bb17b3aa50f1e',
+     'wav', 176444, 2000, 1, 44100, -16, null, null,
+     'TEST tone — narration frag9 (protected)', '{}', 'original',
+     'staging-audio/c7ab860a7db67c8d298af3b2758291499acbcf5cb520f3dbb66bb17b3aa50f1e.wav', false),
+    (c_asset_narr_f10_id, 'narration',
+     '591dcfcbff07cdcfceba48237625356e529f431fbbdf29c4c9277ac7950e0add',
+     'wav', 176444, 2000, 1, 44100, -16, null, null,
+     'TEST tone — narration frag10 rev1', '{}', 'original',
+     'staging-audio/591dcfcbff07cdcfceba48237625356e529f431fbbdf29c4c9277ac7950e0add.wav', false),
+    (c_asset_narr_f10_r2_id, 'narration',
+     '95dcd251db2dcf2d076697a32b5be1ae3d3a47bc68dfcff67583daf34426fba1',
+     'wav', 176444, 2000, 1, 44100, -16, null, null,
+     'TEST tone — narration frag10 rev2 (outcome-gated)', '{}', 'original',
+     'staging-audio/95dcd251db2dcf2d076697a32b5be1ae3d3a47bc68dfcff67583daf34426fba1.wav', false),
+    -- sfx (source public_domain; license cc0)
     (c_asset_bed_marsh_id, 'sfx_bed',
      'f384397cef9c76b20b004403e804768a5164cad7be43ca57c06b795c5933cac7',
      'wav', 352844, 4000, 2, 22050, -30, 0, 4000,
@@ -318,12 +361,17 @@ begin
   insert into public.asset_rights (
     asset_id, license, contributor_id, consent_id, attribution, status
   ) values
-    (c_asset_narr_root_id,    'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_ba_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_bb_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_la_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_lb_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
-    (c_asset_narr_lc_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f1_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f2_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f3_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f4_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f5_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f6_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f7_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f8_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f9_id,      'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f10_id,     'consent_form', c_contributor_id, c_consent_id, null, 'active'),
+    (c_asset_narr_f10_r2_id,  'consent_form', c_contributor_id, c_consent_id, null, 'active'),
     (c_asset_bed_marsh_id,    'cc0',          null,             null,         null, 'active'),
     (c_asset_bed_urban_id,    'cc0',          null,             null,         null, 'active'),
     (c_asset_os_marsh1_id,    'cc0',          null,             null,         null, 'active'),
@@ -345,11 +393,11 @@ begin
   ) values (
     c_grove_id,
     c_site_demo_id,
-    'demo-park',
-    '{"en":"Demo Park Grove"}'::jsonb,
-    '{"en":"Synthetic test grove for M2 seed and pgTAP."}'::jsonb,
-    '{"en":"Fictional park — not a real place."}'::jsonb,
-    v_park_poly,
+    'demo',
+    '{"en":"Farmington Bird Refuge Grove"}'::jsonb,
+    '{"en":"Synthetic test grove for M2a seed and pgTAP (Farmington fixture)."}'::jsonb,
+    '{"en":"Test content at Farmington Bird Refuge — synthetic audio only."}'::jsonb,
+    v_grove_boundary,
     'published',
     0,
     now()
@@ -376,44 +424,79 @@ begin
      '{"en":"Keeper"}'::jsonb, '{"en":"Another demo character for tests."}'::jsonb);
 
   ---------------------------------------------------------------------------
-  -- Fragments: 1 root, 2 branches (one unmarked), 3 leaves
+  -- Fragments 1–10 (ADR 0003: no parent_id; exact fixture names/tiers/radii)
   ---------------------------------------------------------------------------
   insert into public.fragments (
-    id, grove_id, tier, parent_id, title, location, visibility,
+    id, grove_id, tier, is_ending, title, location, visibility,
     trigger_radius_m, marker_code, story_order, gap_hint,
     introduced_in_ring_id, status
   ) values
-    (c_frag_root_id, c_grove_id, 'root', null,
-     '{"en":"Demo Root"}'::jsonb, v_pt_root, 'marked',
-     40, null, 1, '{"en":"Begin near the open center."}'::jsonb,
+    (c_frag1_id, c_grove_id, 'root', false,
+     '{"en":"Beginning"}'::jsonb, v_pt_frag1, 'marked',
+     30, null, 1, '{"en":"Begin near the refuge entrance."}'::jsonb,
      c_ring1_id, 'published'),
-    (c_frag_branch_a_id, c_grove_id, 'branch', c_frag_root_id,
-     '{"en":"Demo Branch A"}'::jsonb, v_pt_branch_a, 'marked',
-     30, null, 2, '{"en":"A marked path north of center."}'::jsonb,
+    (c_frag2_id, c_grove_id, 'branch', false,
+     '{"en":"Buildings 1"}'::jsonb, v_pt_frag2, 'marked',
+     25, null, 2, '{"en":"Near the education-center buildings."}'::jsonb,
      c_ring1_id, 'published'),
-    (c_frag_branch_b_id, c_grove_id, 'branch', c_frag_root_id,
-     '{"en":"Demo Branch B (unmarked)"}'::jsonb, v_pt_branch_b, 'unmarked',
-     30, null, 3, '{"en":"An unmarked stretch south of center."}'::jsonb,
+    (c_frag3_id, c_grove_id, 'branch', false,
+     '{"en":"Buildings 2"}'::jsonb, v_pt_frag3, 'marked',
+     25, null, 3, '{"en":"Another stretch by the buildings."}'::jsonb,
      c_ring1_id, 'published'),
-    (c_frag_leaf_a_id, c_grove_id, 'leaf', c_frag_branch_a_id,
-     '{"en":"Demo Leaf A"}'::jsonb, v_pt_leaf_a, 'marked',
-     25, null, 4, '{"en":"A short leaf to the northeast."}'::jsonb,
+    (c_frag4_id, c_grove_id, 'leaf', false,
+     '{"en":"Parking Lot 1"}'::jsonb, v_pt_frag4, 'marked',
+     20, null, 4, '{"en":"A short leaf by the parking lot."}'::jsonb,
      c_ring1_id, 'published'),
-    (c_frag_leaf_b_id, c_grove_id, 'leaf', c_frag_branch_a_id,
-     '{"en":"Demo Leaf B (protected)"}'::jsonb, v_pt_leaf_b, 'protected',
-     25, 'DEMO-001', 5, '{"en":"A protected leaf — marker required."}'::jsonb,
+    (c_frag5_id, c_grove_id, 'leaf', false,
+     '{"en":"Parking Lot 2"}'::jsonb, v_pt_frag5, 'marked',
+     20, null, 5, '{"en":"AND-test leaf — needs Buildings 1 and 2."}'::jsonb,
      c_ring1_id, 'published'),
-    (c_frag_leaf_c_id, c_grove_id, 'leaf', c_frag_branch_b_id,
-     '{"en":"Demo Leaf C (outcome-gated)"}'::jsonb, v_pt_leaf_c, 'marked',
-     25, null, 6, '{"en":"Waits on a crossroads outcome."}'::jsonb,
+    (c_frag6_id, c_grove_id, 'root', true,
+     '{"en":"Ending"}'::jsonb, v_pt_frag6, 'marked',
+     30, null, 6, '{"en":"Root End — same point as Beginning."}'::jsonb,
+     c_ring1_id, 'published'),
+    (c_frag7_id, c_grove_id, 'root', false,
+     '{"en":"Pond"}'::jsonb, v_pt_frag7, 'marked',
+     30, null, 7, '{"en":"Gated Root Start after the ending."}'::jsonb,
+     c_ring1_id, 'published'),
+    (c_frag8_id, c_grove_id, 'branch', false,
+     '{"en":"Heron Overlook"}'::jsonb, v_pt_frag8, 'unmarked',
+     25, null, 8, '{"en":"An unmarked overlook on the marsh loop."}'::jsonb,
+     c_ring1_id, 'published'),
+    (c_frag9_id, c_grove_id, 'leaf', false,
+     '{"en":"Hidden Post"}'::jsonb, v_pt_frag9, 'protected',
+     20, 'DEMO-001', 9, '{"en":"Protected — marker required."}'::jsonb,
+     c_ring1_id, 'published'),
+    (c_frag10_id, c_grove_id, 'leaf', false,
+     '{"en":"Two Ways"}'::jsonb, v_pt_frag10, 'marked',
+     20, null, 10, '{"en":"OR-test leaf; rev2 waits on a crossroads."}'::jsonb,
      c_ring1_id, 'published');
 
   insert into public.fragment_characters (fragment_id, character_id, introduces) values
-    (c_frag_root_id,     c_char_a_id, true),
-    (c_frag_branch_a_id, c_char_b_id, true);
+    (c_frag1_id, c_char_a_id, true),
+    (c_frag2_id, c_char_b_id, true);
 
   ---------------------------------------------------------------------------
-  -- Question + open crossroads (anchored on branch A) with 2 options
+  -- Prerequisites (AND of OR groups) — fixture requires[] exactly
+  ---------------------------------------------------------------------------
+  -- frag1: none
+  perform pg_temp.add_prereq_group(c_pg_f2_0,  c_frag2_id,  0, array[c_frag1_id]);
+  perform pg_temp.add_prereq_group(c_pg_f3_0,  c_frag3_id,  0, array[c_frag1_id]);
+  perform pg_temp.add_prereq_group(c_pg_f4_0,  c_frag4_id,  0, array[c_frag2_id]);
+  perform pg_temp.add_prereq_group(c_pg_f5_0,  c_frag5_id,  0, array[c_frag2_id]);
+  perform pg_temp.add_prereq_group(c_pg_f5_1,  c_frag5_id,  1, array[c_frag3_id]);
+  perform pg_temp.add_prereq_group(c_pg_f6_0,  c_frag6_id,  0, array[c_frag1_id]);
+  perform pg_temp.add_prereq_group(c_pg_f6_1,  c_frag6_id,  1, array[c_frag2_id]);
+  perform pg_temp.add_prereq_group(c_pg_f6_2,  c_frag6_id,  2, array[c_frag3_id]);
+  perform pg_temp.add_prereq_group(c_pg_f6_3,  c_frag6_id,  3, array[c_frag4_id]);
+  perform pg_temp.add_prereq_group(c_pg_f6_4,  c_frag6_id,  4, array[c_frag5_id]);
+  perform pg_temp.add_prereq_group(c_pg_f7_0,  c_frag7_id,  0, array[c_frag6_id]);
+  perform pg_temp.add_prereq_group(c_pg_f8_0,  c_frag8_id,  0, array[c_frag7_id]);
+  perform pg_temp.add_prereq_group(c_pg_f9_0,  c_frag9_id,  0, array[c_frag8_id]);
+  perform pg_temp.add_prereq_group(c_pg_f10_0, c_frag10_id, 0, array[c_frag8_id, c_frag9_id]);
+
+  ---------------------------------------------------------------------------
+  -- Question + open crossroads (anchored on frag2) with 2 options
   ---------------------------------------------------------------------------
   insert into public.questions (
     id, grove_id, ring_id, text, anchor_fragment_id, anchor_character_id,
@@ -422,8 +505,8 @@ begin
     c_question_id,
     c_grove_id,
     c_ring1_id,
-    '{"en":"What did you notice near the marked path?"}'::jsonb,
-    c_frag_branch_a_id,
+    '{"en":"What did you notice near the buildings?"}'::jsonb,
+    c_frag2_id,
     c_char_a_id,
     true,
     now() - interval '1 day',
@@ -438,7 +521,7 @@ begin
     c_crossroads_id,
     c_grove_id,
     c_ring1_id,
-    c_frag_branch_a_id,
+    c_frag2_id,
     '{"en":"Which way should the story lean next?"}'::jsonb,
     75,
     now() - interval '1 day',
@@ -449,47 +532,62 @@ begin
   insert into public.crossroads_options (id, crossroads_id, label, description, sort_order) values
     (c_option_a_id, c_crossroads_id,
      '{"en":"Toward the reeds"}'::jsonb,
-     '{"en":"Demo option A — outcome for leaf C."}'::jsonb, 0),
+     '{"en":"Demo option A — outcome for frag10 revision 2."}'::jsonb, 0),
     (c_option_b_id, c_crossroads_id,
      '{"en":"Toward the path"}'::jsonb,
      '{"en":"Demo option B."}'::jsonb, 1);
 
   ---------------------------------------------------------------------------
-  -- Published revisions (+ outcome-gated leaf C still not playable while open)
+  -- Published revisions (rev1 for all; frag10 also rev2, outcome-gated)
   ---------------------------------------------------------------------------
   insert into public.fragment_revisions (
     id, fragment_id, revision_no, ring_id, status, publish_at,
     requires_outcome_option_id, content_note
   ) values
-    (c_rev_root_id,     c_frag_root_id,     1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Root r1"}'::jsonb),
-    (c_rev_branch_a_id, c_frag_branch_a_id, 1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Branch A r1"}'::jsonb),
-    (c_rev_branch_b_id, c_frag_branch_b_id, 1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Branch B r1"}'::jsonb),
-    (c_rev_leaf_a_id,   c_frag_leaf_a_id,   1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Leaf A r1"}'::jsonb),
-    (c_rev_leaf_b_id,   c_frag_leaf_b_id,   1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Leaf B r1 protected"}'::jsonb),
-    (c_rev_leaf_c_id,   c_frag_leaf_c_id,   1, c_ring1_id, 'published', now() - interval '1 day', c_option_a_id, '{"en":"Leaf C r1 waits on option A"}'::jsonb);
+    (c_rev_f1_id,     c_frag1_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag1 r1"}'::jsonb),
+    (c_rev_f2_id,     c_frag2_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag2 r1"}'::jsonb),
+    (c_rev_f3_id,     c_frag3_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag3 r1"}'::jsonb),
+    (c_rev_f4_id,     c_frag4_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag4 r1"}'::jsonb),
+    (c_rev_f5_id,     c_frag5_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag5 r1"}'::jsonb),
+    (c_rev_f6_id,     c_frag6_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag6 r1 Ending"}'::jsonb),
+    (c_rev_f7_id,     c_frag7_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag7 r1 Pond"}'::jsonb),
+    (c_rev_f8_id,     c_frag8_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag8 r1 unmarked"}'::jsonb),
+    (c_rev_f9_id,     c_frag9_id,  1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag9 r1 protected"}'::jsonb),
+    (c_rev_f10_r1_id, c_frag10_id, 1, c_ring1_id, 'published', now() - interval '1 day', null,          '{"en":"Frag10 r1"}'::jsonb),
+    (c_rev_f10_r2_id, c_frag10_id, 2, c_ring1_id, 'published', now() - interval '1 day', c_option_a_id, '{"en":"Frag10 r2 waits on option A"}'::jsonb);
 
   insert into public.revision_versions (
     revision_id, language, narration_asset_id, transcript
   ) values
-    (c_rev_root_id,     'en', c_asset_narr_root_id, 'TEST transcript — demo root narration tone.'),
-    (c_rev_branch_a_id, 'en', c_asset_narr_ba_id,   'TEST transcript — demo branch A narration tone.'),
-    (c_rev_branch_b_id, 'en', c_asset_narr_bb_id,   'TEST transcript — demo branch B narration tone.'),
-    (c_rev_leaf_a_id,   'en', c_asset_narr_la_id,   'TEST transcript — demo leaf A narration tone.'),
-    (c_rev_leaf_b_id,   'en', c_asset_narr_lb_id,   'TEST transcript — demo leaf B protected narration tone.'),
-    (c_rev_leaf_c_id,   'en', c_asset_narr_lc_id,   'TEST transcript — demo leaf C outcome-gated narration tone.');
+    (c_rev_f1_id,     'en', c_asset_narr_f1_id,     'TEST transcript — frag1 Beginning narration tone.'),
+    (c_rev_f2_id,     'en', c_asset_narr_f2_id,     'TEST transcript — frag2 Buildings 1 narration tone.'),
+    (c_rev_f3_id,     'en', c_asset_narr_f3_id,     'TEST transcript — frag3 Buildings 2 narration tone.'),
+    (c_rev_f4_id,     'en', c_asset_narr_f4_id,     'TEST transcript — frag4 Parking Lot 1 narration tone.'),
+    (c_rev_f5_id,     'en', c_asset_narr_f5_id,     'TEST transcript — frag5 Parking Lot 2 narration tone.'),
+    (c_rev_f6_id,     'en', c_asset_narr_f6_id,     'TEST transcript — frag6 Ending narration tone.'),
+    (c_rev_f7_id,     'en', c_asset_narr_f7_id,     'TEST transcript — frag7 Pond narration tone.'),
+    (c_rev_f8_id,     'en', c_asset_narr_f8_id,     'TEST transcript — frag8 Heron Overlook narration tone.'),
+    (c_rev_f9_id,     'en', c_asset_narr_f9_id,     'TEST transcript — frag9 Hidden Post protected narration tone.'),
+    (c_rev_f10_r1_id, 'en', c_asset_narr_f10_id,    'TEST transcript — frag10 Two Ways rev1 narration tone.'),
+    (c_rev_f10_r2_id, 'en', c_asset_narr_f10_r2_id, 'TEST transcript — frag10 Two Ways rev2 outcome-gated narration tone.');
 
   insert into public.revision_contributors (
     revision_id, contributor_id, role, consent_id
   ) values
-    (c_rev_root_id,     c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_branch_a_id, c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_branch_b_id, c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_leaf_a_id,   c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_leaf_b_id,   c_contributor_id, 'narrator', c_consent_id),
-    (c_rev_leaf_c_id,   c_contributor_id, 'narrator', c_consent_id);
+    (c_rev_f1_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f2_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f3_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f4_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f5_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f6_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f7_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f8_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f9_id,     c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f10_r1_id, c_contributor_id, 'narrator', c_consent_id),
+    (c_rev_f10_r2_id, c_contributor_id, 'narrator', c_consent_id);
 
   ---------------------------------------------------------------------------
-  -- Ambience: Marsh + Urban profiles (bed + 2 oneshots each); marsh zone
+  -- Ambience: Marsh + Urban profiles (bed + 2 oneshots each); marsh zone = grove
   ---------------------------------------------------------------------------
   insert into public.ambience_profiles (id, region_id, slug, name, description, density) values
     (c_amb_marsh_id, c_region_id, 'marsh', 'Marsh',
@@ -528,7 +626,7 @@ begin
   ) values (
     c_amb_zone_id,
     c_region_id,
-    'Demo Park marsh zone',
+    'Farmington marsh zone',
     v_ambience_poly,
     c_amb_marsh_id,
     100,
@@ -544,7 +642,7 @@ begin
   ) values (
     c_music_zone_id,
     c_region_id,
-    'Demo Park music zone',
+    'Farmington music zone',
     v_music_poly,
     100,
     60,
@@ -602,5 +700,8 @@ begin
     0,
     timestamptz '1970-01-01 00:00:00+00'
   );
+
+  -- Geometry helper table is only for this seed pass.
+  drop table if exists public._seed_geometry;
 end;
 $seed$;

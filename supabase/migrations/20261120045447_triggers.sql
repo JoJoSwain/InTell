@@ -147,7 +147,7 @@ begin
     if old.title is distinct from new.title then changed := array_append(changed, 'title'); end if;
     if old.visibility is distinct from new.visibility then changed := array_append(changed, 'visibility'); end if;
     if old.status is distinct from new.status then changed := array_append(changed, 'status'); end if;
-    if old.parent_id is distinct from new.parent_id then changed := array_append(changed, 'parent_id'); end if;
+    if old.is_ending is distinct from new.is_ending then changed := array_append(changed, 'is_ending'); end if;
     if old.trigger_radius_m is distinct from new.trigger_radius_m then changed := array_append(changed, 'trigger_radius_m'); end if;
     if old.story_order is distinct from new.story_order then changed := array_append(changed, 'story_order'); end if;
     if old.location is distinct from new.location then changed := array_append(changed, 'location'); end if;

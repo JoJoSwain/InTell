@@ -452,6 +452,64 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"fragment_prereq_groups": {
+                  Row: {
+                    "created_at": string,"fragment_id": string,"id": string,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"fragment_id": string,"id"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"fragment_id"?: string,"id"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fragment_prereq_groups_fragment_id_fkey"
+      columns: ["fragment_id"]
+isOneToOne: false
+      referencedRelation: "fragments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fragment_prereq_groups_fragment_id_fkey"
+      columns: ["fragment_id"]
+isOneToOne: false
+      referencedRelation: "fragments_staff"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"fragment_prereq_members": {
+                  Row: {
+                    "group_id": string,"requires_fragment_id": string,"sort_order": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "group_id": string,"requires_fragment_id": string,"sort_order"?: number
+                  }
+                  Update: {
+                    "group_id"?: string,"requires_fragment_id"?: string,"sort_order"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fragment_prereq_members_group_id_fkey"
+      columns: ["group_id"]
+isOneToOne: false
+      referencedRelation: "fragment_prereq_groups"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fragment_prereq_members_requires_fragment_id_fkey"
+      columns: ["requires_fragment_id"]
+isOneToOne: false
+      referencedRelation: "fragments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fragment_prereq_members_requires_fragment_id_fkey"
+      columns: ["requires_fragment_id"]
+isOneToOne: false
+      referencedRelation: "fragments_staff"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"fragment_revisions": {
                   Row: {
                     "change_note": NonNullable<Json>,"content_note": NonNullable<Json>,"created_at": string,"created_by": string | null,"fragment_id": string,"id": string,"publish_at": string | null,"requires_outcome_option_id": string | null,"revision_no": number,"ring_id": string | null,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"writer_notes": string | null
@@ -524,14 +582,14 @@ isOneToOne: false
                   ]
                 },"fragments": {
                   Row: {
-                    "created_at": string,"gap_hint": NonNullable<Json>,"grove_id": string,"id": string,"introduced_in_ring_id": string | null,"location": unknown,"marker_code": string | null,"parent_id": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"]
+                    "created_at": string,"gap_hint": NonNullable<Json>,"grove_id": string,"id": string,"introduced_in_ring_id": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"gap_hint"?: NonNullable<Json>,"grove_id": string,"id"?: string,"introduced_in_ring_id"?: string | null,"location": unknown,"marker_code"?: string | null,"parent_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
+                    "created_at"?: string,"gap_hint"?: NonNullable<Json>,"grove_id": string,"id"?: string,"introduced_in_ring_id"?: string | null,"is_ending"?: boolean,"location": unknown,"marker_code"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
                   }
                   Update: {
-                    "created_at"?: string,"gap_hint"?: NonNullable<Json>,"grove_id"?: string,"id"?: string,"introduced_in_ring_id"?: string | null,"location"?: unknown,"marker_code"?: string | null,"parent_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order"?: number,"tier"?: Database["public"]['Enums']["tier"],"title"?: NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
+                    "created_at"?: string,"gap_hint"?: NonNullable<Json>,"grove_id"?: string,"id"?: string,"introduced_in_ring_id"?: string | null,"is_ending"?: boolean,"location"?: unknown,"marker_code"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order"?: number,"tier"?: Database["public"]['Enums']["tier"],"title"?: NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
                   }
                   Relationships: [
                     {
@@ -545,18 +603,6 @@ isOneToOne: false
       columns: ["introduced_in_ring_id"]
 isOneToOne: false
       referencedRelation: "rings"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "fragments_parent_id_fkey"
-      columns: ["parent_id"]
-isOneToOne: false
-      referencedRelation: "fragments"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "fragments_parent_id_fkey"
-      columns: ["parent_id"]
-isOneToOne: false
-      referencedRelation: "fragments_staff"
       referencedColumns: ["id"]
     }
                   ]
@@ -1177,14 +1223,14 @@ isOneToOne: false
                   ]
                 },"fragments_staff": {
                   Row: {
-                    "created_at": string,"gap_hint": NonNullable<Json>,"grove_id": string,"id": string,"introduced_in_ring_id": string | null,"location": unknown,"marker_code": string | null,"parent_id": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"]
+                    "created_at": string,"gap_hint": NonNullable<Json>,"grove_id": string,"id": string,"introduced_in_ring_id": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"]
                   }
                   ComputedFields: never
                   Insert: {
-                           "created_at"?: string | null,"gap_hint"?: Json | null,"grove_id"?: string | null,"id"?: string | null,"introduced_in_ring_id"?: string | null,"location"?: never,"marker_code"?: never,"parent_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"] | null,"story_order"?: number | null,"tier"?: Database["public"]['Enums']["tier"] | null,"title"?: Json | null,"trigger_radius_m"?: number | null,"updated_at"?: string | null,"visibility"?: Database["public"]['Enums']["fragment_visibility"] | null
+                           "created_at"?: string | null,"gap_hint"?: Json | null,"grove_id"?: string | null,"id"?: string | null,"introduced_in_ring_id"?: string | null,"is_ending"?: boolean | null,"location"?: never,"marker_code"?: never,"status"?: Database["public"]['Enums']["publish_status"] | null,"story_order"?: number | null,"tier"?: Database["public"]['Enums']["tier"] | null,"title"?: Json | null,"trigger_radius_m"?: number | null,"updated_at"?: string | null,"visibility"?: Database["public"]['Enums']["fragment_visibility"] | null
                          }
                         Update: {
-                           "created_at"?: string | null,"gap_hint"?: Json | null,"grove_id"?: string | null,"id"?: string | null,"introduced_in_ring_id"?: string | null,"location"?: never,"marker_code"?: never,"parent_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"] | null,"story_order"?: number | null,"tier"?: Database["public"]['Enums']["tier"] | null,"title"?: Json | null,"trigger_radius_m"?: number | null,"updated_at"?: string | null,"visibility"?: Database["public"]['Enums']["fragment_visibility"] | null
+                           "created_at"?: string | null,"gap_hint"?: Json | null,"grove_id"?: string | null,"id"?: string | null,"introduced_in_ring_id"?: string | null,"is_ending"?: boolean | null,"location"?: never,"marker_code"?: never,"status"?: Database["public"]['Enums']["publish_status"] | null,"story_order"?: number | null,"tier"?: Database["public"]['Enums']["tier"] | null,"title"?: Json | null,"trigger_radius_m"?: number | null,"updated_at"?: string | null,"visibility"?: Database["public"]['Enums']["fragment_visibility"] | null
                          }
                         Relationships: [
                     {
@@ -1198,18 +1244,6 @@ isOneToOne: false
       columns: ["introduced_in_ring_id"]
 isOneToOne: false
       referencedRelation: "rings"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "fragments_parent_id_fkey"
-      columns: ["parent_id"]
-isOneToOne: false
-      referencedRelation: "fragments"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "fragments_parent_id_fkey"
-      columns: ["parent_id"]
-isOneToOne: false
-      referencedRelation: "fragments_staff"
       referencedColumns: ["id"]
     }
                   ]
@@ -1310,6 +1344,9 @@ isOneToOne: false
                            },
 "fn_layer_assets_playable":
 { Args: { "p_layer_id": string }; Returns: string[]
+                           },
+"fn_must_precede":
+{ Args: { "p_earlier": string,"p_later": string }; Returns: boolean
                            },
 "fn_publish_check":
 { Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json

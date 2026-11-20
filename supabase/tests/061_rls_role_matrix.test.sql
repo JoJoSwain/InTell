@@ -25,7 +25,7 @@ insert into public.staff (user_id, display_name, role, active) values
 insert into public.fragment_revisions (
   id, fragment_id, revision_no, status, content_note, change_note
 ) values (
-  'aaaaaaaa-bbbb-4ccc-8ddd-000000000047',
+  'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000070',
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
   9,
   'draft',
@@ -62,7 +62,7 @@ set local role authenticated;
 select throws_ok(
   $$update public.fragment_revisions
       set status = 'published'
-    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000047'$$,
+    where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000070'$$,
   '42501',
   null,
   'writer cannot publish revision to published'

@@ -45,12 +45,17 @@ function tone(durationSec, sampleRate, channels, hz) {
 }
 
 const SPECS = [
-  { key: "narration_root", file: "narration_root.wav", kind: "narration", hz: 220, dur: 2, ch: 1, sr: 44100, lufs: -16 },
-  { key: "narration_branch_a", file: "narration_branch_a.wav", kind: "narration", hz: 246.94, dur: 2, ch: 1, sr: 44100, lufs: -16 },
-  { key: "narration_branch_b", file: "narration_branch_b.wav", kind: "narration", hz: 261.63, dur: 2, ch: 1, sr: 44100, lufs: -16 },
-  { key: "narration_leaf_a", file: "narration_leaf_a.wav", kind: "narration", hz: 293.66, dur: 2, ch: 1, sr: 44100, lufs: -16 },
-  { key: "narration_leaf_b", file: "narration_leaf_b.wav", kind: "narration", hz: 329.63, dur: 2, ch: 1, sr: 44100, lufs: -16 },
-  { key: "narration_leaf_c", file: "narration_leaf_c.wav", kind: "narration", hz: 349.23, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag1", file: "narration_frag1.wav", kind: "narration", hz: 220, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag2", file: "narration_frag2.wav", kind: "narration", hz: 233, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag3", file: "narration_frag3.wav", kind: "narration", hz: 247, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag4", file: "narration_frag4.wav", kind: "narration", hz: 262, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag5", file: "narration_frag5.wav", kind: "narration", hz: 277, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag6", file: "narration_frag6.wav", kind: "narration", hz: 294, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag7", file: "narration_frag7.wav", kind: "narration", hz: 311, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag8", file: "narration_frag8.wav", kind: "narration", hz: 330, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag9", file: "narration_frag9.wav", kind: "narration", hz: 349, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag10", file: "narration_frag10.wav", kind: "narration", hz: 370, dur: 2, ch: 1, sr: 44100, lufs: -16 },
+  { key: "narration_frag10_rev2", file: "narration_frag10_rev2.wav", kind: "narration", hz: 392, dur: 2, ch: 1, sr: 44100, lufs: -16 },
   { key: "bed_marsh", file: "bed_marsh.wav", kind: "sfx_bed", hz: 110, dur: 4, ch: 2, sr: 22050, lufs: -30, loop: true },
   { key: "bed_urban", file: "bed_urban.wav", kind: "sfx_bed", hz: 98, dur: 4, ch: 2, sr: 22050, lufs: -30, loop: true },
   { key: "oneshot_marsh_1", file: "oneshot_marsh_1.wav", kind: "sfx_oneshot", hz: 880, dur: 0.3, ch: 1, sr: 44100, lufs: -24 },

@@ -1,18 +1,23 @@
--- C17: geography ST_Covers — ~1 m outside fails; vertex / inside succeed.
+-- C17: geography ST_Covers — outside fails; vertex / inside succeed (Farmington).
 begin;
 select plan(3);
 
--- ~1 m south of the southern edge (lat 40.8985); 1 m ≈ 9e-6 deg
+-- clearly outside: translate centroid ~2 km north
 select throws_ok(
   $$insert into public.fragments (
-     grove_id, tier, parent_id, title, location, visibility,
+     grove_id, tier, title, location, visibility,
      trigger_radius_m, story_order, status
    ) values (
      'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
      'branch',
-     'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
      '{"en":"outside"}'::jsonb,
-     extensions.ST_GeogFromText('SRID=4326;POINT(-111.9000 40.898491)'),
+     (
+       select extensions.ST_Translate(
+                extensions.ST_Centroid(boundary::geometry), 0, 0.02
+              )::extensions.geography
+       from public.groves
+       where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
+     ),
      'marked',
      25,
      90,
@@ -20,20 +25,25 @@ select throws_ok(
    )$$,
   'P0001',
   'fragment location must be inside grove boundary',
-  'point ~1m outside boundary fails'
+  'point outside boundary fails'
 );
 
--- exact southwest vertex of demo park polygon
+-- first exterior-ring vertex of Farmington grove
 select lives_ok(
   $$insert into public.fragments (
-     grove_id, tier, parent_id, title, location, visibility,
+     grove_id, tier, title, location, visibility,
      trigger_radius_m, story_order, status
    ) values (
      'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
      'branch',
-     'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
      '{"en":"vertex"}'::jsonb,
-     extensions.ST_GeogFromText('SRID=4326;POINT(-111.9015 40.8985)'),
+     (
+       select extensions.ST_PointN(
+                extensions.ST_ExteriorRing(boundary::geometry), 1
+              )::extensions.geography
+       from public.groves
+       where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
+     ),
      'marked',
      25,
      91,
@@ -42,17 +52,20 @@ select lives_ok(
   'point on boundary vertex succeeds'
 );
 
--- interior center
+-- interior centroid
 select lives_ok(
   $$insert into public.fragments (
-     grove_id, tier, parent_id, title, location, visibility,
+     grove_id, tier, title, location, visibility,
      trigger_radius_m, story_order, status
    ) values (
      'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
      'branch',
-     'aaaaaaaa-bbbb-4ccc-8ddd-000000000030',
      '{"en":"inside"}'::jsonb,
-     extensions.ST_GeogFromText('SRID=4326;POINT(-111.9000 40.9000)'),
+     (
+       select extensions.ST_Centroid(boundary)::extensions.geography
+       from public.groves
+       where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
+     ),
      'marked',
      25,
      92,

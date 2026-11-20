@@ -70,7 +70,7 @@ create table public.fragments (
   id uuid primary key default gen_random_uuid(),
   grove_id uuid not null references public.groves(id) on delete cascade,
   tier public.tier not null,
-  parent_id uuid references public.fragments(id) on delete restrict,
+  is_ending boolean not null default false,
   title jsonb not null,
   location extensions.geography(Point,4326) not null,
   visibility public.fragment_visibility not null default 'marked',
@@ -82,7 +82,7 @@ create table public.fragments (
   status public.publish_status not null default 'draft',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint tier_parent check ((tier = 'root') = (parent_id is null)),
+  constraint ending_is_root check (not is_ending or tier = 'root'),
   constraint protected_requires_marker_code check (
     visibility <> 'protected' or marker_code is not null
   )
@@ -92,6 +92,7 @@ create trigger fragments_set_updated_at
   before update on public.fragments
   for each row execute function public.set_updated_at();
 
+-- ADR 0003: boundary + protected only (no parent/tier graph rules)
 create or replace function public.fn_fragment_guard()
 returns trigger
 language plpgsql
@@ -99,7 +100,6 @@ security definer
 set search_path = ''
 as $$
 declare
-  parent_row public.fragments%rowtype;
   grove_boundary extensions.geography(Polygon,4326);
 begin
   select g.boundary into grove_boundary
@@ -114,22 +114,6 @@ begin
     raise exception 'fragment location must be inside grove boundary';
   end if;
 
-  if new.parent_id is not null then
-    select * into parent_row from public.fragments where id = new.parent_id;
-    if not found then
-      raise exception 'parent fragment not found';
-    end if;
-    if parent_row.grove_id <> new.grove_id then
-      raise exception 'parent fragment must be in the same grove';
-    end if;
-    if new.tier = 'branch' and parent_row.tier <> 'root' then
-      raise exception 'branch parent must be root';
-    end if;
-    if new.tier = 'leaf' and parent_row.tier <> 'branch' then
-      raise exception 'leaf parent must be branch';
-    end if;
-  end if;
-
   return new;
 end;
 $$;
@@ -139,6 +123,83 @@ revoke all on function public.fn_fragment_guard() from public, anon, authenticat
 create trigger fragments_guard
   before insert or update on public.fragments
   for each row execute function public.fn_fragment_guard();
+
+-- Prerequisite groups (AND of ORs)
+create table public.fragment_prereq_groups (
+  id uuid primary key default gen_random_uuid(),
+  fragment_id uuid not null references public.fragments(id) on delete cascade,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create trigger fragment_prereq_groups_set_updated_at
+  before update on public.fragment_prereq_groups
+  for each row execute function public.set_updated_at();
+
+create table public.fragment_prereq_members (
+  group_id uuid not null references public.fragment_prereq_groups(id) on delete cascade,
+  requires_fragment_id uuid not null references public.fragments(id) on delete restrict,
+  sort_order int not null default 0,
+  primary key (group_id, requires_fragment_id)
+);
+
+create or replace function public.fn_prereq_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  owner_frag public.fragments%rowtype;
+  req_frag public.fragments%rowtype;
+  cycle_hit boolean;
+begin
+  select f.* into owner_frag
+  from public.fragment_prereq_groups g
+  join public.fragments f on f.id = g.fragment_id
+  where g.id = new.group_id;
+
+  if not found then
+    raise exception 'prerequisite group not found';
+  end if;
+
+  select * into req_frag from public.fragments where id = new.requires_fragment_id;
+  if not found then
+    raise exception 'required fragment not found';
+  end if;
+
+  if req_frag.grove_id <> owner_frag.grove_id then
+    raise exception 'prerequisite must be in the same grove';
+  end if;
+
+  if new.requires_fragment_id = owner_frag.id then
+    raise exception 'fragment cannot require itself';
+  end if;
+
+  -- Cycle: walking requires edges from the new required fragment must not reach the owner
+  with recursive walk as (
+    select new.requires_fragment_id as frag_id
+    union
+    select m.requires_fragment_id
+    from walk w
+    join public.fragment_prereq_groups g on g.fragment_id = w.frag_id
+    join public.fragment_prereq_members m on m.group_id = g.id
+  )
+  select exists (select 1 from walk where frag_id = owner_frag.id) into cycle_hit;
+
+  if coalesce(cycle_hit, false) then
+    raise exception 'prerequisite edge would create a cycle';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.fn_prereq_guard() from public, anon, authenticated;
+
+create trigger fragment_prereq_members_guard
+  before insert or update on public.fragment_prereq_members
+  for each row execute function public.fn_prereq_guard();
 
 create table public.fragment_threads (
   fragment_id uuid references public.fragments(id) on delete cascade,

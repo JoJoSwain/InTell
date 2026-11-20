@@ -1,5 +1,5 @@
 -- R3: anon cannot execute funcs that return coords; audit/jobs omit codes/coords;
--- viewer cannot read private-docs.
+-- viewer cannot read private-docs. Covers frag9 (protected DEMO-001).
 begin;
 select plan(5);
 
@@ -18,17 +18,16 @@ select ok(
 delete from public.audit_log;
 delete from public.jobs;
 
--- update protected fragment (leaf_b DEMO-001 at ~40.9007,-111.9005)
+-- update protected fragment frag9 (Hidden Post / DEMO-001)
 update public.fragments
    set title = title || jsonb_build_object('t', 'audit')
- where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000034';
+ where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038';
 
 select ok(
   not exists (
     select 1 from public.audit_log
     where detail::text like '%DEMO-001%'
-       or detail::text like '%40.89%'
-       or detail::text like '%40.90%'
+       or detail::text like '%40.96%'
        or detail::text like '%-111.9%'
   ),
   'audit_log.detail has no DEMO-001 or coordinate numbers'
@@ -43,8 +42,7 @@ select ok(
   not exists (
     select 1 from public.jobs
     where payload::text like '%DEMO-001%'
-       or payload::text like '%40.89%'
-       or payload::text like '%40.90%'
+       or payload::text like '%40.96%'
        or payload::text like '%-111.9%'
        or payload::text ~* 'marker_code'
   ),

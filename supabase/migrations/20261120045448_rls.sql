@@ -144,7 +144,7 @@ where public.has_role(array['viewer','moderator','writer','sound','editor','admi
 create or replace view public.fragments_staff
 with (security_barrier = true) as
 select
-  id, grove_id, tier, parent_id, title,
+  id, grove_id, tier, is_ending, title,
   case
     when visibility <> 'protected' then location
     when public.has_role(array['editor','admin']::public.staff_role[]) then location
@@ -249,6 +249,19 @@ create policy fragment_threads_staff on public.fragment_threads for all to authe
 create policy fragment_characters_staff on public.fragment_characters for all to authenticated
   using (public.has_role(array['viewer','moderator','writer','sound','editor','admin']::public.staff_role[]))
   with check (public.has_role(array['writer','editor','admin']::public.staff_role[]));
+
+-- ADR 0003: prereq structure is editor/admin write; all staff read (ids only — no protected coords)
+create policy fragment_prereq_groups_staff_select on public.fragment_prereq_groups for select to authenticated
+  using (public.has_role(array['viewer','moderator','writer','sound','editor','admin']::public.staff_role[]));
+create policy fragment_prereq_groups_editor_write on public.fragment_prereq_groups for all to authenticated
+  using (public.has_role(array['editor','admin']::public.staff_role[]))
+  with check (public.has_role(array['editor','admin']::public.staff_role[]));
+
+create policy fragment_prereq_members_staff_select on public.fragment_prereq_members for select to authenticated
+  using (public.has_role(array['viewer','moderator','writer','sound','editor','admin']::public.staff_role[]));
+create policy fragment_prereq_members_editor_write on public.fragment_prereq_members for all to authenticated
+  using (public.has_role(array['editor','admin']::public.staff_role[]))
+  with check (public.has_role(array['editor','admin']::public.staff_role[]));
 
 -- Ambience / music: sound write
 create policy ambience_profiles_staff_select on public.ambience_profiles for select to authenticated

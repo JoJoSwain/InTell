@@ -3,8 +3,8 @@
   "deterministic": true,
   "notes": "Synthetic CC0-style test tones for M2 seed. Upload in M2b.",
   "assets": {
-    "narration_root": {
-      "file": "narration_root.wav",
+    "narration_frag1": {
+      "file": "narration_frag1.wav",
       "kind": "narration",
       "sha256": "3576ba8f5052331dca2a180f299e084d0b3ef891e0a7ebe711cd54f38981e88b",
       "ext": "wav",
@@ -17,10 +17,10 @@
       "loop_end_ms": null,
       "staging_path": "staging-audio/3576ba8f5052331dca2a180f299e084d0b3ef891e0a7ebe711cd54f38981e88b.wav"
     },
-    "narration_branch_a": {
-      "file": "narration_branch_a.wav",
+    "narration_frag2": {
+      "file": "narration_frag2.wav",
       "kind": "narration",
-      "sha256": "a1a13dc4a469641c6304dc6bcadd323ad1a79c6a8ecb31c008b85b7973000ed9",
+      "sha256": "70f1e568e7c75e66b93ef5963d048761e111333e1f67becb5663c766f74c2ae7",
       "ext": "wav",
       "bytes": 176444,
       "duration_ms": 2000,
@@ -29,12 +29,12 @@
       "loudness_lufs": -16,
       "loop_start_ms": null,
       "loop_end_ms": null,
-      "staging_path": "staging-audio/a1a13dc4a469641c6304dc6bcadd323ad1a79c6a8ecb31c008b85b7973000ed9.wav"
+      "staging_path": "staging-audio/70f1e568e7c75e66b93ef5963d048761e111333e1f67becb5663c766f74c2ae7.wav"
     },
-    "narration_branch_b": {
-      "file": "narration_branch_b.wav",
+    "narration_frag3": {
+      "file": "narration_frag3.wav",
       "kind": "narration",
-      "sha256": "8038bba56706193394e57d0253266b17a06a0abfec0c7687e6dacba39481cad2",
+      "sha256": "d3a8ae92d84c428d70cda57916fc6597fbae5b5953953fb2679b7f54833155a3",
       "ext": "wav",
       "bytes": 176444,
       "duration_ms": 2000,
@@ -43,12 +43,12 @@
       "loudness_lufs": -16,
       "loop_start_ms": null,
       "loop_end_ms": null,
-      "staging_path": "staging-audio/8038bba56706193394e57d0253266b17a06a0abfec0c7687e6dacba39481cad2.wav"
+      "staging_path": "staging-audio/d3a8ae92d84c428d70cda57916fc6597fbae5b5953953fb2679b7f54833155a3.wav"
     },
-    "narration_leaf_a": {
-      "file": "narration_leaf_a.wav",
+    "narration_frag4": {
+      "file": "narration_frag4.wav",
       "kind": "narration",
-      "sha256": "54deb5d22d1c7c78b66c977afea348a7c55f3e3a834b11878b8dc309cf102d80",
+      "sha256": "56bf2aee6f44f93dacfad0bbb51b522b0becad55d0a3aa01108f9f6fc8440b59",
       "ext": "wav",
       "bytes": 176444,
       "duration_ms": 2000,
@@ -57,12 +57,12 @@
       "loudness_lufs": -16,
       "loop_start_ms": null,
       "loop_end_ms": null,
-      "staging_path": "staging-audio/54deb5d22d1c7c78b66c977afea348a7c55f3e3a834b11878b8dc309cf102d80.wav"
+      "staging_path": "staging-audio/56bf2aee6f44f93dacfad0bbb51b522b0becad55d0a3aa01108f9f6fc8440b59.wav"
     },
-    "narration_leaf_b": {
-      "file": "narration_leaf_b.wav",
+    "narration_frag5": {
+      "file": "narration_frag5.wav",
       "kind": "narration",
-      "sha256": "0c2af2ec982be27376eba4bd5c00f849925e98bb639a94659a2725b5c1e61233",
+      "sha256": "c7474307853655023e674929b79ee85253523e5f5996e36c6e02c0550a1ce586",
       "ext": "wav",
       "bytes": 176444,
       "duration_ms": 2000,
@@ -71,12 +71,12 @@
       "loudness_lufs": -16,
       "loop_start_ms": null,
       "loop_end_ms": null,
-      "staging_path": "staging-audio/0c2af2ec982be27376eba4bd5c00f849925e98bb639a94659a2725b5c1e61233.wav"
+      "staging_path": "staging-audio/c7474307853655023e674929b79ee85253523e5f5996e36c6e02c0550a1ce586.wav"
     },
-    "narration_leaf_c": {
-      "file": "narration_leaf_c.wav",
+    "narration_frag6": {
+      "file": "narration_frag6.wav",
       "kind": "narration",
-      "sha256": "6e5140a3a332d60438ed93cca1db04729d9c54947091fe04e91ad827288ac334",
+      "sha256": "8979653040ba033d7fb66c8a178b6c2572fbb7a814f9ed0ec68485e2cad72b02",
       "ext": "wav",
       "bytes": 176444,
       "duration_ms": 2000,
@@ -85,7 +85,77 @@
       "loudness_lufs": -16,
       "loop_start_ms": null,
       "loop_end_ms": null,
-      "staging_path": "staging-audio/6e5140a3a332d60438ed93cca1db04729d9c54947091fe04e91ad827288ac334.wav"
+      "staging_path": "staging-audio/8979653040ba033d7fb66c8a178b6c2572fbb7a814f9ed0ec68485e2cad72b02.wav"
+    },
+    "narration_frag7": {
+      "file": "narration_frag7.wav",
+      "kind": "narration",
+      "sha256": "6ff8280f32a08dcb5b7b39dd4f9f3a96ffd74b85f14aae2af985a04fa2186efe",
+      "ext": "wav",
+      "bytes": 176444,
+      "duration_ms": 2000,
+      "channels": 1,
+      "sample_rate": 44100,
+      "loudness_lufs": -16,
+      "loop_start_ms": null,
+      "loop_end_ms": null,
+      "staging_path": "staging-audio/6ff8280f32a08dcb5b7b39dd4f9f3a96ffd74b85f14aae2af985a04fa2186efe.wav"
+    },
+    "narration_frag8": {
+      "file": "narration_frag8.wav",
+      "kind": "narration",
+      "sha256": "430feddba090436faf8c6f7e3a986c0b76c309b523533ba8011aa4a4db8af217",
+      "ext": "wav",
+      "bytes": 176444,
+      "duration_ms": 2000,
+      "channels": 1,
+      "sample_rate": 44100,
+      "loudness_lufs": -16,
+      "loop_start_ms": null,
+      "loop_end_ms": null,
+      "staging_path": "staging-audio/430feddba090436faf8c6f7e3a986c0b76c309b523533ba8011aa4a4db8af217.wav"
+    },
+    "narration_frag9": {
+      "file": "narration_frag9.wav",
+      "kind": "narration",
+      "sha256": "c7ab860a7db67c8d298af3b2758291499acbcf5cb520f3dbb66bb17b3aa50f1e",
+      "ext": "wav",
+      "bytes": 176444,
+      "duration_ms": 2000,
+      "channels": 1,
+      "sample_rate": 44100,
+      "loudness_lufs": -16,
+      "loop_start_ms": null,
+      "loop_end_ms": null,
+      "staging_path": "staging-audio/c7ab860a7db67c8d298af3b2758291499acbcf5cb520f3dbb66bb17b3aa50f1e.wav"
+    },
+    "narration_frag10": {
+      "file": "narration_frag10.wav",
+      "kind": "narration",
+      "sha256": "591dcfcbff07cdcfceba48237625356e529f431fbbdf29c4c9277ac7950e0add",
+      "ext": "wav",
+      "bytes": 176444,
+      "duration_ms": 2000,
+      "channels": 1,
+      "sample_rate": 44100,
+      "loudness_lufs": -16,
+      "loop_start_ms": null,
+      "loop_end_ms": null,
+      "staging_path": "staging-audio/591dcfcbff07cdcfceba48237625356e529f431fbbdf29c4c9277ac7950e0add.wav"
+    },
+    "narration_frag10_rev2": {
+      "file": "narration_frag10_rev2.wav",
+      "kind": "narration",
+      "sha256": "95dcd251db2dcf2d076697a32b5be1ae3d3a47bc68dfcff67583daf34426fba1",
+      "ext": "wav",
+      "bytes": 176444,
+      "duration_ms": 2000,
+      "channels": 1,
+      "sample_rate": 44100,
+      "loudness_lufs": -16,
+      "loop_start_ms": null,
+      "loop_end_ms": null,
+      "staging_path": "staging-audio/95dcd251db2dcf2d076697a32b5be1ae3d3a47bc68dfcff67583daf34426fba1.wav"
     },
     "bed_marsh": {
       "file": "bed_marsh.wav",

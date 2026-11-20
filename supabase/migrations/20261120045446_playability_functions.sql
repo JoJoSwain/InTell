@@ -249,6 +249,31 @@ as $$
     and public.fn_asset_is_playable(a.asset_id, 'America/Denver');
 $$;
 
+-- ADR 0003 §4: B must precede A if A has a single-member group {B}, or {X} where B must precede X
+create or replace function public.fn_must_precede(p_earlier uuid, p_later uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with recursive chain as (
+    select p_later as frag_id
+    union
+    select m.requires_fragment_id
+    from chain c
+    join public.fragment_prereq_groups g on g.fragment_id = c.frag_id
+    join public.fragment_prereq_members m on m.group_id = g.id
+    where (
+      select count(*) from public.fragment_prereq_members m2 where m2.group_id = g.id
+    ) = 1
+  )
+  select exists (select 1 from chain where frag_id = p_earlier);
+$$;
+
+revoke all on function public.fn_must_precede(uuid, uuid) from public, anon;
+grant execute on function public.fn_must_precede(uuid, uuid) to authenticated, service_role;
+
 -- Publish check return helpers
 create or replace function public.fn_publish_check(p_entity text, p_ids uuid[])
 returns jsonb
@@ -265,8 +290,9 @@ declare
   grove public.groves%rowtype;
   rev public.fragment_revisions%rowtype;
   cue public.music_cues%rowtype;
-  parent_ok boolean;
-  has_root boolean;
+  prereq_ok boolean;
+  has_start boolean;
+  empty_group boolean;
   other public.fragments%rowtype;
   stem_rec record;
   base_dur int;
@@ -275,6 +301,7 @@ declare
   asset_rec public.audio_assets%rowtype;
   target_lufs numeric;
   tz text;
+  grp record;
 begin
   if p_entity = 'revision' then
     foreach entity_id in array p_ids loop
@@ -351,37 +378,54 @@ begin
           'code','OUTSIDE_GROVE','severity','error','message','fragment outside grove','entity_id',frag.id));
       end if;
 
-      -- C2: parent fragment published/retired, or a revision for that parent is in this batch
-      if frag.parent_id is not null then
-        select exists (
-          select 1 from public.fragments f
-          where f.id = frag.parent_id
-            and (
-              f.status in ('published','retired')
-              or exists (
-                select 1 from public.fragment_revisions r
-                where r.fragment_id = f.id and r.id = any(p_ids)
-              )
-            )
-        ) into parent_ok;
-        if not coalesce(parent_ok, false) then
+      -- EMPTY_PREREQ_GROUP / PREREQ_UNPUBLISHED (ADR 0003)
+      for grp in
+        select g.id as group_id
+        from public.fragment_prereq_groups g
+        where g.fragment_id = frag.id
+      loop
+        select not exists (
+          select 1 from public.fragment_prereq_members m where m.group_id = grp.group_id
+        ) into empty_group;
+        if empty_group then
           failures := failures || jsonb_build_array(jsonb_build_object(
-            'code','PARENT_UNPUBLISHED','severity','error','message','parent not published','entity_id',frag.id));
+            'code','EMPTY_PREREQ_GROUP','severity','error','message','prerequisite group has no members','entity_id',frag.id));
+        else
+          select exists (
+            select 1
+            from public.fragment_prereq_members m
+            join public.fragments rf on rf.id = m.requires_fragment_id
+            where m.group_id = grp.group_id
+              and (
+                rf.status in ('published','retired')
+                or exists (
+                  select 1 from public.fragment_revisions r
+                  where r.fragment_id = rf.id and r.id = any(p_ids)
+                )
+              )
+          ) into prereq_ok;
+          if not coalesce(prereq_ok, false) then
+            failures := failures || jsonb_build_array(jsonb_build_object(
+              'code','PREREQ_UNPUBLISHED','severity','error','message','prerequisite group has no published member','entity_id',frag.id));
+          end if;
         end if;
-      end if;
+      end loop;
 
+      -- NO_START: grove needs ≥1 published fragment with no prerequisite groups
       select exists (
         select 1 from public.fragments f
         where f.grove_id = grove.id
-          and f.tier = 'root'
           and (f.status in ('published','retired') or exists (
             select 1 from public.fragment_revisions r
             where r.fragment_id = f.id and r.id = any(p_ids)
           ))
-      ) into has_root;
-      if not has_root then
+          and not exists (
+            select 1 from public.fragment_prereq_groups g where g.fragment_id = f.id
+          )
+      ) into has_start;
+      if not has_start then
         failures := failures || jsonb_build_array(jsonb_build_object(
-          'code','NO_ROOT','severity','error','message','grove needs a published root','entity_id',grove.id));
+          'code','NO_START','severity','error','message','grove needs a published start fragment','entity_id',grove.id));
       end if;
 
       if frag.visibility = 'protected' and frag.marker_code is null then
@@ -389,17 +433,21 @@ begin
           'code','PROTECTED_NO_CODE','severity','error','message','protected needs marker_code','entity_id',frag.id));
       end if;
 
+      -- RADIUS_OVERLAP skips must-precede pairs (ADR 0003 §4)
       if frag.visibility in ('marked','unmarked') then
         for other in
           select * from public.fragments o
           where o.grove_id = grove.id
             and o.id <> frag.id
             and o.visibility in ('marked','unmarked')
+            and o.id > frag.id  -- emit once per unordered pair
         loop
-          if extensions.ST_DWithin(frag.location, other.location, frag.trigger_radius_m + other.trigger_radius_m) then
+          if extensions.ST_DWithin(frag.location, other.location, frag.trigger_radius_m + other.trigger_radius_m)
+             and not public.fn_must_precede(frag.id, other.id)
+             and not public.fn_must_precede(other.id, frag.id) then
             failures := failures || jsonb_build_array(jsonb_build_object(
-              'code','RADIUS_OVERLAP','severity','warning','message','trigger radii overlap','entity_id',frag.id));
-            exit;
+              'code','RADIUS_OVERLAP','severity','warning','message','trigger radii overlap','entity_id',frag.id,
+              'other_id', other.id));
           end if;
         end loop;
       end if;

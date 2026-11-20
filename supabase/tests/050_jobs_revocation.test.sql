@@ -29,7 +29,7 @@ select ok(
 select ok(
   not exists (
     select 1 from public.jobs j
-    where j.payload::text like '%40.89%'
+    where j.payload::text like '%40.96%'
        or j.payload::text like '%-111.9%'
   ),
   'job payloads have no coordinate numbers'

@@ -11,7 +11,7 @@
     "dev:mobile": "pnpm --filter @intell/mobile start",
     "db:setup-local": "node tools/db-setup-local.mjs",
     "db:seed-media-meta": "pnpm --filter @intell/audio-fixtures generate:seed-meta",
-    "db:demo-gpx": "node tools/demo-route-gpx.mjs"
+    "db:demo-geometry": "node tools/demo-geometry/generate.mjs"
   },
   "devDependencies": {
     "supabase": "3.2.0",

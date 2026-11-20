@@ -9,8 +9,8 @@ select ok(
 );
 
 select ok(
-  not public.fn_revision_is_playable('aaaaaaaa-bbbb-4ccc-8ddd-000000000045'),
-  'leaf_c revision false while crossroads open (outcome not decided)'
+  not public.fn_revision_is_playable('aaaaaaaa-bbbb-4ccc-8ddd-00000000004a'),
+  'frag10 rev2 false while crossroads open (outcome not decided)'
 );
 
 -- consent revoked
