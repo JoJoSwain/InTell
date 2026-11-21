@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { serviceClient } from "../_shared/clients.ts";
-import { json, requireServiceRole } from "../_shared/http.ts";
+import { json, requireServiceCaller } from "../_shared/http.ts";
 import { buildGrovePack } from "../_shared/buildGrovePack.ts";
 import { buildRegionPack } from "../_shared/buildRegionPack.ts";
 
@@ -16,7 +16,7 @@ const Body = z
   });
 
 Deno.serve(async (req) => {
-  const denied = requireServiceRole(req);
+  const denied = requireServiceCaller(req);
   if (denied) return denied;
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 

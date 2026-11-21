@@ -185,14 +185,15 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 - Journal voice files live in a private bucket on a retention schedule.
 - Staff: invite-only accounts, Supabase password protections on (minimum length, leaked-password rejection, session expiry), an audit log on every publish, unpublish and staff change. No two-factor (ADR 0004).
 - Preview manifests and signed URLs are issued only to writer/sound/editor/admin staff JWTs and expire in **1 hour** (DATA_MODEL §12.5).
+- **`verify_jwt = false` only for service-called functions** (`run-jobs`, `build-pack`, `purge-assets`, `publish`) that validate a secret key in-function (`requireServiceCaller` / publish service path), with tests proving every other caller is refused. Staff-JWT-only functions (`invite-staff`, `unpublish`, `preview`) keep `verify_jwt = true`. Service callers send the secret in the `apikey` header (Bearer still accepted during the transition).
 
 ---
 
 ## 7. Configuration
 - Environments: `dev` (local Supabase), `staging` and `prod` (hosted Supabase + hosted admin), with separate EAS channels.
-- **Mobile** `extra`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GOOGLE_MAPS_API_KEY_IOS`, `GOOGLE_MAPS_API_KEY_ANDROID`, `GOOGLE_MAP_ID`, `SENTRY_DSN`, `LINK_DOMAIN`, `WEBSITE_URL`, `PRIVACY_URL`, `JOURNAL_GUIDE_URL`.
-- **Edge function secrets (names only):** `GOOGLE_ROUTES_API_KEY` (M5, for `embark`; Supabase secrets, never in the repo).
-- **Admin:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAP_ID`, `NEXT_PUBLIC_LINK_DOMAIN`, `SENTRY_DSN`. No service role key.
+- **Mobile** `extra`: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), `GOOGLE_MAPS_API_KEY_IOS`, `GOOGLE_MAPS_API_KEY_ANDROID`, `GOOGLE_MAP_ID`, `SENTRY_DSN`, `LINK_DOMAIN`, `WEBSITE_URL`, `PRIVACY_URL`, `JOURNAL_GUIDE_URL`.
+- **Edge function secrets (names only):** `GOOGLE_ROUTES_API_KEY` (M5, for `embark`; Supabase secrets, never in the repo). Hosted projects inject `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` / `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_PUBLISHABLE_KEYS` / `SUPABASE_ANON_KEY` automatically.
+- **Admin:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAP_ID`, `NEXT_PUBLIC_LINK_DOMAIN`, `SENTRY_DSN`. No secret / service role key.
 - **Universal links:** `LINK_DOMAIN` is on replaceplace.com (proposed `intell.replaceplace.com`). It serves `apple-app-site-association` and `assetlinks.json`, plus a fallback web page at `/f/{code}` that points to the app stores.
 
 ---

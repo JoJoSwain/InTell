@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { publishableKey } from "./keys.ts";
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -27,8 +28,8 @@ export async function requireStaffEditor(req: Request): Promise<StaffAuth> {
   }
   const jwt = auth.slice("Bearer ".length);
   const url = Deno.env.get("SUPABASE_URL") ?? "";
-  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const userClient = createClient(url, anon, {
+  const publishable = publishableKey();
+  const userClient = createClient(url, publishable, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -55,8 +56,8 @@ export async function requireStaffAdmin(req: Request): Promise<StaffAuth> {
   }
   const jwt = auth.slice("Bearer ".length);
   const url = Deno.env.get("SUPABASE_URL") ?? "";
-  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const userClient = createClient(url, anon, {
+  const publishable = publishableKey();
+  const userClient = createClient(url, publishable, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });

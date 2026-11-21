@@ -1,8 +1,9 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { serviceKey } from "./keys.ts";
 
 export function serviceClient(): SupabaseClient {
   const url = Deno.env.get("SUPABASE_URL") ?? "";
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const key = serviceKey();
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
