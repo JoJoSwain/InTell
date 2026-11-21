@@ -8,6 +8,33 @@ const GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const FRAG10 = "aaaaaaaa-bbbb-4ccc-8ddd-000000000039";
 const CHAR_RIVER = "aaaaaaaa-bbbb-4ccc-8ddd-000000000020";
 
+function uniqueCopy(label: string): string {
+  return `E2E ${label} ${Date.now()}.`;
+}
+
+async function journeyPassageEn(
+  mode: "walk" | "bike" | "transit",
+): Promise<string> {
+  const auth = loadUsers();
+  const key = auth.serviceRoleKey;
+  if (!key) throw new Error("serviceRoleKey missing from e2e auth users");
+  const res = await fetch(
+    `${auth.supabaseUrl}/rest/v1/grove_journeys?grove_id=eq.${GROVE}&mode=eq.${mode}&select=passage`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Accept: "application/json",
+      },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`grove_journeys ${mode}: ${res.status}`);
+  }
+  const rows = (await res.json()) as { passage?: { en?: string } }[];
+  return rows[0]?.passage?.en ?? "";
+}
+
 test.describe("M3e story fields", () => {
   test.beforeAll(() => {
     mkdirSync(SHOTS, { recursive: true });
@@ -23,25 +50,50 @@ test.describe("M3e story fields", () => {
 
     await signIn(page, writer.email, writer.password);
 
-    // Journey passages
+    const walk = uniqueCopy("on foot to the opening root");
+    const bike = uniqueCopy("by bike to the opening root");
+    const transit = uniqueCopy("by transit to the opening root");
+    const teaser = uniqueCopy("change teaser for Two Ways contingency");
+    const dayHint = uniqueCopy("after dusk, another telling waits");
+    const nightHint = uniqueCopy("by day, another telling waits");
+
+    // Journey passages — exact values after save + reload (R1)
     await page.goto(`/story/groves/${GROVE}`);
     await expect(
       page.getByRole("heading", { name: "Journey passages" }),
     ).toBeVisible({ timeout: 15_000 });
-    await page
-      .getByLabel("On foot journey passage")
-      .fill("E2E on foot to the opening root.");
-    await page
-      .getByLabel("By bike journey passage")
-      .fill("E2E by bike to the opening root.");
-    await page
-      .getByLabel("By transit journey passage")
-      .fill("E2E by transit to the opening root.");
+    for (const [label, value] of [
+      ["On foot journey passage", walk],
+      ["By bike journey passage", bike],
+      ["By transit journey passage", transit],
+    ] as const) {
+      const field = page.getByLabel(label);
+      await field.click();
+      await field.fill("");
+      await field.fill(value);
+      await expect(field).toHaveValue(value);
+    }
     await page.getByRole("button", { name: "Save journey passages" }).click();
-    await expect(page.getByLabel("On foot journey passage")).toHaveValue(
-      /E2E on foot/,
-      { timeout: 15_000 },
+    await expect(page).toHaveURL(
+      new RegExp(`/story/groves/${GROVE}\\?journeys=\\d+`),
+      { timeout: 30_000 },
     );
+    await expect(page.getByLabel("On foot journey passage")).toHaveValue(walk, {
+      timeout: 15_000,
+    });
+    expect(await journeyPassageEn("walk")).toBe(walk);
+    expect(await journeyPassageEn("bike")).toBe(bike);
+    expect(await journeyPassageEn("transit")).toBe(transit);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Journey passages" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("On foot journey passage")).toHaveValue(walk);
+    await expect(page.getByLabel("By bike journey passage")).toHaveValue(bike);
+    await expect(page.getByLabel("By transit journey passage")).toHaveValue(
+      transit,
+    );
+    expect(await journeyPassageEn("walk")).toBe(walk);
     await page.screenshot({
       path: join(SHOTS, "m3e-grove-journeys.png"),
       fullPage: true,
@@ -71,28 +123,36 @@ test.describe("M3e story fields", () => {
       timeout: 20_000,
     });
     await page.getByLabel("Story Contingency").check();
-    await page
-      .getByLabel("Change teaser")
-      .fill("E2E change teaser for Two Ways contingency.");
+    await page.getByLabel("Change teaser").fill(teaser);
     await page.getByLabel("Include Day version").check();
     await page.getByLabel("Include Night version").check();
-    // Pick first available narration assets
     const dayAsset = page.getByLabel("Day narration asset");
     const nightAsset = page.getByLabel("Night narration asset");
     await dayAsset.selectOption({ index: 1 });
     await nightAsset.selectOption({ index: 1 });
     await page.getByLabel("Day transcript").fill("E2E day transcript.");
     await page.getByLabel("Night transcript").fill("E2E night transcript.");
-    await page
-      .getByLabel("Day other-time hint")
-      .fill("E2E: after dusk, another telling waits.");
-    await page
-      .getByLabel("Night other-time hint")
-      .fill("E2E: by day, another telling waits.");
+    await page.getByLabel("Day other-time hint").fill(dayHint);
+    await page.getByLabel("Night other-time hint").fill(nightHint);
     await page.getByRole("button", { name: "Create revision" }).click();
-    await expect(page.getByLabel("Change teaser")).toHaveValue(
-      /E2E change teaser/,
-      { timeout: 20_000 },
+    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}\/?$/, {
+      timeout: 20_000,
+    });
+    await expect(page.getByLabel("Change teaser")).toHaveValue(teaser, {
+      timeout: 20_000,
+    });
+    await expect(page.getByLabel("Day other-time hint")).toHaveValue(dayHint);
+    await expect(page.getByLabel("Night other-time hint")).toHaveValue(
+      nightHint,
+    );
+    await page.reload();
+    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}\/?$/);
+    await expect(page.getByLabel("Change teaser")).toHaveValue(teaser, {
+      timeout: 20_000,
+    });
+    await expect(page.getByLabel("Day other-time hint")).toHaveValue(dayHint);
+    await expect(page.getByLabel("Night other-time hint")).toHaveValue(
+      nightHint,
     );
     await page.screenshot({
       path: join(SHOTS, "m3e-revision-change-teaser.png"),
@@ -127,7 +187,6 @@ test.describe("M3e story fields", () => {
       page.getByRole("heading", { name: `E2E M3e checklist ${stamp}` }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // Add River as a release item if the UI exposes the picker
     const addEntity = page.locator("select").filter({ hasText: /character|grove|fragment/i }).first();
     if (await addEntity.isVisible().catch(() => false)) {
       await addEntity.selectOption("character");

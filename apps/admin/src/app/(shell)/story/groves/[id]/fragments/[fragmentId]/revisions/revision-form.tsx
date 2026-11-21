@@ -1,7 +1,21 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { createRevision, updateRevision } from "./actions";
+
+function RevisionSubmitButton({
+  label,
+}: {
+  label: "Save revision" | "Create revision";
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} aria-label={label}>
+      {pending ? "Saving…" : label}
+    </Button>
+  );
+}
 
 export type AudioOption = { id: string; title: string; kind: string };
 
@@ -133,9 +147,13 @@ export function RevisionForm({
   const changeKind = isFirst
     ? "contingency"
     : (initial?.change_kind ?? "");
+  // Remount when server-provided field values change after save (R1).
+  const remountKey = initial?.id
+    ? `rev:${initial.id}:${initial.change_teaser ?? ""}:${initial.day?.other_time_hint ?? ""}:${initial.night?.other_time_hint ?? ""}`
+    : `rev:new:${fragmentId}`;
 
   return (
-    <form action={action} className="space-y-6">
+    <form key={remountKey} action={action} className="space-y-6">
       <input type="hidden" name="grove_id" value={groveId} />
       <input type="hidden" name="fragment_id" value={fragmentId} />
       {initial?.id ? (
@@ -236,9 +254,9 @@ export function RevisionForm({
       />
 
       {!readOnly ? (
-        <Button type="submit" aria-label={initial?.id ? "Save revision" : "Create revision"}>
-          {initial?.id ? "Save revision" : "Create revision"}
-        </Button>
+        <RevisionSubmitButton
+          label={initial?.id ? "Save revision" : "Create revision"}
+        />
       ) : (
         <p className="text-sm text-textMuted">
           {initial?.status === "draft"

@@ -451,5 +451,7 @@ export async function saveGroveJourneys(formData: FormData) {
   }
 
   revalidatePath(`/story/groves/${groveId}`);
-  redirect(`/story/groves/${groveId}`);
+  // Caller performs a hard navigation after save (R1). Soft redirect can
+  // restore prior form field values and concatenate them into the next submit.
+  return { ok: true as const, groveId };
 }

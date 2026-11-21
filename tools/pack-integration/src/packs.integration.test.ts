@@ -954,4 +954,55 @@ describe.sequential("M3a pack integration", () => {
     expect(parsed.schema).toBe("preview/1");
     expect(parsed.releaseId).toBe(DEMO.draftReleaseId);
   }, 60_000);
+
+  it("preview: incomplete character returns 422 with clear message (N1)", async () => {
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
+    const { data: before } = await svc
+      .from("characters")
+      .select("home_grove_id, portrait_image_id")
+      .eq("id", DEMO.charRiverId)
+      .single();
+    expect(before?.home_grove_id).toBeTruthy();
+
+    await svc
+      .from("characters")
+      .update({ home_grove_id: null })
+      .eq("id", DEMO.charRiverId);
+
+    await svc.from("release_items").delete().eq("release_id", DEMO.draftReleaseId);
+    const { error: itemErr } = await svc.from("release_items").insert([
+      { release_id: DEMO.draftReleaseId, entity: "grove", entity_id: DEMO.groveId },
+      {
+        release_id: DEMO.draftReleaseId,
+        entity: "character",
+        entity_id: DEMO.charRiverId,
+      },
+    ]);
+    if (itemErr) throw new Error(itemErr.message);
+
+    try {
+      const { jwt } = await ensureEditor();
+      const res = await invoke(
+        "preview",
+        { releaseId: DEMO.draftReleaseId },
+        jwt,
+      );
+      expect(res.status, await res.clone().text()).toBe(422);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toMatch(/River needs a home grove before preview/i);
+    } finally {
+      await svc
+        .from("characters")
+        .update({
+          home_grove_id: before?.home_grove_id ?? DEMO.groveId,
+          portrait_image_id: before?.portrait_image_id ?? null,
+        })
+        .eq("id", DEMO.charRiverId);
+      await svc.from("release_items").delete().eq("release_id", DEMO.draftReleaseId);
+    }
+  }, 120_000);
 });

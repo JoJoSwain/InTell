@@ -2,9 +2,9 @@
 
 **Branch:** `m3e-story-fields`  
 **PR:** https://github.com/JoJoSwain/InTell/pull/14  
-**Tip:** `37c05c9` (`fix(admin): type Playwright webServer.env as Record<string, string>`)  
-**Plan:** `docs/briefs/M3e-plan.md` · **Review (wins):** `docs/briefs/M3e-plan-review.md` (`d7f3026`)  
-**Stop for architect review of this report.** Do not start M4 or M5.
+**Tip:** see latest on `m3e-story-fields` after Review fixes  
+**Plan:** `docs/briefs/M3e-plan.md` · **Plan review:** `docs/briefs/M3e-plan-review.md` (`d7f3026`) · **Impl review:** `docs/briefs/M3e-review.md` (`b1d9200`)  
+**Stop for verification after Review fixes.** Do not start M3f, M4, or M5.
 
 ---
 
@@ -145,3 +145,33 @@ None blocking M3e. Items deferred by design (review Notes):
 - Phone features (Embark, pulsing marker, Chronicle cards/hints) remain **M5 / M8**.
 
 **Ready for architect review. Do not start M4 or M5 from this branch.**
+
+---
+
+## 12. Review fixes (`M3e-review.md` R1 + N1)
+
+**Reviewed against:** `docs/briefs/M3e-review.md` (Approved after R1). Review wins.
+
+### Commits since `90f6aa0`
+- `b1d9200` docs: M3e implementation review; M3f brief (not started)
+- *(this push)* fix R1 journey soft-nav doubling + N1 preview 422; tighten Playwright exact assertions; update this report
+
+### R1 — journey passage doubling
+**Finding: real bug (display + stored), not only a screenshot artifact.**
+
+Soft navigation after `saveGroveJourneys` restored prior form field values into the remounted textareas (same `name`s). The next save then upserted the concatenated string. Playwright’s old `/E2E on foot/` regex hid it; the DB row for walk accumulated multiple E2E strings across runs.
+
+**Fix:**
+- `saveGroveJourneys` returns `{ ok, groveId }` (no soft `redirect`)
+- `JourneyForm` submits via `useTransition`, then **hard** `window.location.assign(...?journeys=<ts>)`
+- Grove page passes `remountKey` from that query param; form/fields remount with server `defaultValue`
+- Submit button disabled while pending
+- Playwright: unique copy per run, clear+fill, assert **exact** values after save URL and after reload, assert `grove_journeys.passage.en` exactly; same exact-value + reload pattern for change teaser and other-time hints (revision create already hard-changes URL; pending submit button added)
+
+Screenshots regenerated (`m3e-grove-journeys.png` shows a single On foot passage).
+
+### N1 — preview incomplete character
+**Done.** `buildGrovePackObject` errors now include the character public name. `preview` catches missing home grove / portrait and returns **422** with e.g. `"River needs a home grove before preview."` Integration: `preview: incomplete character returns 422 with clear message (N1)`.
+
+### Suite / CI
+Local after fixes: db reset + pgTAP 35/194; integration **22**; Playwright M3e both green (full 16 with one staff-gate retry for transient 503); lint/typecheck/test/admin build green. CI/Vercel: see tip after push.

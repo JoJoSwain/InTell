@@ -240,12 +240,20 @@ export async function buildGrovePackObject(
     if (!crow) continue;
     const c = parseSnapshot("character", crow.data);
     if (c.status !== "published" && c.status !== "retired" && !preview) continue;
+    const characterLabel =
+      typeof c.publicName?.en === "string" && c.publicName.en.trim()
+        ? c.publicName.en.trim()
+        : cid;
     if (!c.homeGroveId) {
-      throw new Error(`character ${cid} missing homeGroveId (PACK_BUILD_FAILED)`);
+      throw new Error(
+        `character ${characterLabel} (${cid}) missing homeGroveId (PACK_BUILD_FAILED)`,
+      );
     }
     watermarks.push(crow.published_at);
     if (!c.portraitImageId) {
-      throw new Error(`character ${cid} missing portrait (PACK_BUILD_FAILED)`);
+      throw new Error(
+        `character ${characterLabel} (${cid}) missing portrait (PACK_BUILD_FAILED)`,
+      );
     }
     let irow: { data: unknown } | null = null;
     if (overlay?.items.has(itemKey("image", c.portraitImageId))) {

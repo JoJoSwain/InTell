@@ -85,10 +85,34 @@ Deno.serve(async (req) => {
   const packs: unknown[] = [];
   const assetMeta = new Map<string, { sha: string; ext: string; kind: string; isPublic: boolean }>();
 
+  function staffPreviewBuildError(message: string): string | null {
+    const home = /character (.+?) \(([0-9a-f-]{36})\) missing homeGroveId/i.exec(
+      message,
+    );
+    if (home?.[1]) {
+      return `${home[1]} needs a home grove before preview.`;
+    }
+    const portrait =
+      /character (.+?) \(([0-9a-f-]{36})\) missing portrait\b/i.exec(message);
+    if (portrait?.[1]) {
+      return `${portrait[1]} needs a portrait before preview.`;
+    }
+    return null;
+  }
+
   for (const groveId of groveIds) {
-    const { pack, assetShas } = await buildGrovePackObject(svc, groveId, {
-      overlay,
-    });
+    let assembled: Awaited<ReturnType<typeof buildGrovePackObject>>;
+    try {
+      assembled = await buildGrovePackObject(svc, groveId, {
+        overlay,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const staffMsg = staffPreviewBuildError(message);
+      if (staffMsg) return json({ error: staffMsg }, 422);
+      return json({ error: message }, 500);
+    }
+    const { pack, assetShas } = assembled;
     const parsed = GrovePack.parse(pack);
     const asJson = JSON.stringify(parsed);
     if (

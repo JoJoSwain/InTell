@@ -25,12 +25,16 @@ import { PrereqGraph } from "../prereq-graph";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fragment?: string; new?: string }>;
+  searchParams: Promise<{ fragment?: string; new?: string; journeys?: string }>;
 };
 
 export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const sp = await searchParams;
+  const journeyRemountKey =
+    typeof sp.journeys === "string" && sp.journeys.length > 0
+      ? sp.journeys
+      : "initial";
   const supabase = await createClient();
   const {
     data: { user },
@@ -253,8 +257,10 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
         </h2>
         <div className="mt-4">
           <JourneyForm
+            key={journeyRemountKey}
             groveId={grove.id}
             canEdit={canNotes}
+            remountKey={journeyRemountKey}
             initial={{
               walk: journeyByMode.walk ?? "",
               bike: journeyByMode.bike ?? "",
