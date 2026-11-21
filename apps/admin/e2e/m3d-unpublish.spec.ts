@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadUsers, signIn } from "./auth";
 
-/** Published seed fragment with dependents (frag1). */
+/** Published seed revision (frag1 Beginning) — has dependents → stranded warnings. */
 const SEED_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const SEED_FRAG1 = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
 const SEED_REV_F1 = "aaaaaaaa-bbbb-4ccc-8ddd-000000000040";
@@ -39,7 +39,7 @@ test.describe("M3d unpublish confirm", () => {
     await expect(
       page.getByRole("heading", { name: /Unpublish revision/i }),
     ).toBeVisible();
-    // Either stranded list or explicit none
+    // Preview returns stranded list or the explicit none message
     const stranded = page.getByLabel("Unpublish warnings");
     const none = page.getByText("No stranded-prerequisite warnings.");
     await expect(stranded.or(none)).toBeVisible({ timeout: 15_000 });
@@ -49,7 +49,7 @@ test.describe("M3d unpublish confirm", () => {
       fullPage: true,
     });
 
-    // Cancel — do not actually unpublish seed in e2e
+    // Cancel — do not actually unpublish seed content in e2e
     await page.getByRole("button", { name: "Cancel unpublish" }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });

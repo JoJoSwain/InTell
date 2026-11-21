@@ -262,7 +262,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
           <p className="mt-2 text-sm text-textMuted">
             Created {new Date(r.created_at).toLocaleString()}
             {creatorName ? ` · ${creatorName}` : ""}
-            {r.publish_at}
+            {r.publish_at
               ? ` · scheduled ${new Date(r.publish_at).toLocaleString()}`
               : ""}
             {r.published_at

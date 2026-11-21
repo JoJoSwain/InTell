@@ -41,6 +41,7 @@ yarn-error.log*
 /playwright/.cache/
 /e2e/.auth-users.json
 /e2e/.auth/
+/e2e/screenshots/*.png
 
 # vercel
 .vercel
