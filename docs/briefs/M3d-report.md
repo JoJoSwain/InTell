@@ -157,4 +157,5 @@ CI / Vercel: see **Review fixes** §N2 after the fix push.
 None — N1 and N2 done.
 
 ### CI / Vercel (N2)
-*Filled after push on the fix head.*
+- Tip `9c86629`: `check` green; `db` failed Playwright E1 — global `jobs` drain never emptied after integration leftovers. Fixed by waiting on **this release’s** `published` status while calling `run-jobs` (follow-up tip below).
+- Vercel Preview Comments: success on `9c86629`.

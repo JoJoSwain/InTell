@@ -38,26 +38,33 @@ async function fillFirstRevisionDayOnly(
   await expect(page.getByText(/Rev 1/)).toBeVisible({ timeout: 20_000 });
 }
 
-async function drainJobs(
+/** Call run-jobs until this release is published (or failed). Ignores leftover jobs from prior suite cases. */
+async function waitUntilReleasePublished(
   supabaseUrl: string,
   serviceRoleKey: string,
-  maxRounds = 40,
+  releaseId: string,
+  maxRounds = 60,
 ) {
   for (let i = 0; i < maxRounds; i++) {
-    const pendingRes = await fetch(
-      `${supabaseUrl}/rest/v1/jobs?status=in.(queued,running)&select=id`,
+    const statusRes = await fetch(
+      `${supabaseUrl}/rest/v1/releases?id=eq.${releaseId}&select=status`,
       {
         headers: {
           apikey: serviceRoleKey,
           Authorization: `Bearer ${serviceRoleKey}`,
-          Prefer: "count=exact",
         },
       },
     );
-    const contentRange = pendingRes.headers.get("content-range") ?? "";
-    const match = contentRange.match(/\/(\d+)$/);
-    const pending = match ? Number(match[1]) : 0;
-    if (pending === 0) return;
+    if (!statusRes.ok) {
+      throw new Error(`release status ${statusRes.status}: ${await statusRes.text()}`);
+    }
+    const rows = (await statusRes.json()) as { status?: string }[];
+    const status = rows[0]?.status;
+    if (status === "published") return;
+    if (status === "failed") {
+      throw new Error(`release ${releaseId} failed during pack go-live`);
+    }
+
     const res = await fetch(`${supabaseUrl}/functions/v1/run-jobs`, {
       method: "POST",
       headers: {
@@ -70,7 +77,7 @@ async function drainJobs(
       throw new Error(`run-jobs ${res.status}: ${await res.text()}`);
     }
   }
-  throw new Error("jobs did not drain");
+  throw new Error(`release ${releaseId} did not reach published`);
 }
 
 test.describe("M3d publish from scratch", () => {
@@ -208,6 +215,7 @@ test.describe("M3d publish from scratch", () => {
     await expect(
       page.getByRole("heading", { name: `M3d Release ${stamp}` }),
     ).toBeVisible({ timeout: 15_000 });
+    const releaseId = page.url().split("/").pop()!;
 
     async function addItem(entity: string, entityId: string) {
       await page.getByLabel("Release item entity type").selectOption(entity);
@@ -271,7 +279,11 @@ test.describe("M3d publish from scratch", () => {
       throw new Error("release failed checklist/publish — see screenshot");
     }
 
-    await drainJobs(auth.supabaseUrl, serviceRoleKey);
+    await waitUntilReleasePublished(
+      auth.supabaseUrl,
+      serviceRoleKey,
+      releaseId,
+    );
 
     await page.reload();
     await expect(page.getByLabel("Status: Published")).toBeVisible({
