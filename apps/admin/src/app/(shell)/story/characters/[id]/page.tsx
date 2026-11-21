@@ -1,8 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { canManageCharacters, isActiveStaff, loadStaff } from "@/lib/staff";
+import {
+  canManageCharacters,
+  canPublishRelease,
+  isActiveStaff,
+  loadStaff,
+} from "@/lib/staff";
 import { l10nEn } from "@/lib/geo";
 import { Button } from "@/components/ui/button";
+import { UnpublishButton } from "@/components/unpublish-button";
 import { saveCharacter } from "../actions";
 
 type Props = { params: Promise<{ id: string }> };
@@ -32,6 +38,8 @@ export default async function CharacterDetailPage({ params }: Props) {
     .order("title");
 
   const editable = canManageCharacters(staff.role);
+  const canUnpublish =
+    canPublishRelease(staff.role) && character.status === "published";
 
   return (
     <main className="px-8 py-10">
@@ -41,6 +49,11 @@ export default async function CharacterDetailPage({ params }: Props) {
       <p className="mt-2 text-textMuted">
         {character.name} · {character.status}
       </p>
+      {canUnpublish ? (
+        <div className="mt-4">
+          <UnpublishButton entity="character" id={character.id} />
+        </div>
+      ) : null}
 
       {editable ? (
         <form action={saveCharacter} className="mt-8 max-w-xl space-y-4">

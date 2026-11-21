@@ -450,3 +450,6 @@ verify_jwt = true
 [functions.invite-staff]
 verify_jwt = true
 
+[functions.preview]
+verify_jwt = true
+

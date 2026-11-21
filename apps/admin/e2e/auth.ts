@@ -5,6 +5,8 @@ import { join } from "node:path";
 export type AuthUsers = {
   supabaseUrl: string;
   anonKey: string;
+  /** Present after e2e:prepare; used to call run-jobs / storage as service role. */
+  serviceRoleKey?: string;
   users: Record<
     string,
     { email: string; password: string; userId: string }

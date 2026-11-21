@@ -62,6 +62,7 @@ export function ShellSidebar({
     { href: "/story/groves", label: "Groves", show: true },
     { href: "/story/characters", label: "Characters", show: true },
     { href: "/story/notes", label: "Story Notes", show: true },
+    { href: "/story/releases", label: "Releases", show: true },
   ];
   const media: NavItem[] = [
     { href: "/media/audio", label: "Audio", show: true },

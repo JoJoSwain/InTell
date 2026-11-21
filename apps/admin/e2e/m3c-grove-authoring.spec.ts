@@ -61,8 +61,10 @@ test.describe("M3c grove authoring", () => {
       timeout: 15_000,
     });
 
-    // Fragment B
-    await page.getByRole("link", { name: "New fragment" }).click();
+    // Fragment B — hard-nav so FragmentForm remounts cleanly
+    const grovePath = new URL(page.url()).pathname;
+    await page.goto(`${grovePath}?new=1`);
+    await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`Frag B ${stamp}`);
     await page.getByLabel("Teaser").fill("Teaser B");
     await page.getByLabel("Latitude").fill("41.101");
@@ -73,7 +75,8 @@ test.describe("M3c grove authoring", () => {
     });
 
     // Fragment C — physical
-    await page.getByRole("link", { name: "New fragment" }).click();
+    await page.goto(`${grovePath}?new=1`);
+    await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`Frag C ${stamp}`);
     await page.getByLabel("Teaser").fill("Teaser C");
     await page.getByLabel("Visibility").selectOption("physical");

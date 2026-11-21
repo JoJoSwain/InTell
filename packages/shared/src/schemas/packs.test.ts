@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GrovePack, RegionPack } from "./packs";
+import { GrovePack, PreviewManifest, RegionPack } from "./packs";
 
 const boundary = {
   type: "Polygon" as const,
@@ -247,6 +247,29 @@ describe("GrovePack schema 2", () => {
     });
     expect(parsed.externalPrerequisites).toHaveLength(1);
     expect(parsed.assets.some((a) => a.kind === "image")).toBe(true);
+  });
+});
+
+describe("PreviewManifest", () => {
+  it("accepts schema preview/1 with GrovePack groves", () => {
+    const grove = GrovePack.parse(baseGrove);
+    const parsed = PreviewManifest.parse({
+      schema: "preview/1",
+      releaseId: "aaaaaaaa-bbbb-4ccc-8ddd-0000000000e1",
+      generatedAt: "2026-06-15T17:00:00.000Z",
+      expiresAt: "2026-06-15T18:00:00.000Z",
+      groves: [grove],
+      assets: [
+        {
+          sha,
+          ext: "m4a",
+          url: "https://example.test/a.m4a",
+          expiresAt: "2026-06-15T18:00:00.000Z",
+        },
+      ],
+    });
+    expect(parsed.schema).toBe("preview/1");
+    expect(parsed.groves).toHaveLength(1);
   });
 });
 

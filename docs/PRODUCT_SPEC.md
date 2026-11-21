@@ -1,8 +1,8 @@
 # InTell — Product Spec (v3)
 
-> **InTell** is Replaceplace's app for **InDigeny**, its story pathway. It brings forward **Indigeny**, the embodied struggle between **Earth** (the physical environment) and **World** (cultural practice, history, social norms), so people explore themselves and their relationship with Place through stories met in real places. Narrated story fragments, sound effects and an adaptive soundtrack play as you move through the place itself.
+> **InTell** is both Replaceplace's app and its **story pathway**. *Find your place in story.* It brings forward **Indigeny**, the phenomenon all of Replaceplace's pathways explore: the embodied struggle between **Earth** (the physical environment) and **World** (cultural practice, history, social norms), so people explore themselves and their relationship with Place through stories met in real places. Narrated story fragments, sound effects and an adaptive soundtrack play as you move through the place itself.
 
-v3 incorporates ADR 0004 (product realignment, 2026-11-20).
+v3 incorporates ADR 0004 (product realignment, 2026-11-20) and ADR 0005 (listener experience: Embark, story changes, character cards, progress; 2026-11-20 evening).
 
 **Doc map** (read in this order):
 | Doc | Covers |
@@ -16,8 +16,9 @@ v3 incorporates ADR 0004 (product realignment, 2026-11-20).
 | `DESIGN.md` | Tokens, map style, components, screen layouts, copy |
 | `BUILD_PLAN.md` | Milestones and acceptance criteria |
 | `adr/0004-product-realignment.md` | The decisions behind v3 |
+| `adr/0005-listener-experience.md` | Embark, no cars, story-change pulse, character cards, progress backup |
 
-If docs conflict: PRODUCT_SPEC wins on behavior, DATA_MODEL on schema, AUDIO_SPEC on sound, and TECH_SPEC on implementation. ADR 0004 beats any older text it contradicts.
+If docs conflict: PRODUCT_SPEC wins on behavior, DATA_MODEL on schema, AUDIO_SPEC on sound, and TECH_SPEC on implementation. ADRs 0004 and 0005 beat any older text they contradict.
 
 ---
 
@@ -56,15 +57,16 @@ Taking part (visits, fragments completed) · depth (share reaching branches and 
 
 ## 2. Principles (these break ties)
 1. **The place comes first.** Every feature serves the on-site encounter. Nothing lets a first listen happen off site.
-2. **The environment is the interface.** A map, Chronicle and Journal buttons, a center button (to be decided), Settings, and a dark playing overlay. No feeds, search, lists of nearby content, streaks, badges, percentages or push notifications.
+2. **The environment is the interface.** A map, the Chronicle, **Embark** and Journal buttons, Settings, and a dark playing overlay. No feeds, search, lists of nearby content, streaks, badges, percentages or push notifications.
 2a. **Hands-free.** The story starts itself when you arrive. There's never a Play button for a first listen, so the phone can stay in a pocket. **One story fragment plays at a time**, layered over the surroundings and soundtrack; two fragments never overlap.
 3. **In situ first.** New fragments play only on site. A fragment enters the Chronicle only after it has been completed on site.
 4. **Sound accompanies reality.** Surroundings are mixed low, with Hush moments; wildlife calls never play on the speaker (AUDIO_SPEC §1).
 5. **Replaceplace makes everything that plays.** Writing, narration, music and sound effects are produced by Replaceplace staff, for creative control and quality. No AI-generated text, narration, music or sound. Listeners' Journal entries inform the writers; they're never played, shown or credited.
 6. **Show where the story leads, not what it says.** Locked fragments are visible on the map; only their teaser is shown until they're completed.
 7. **Earth and World meet in the body.** Fragments and teasers point to real sounds, textures and things in the place, and tie them to the story.
-8. **Anonymous by default.** No listener accounts. Location never leaves the phone. Story progress stays on the phone.
+8. **Anonymous by default.** No listener accounts. Location leaves the phone only when the listener asks Embark for a route, and it's never stored or logged. Story progress stays on the phone and travels with the phone's own iCloud or Google backup (ADR 0005 §1).
 9. **Accessible by default.** Transcripts, screen readers, large text, reduced motion, a more forgiving accessible trigger, image alt text.
+10. **The journey is part of the adventure.** InTell helps people arrive on foot, by bike or by public transit. **Cars aren't part of the experience:** no driving routes, parking or car information anywhere in the app. Arrival logistics are left to the listener (ADR 0005 §6).
 
 ---
 
@@ -74,21 +76,22 @@ Taking part (visits, fragments completed) · depth (share reaching branches and 
 | Area | v1 |
 |---|---|
 | Launch | Static splash → branded Replaceplace animation (≤ 2.5 s, skippable; full only on cold start) → first-launch welcome (2 cards + location explainer) |
-| Home: Map | Google base map (online); user puck; grove polygons; root, branch and leaf markers (100% playable now, 35% locked or out of window); recenter button; a session status chip; **Chronicle** (bottom left), **center button (TBD)**, **Journal** (bottom right); **Settings** (top right) |
+| Home: Map | Google base map (online); user puck; grove polygons; root, branch and leaf markers (100% playable now, 35% locked or out of window); recenter button; a session status chip; **Chronicle** (bottom left), **Embark** (center), **Journal** (bottom right); **Settings** (top right) |
+| Embark | Routes to the nearest grove's opening (its first root) **on foot, by bike or by transit**, drawn on InTell's own map (Google Routes API through the `embark` relay); optional journey passage per mode; no driving, no spoken turn-by-turn (§5.4, ADR 0005 §5) |
 | Story playback | Automatic proximity triggering with tier priority, one fragment at a time; QR scan for physical markers (plays automatically on a successful scan); the accessible trigger; Day/Night version selection; replay after a Story Contingency; the dark playing overlay with pause; lock-screen controls |
 | Surroundings | Generative ambience from zones or land cover; Day/Night and month aware; wildlife-safe |
 | Soundtrack | Zone- and grove-based cues with story-state conditions and stems, Day/Night; crossfades |
 | Hush | Periodic silence with a "Listen." cue (setting, default on) |
-| Chronicle | Character cards (portrait, growing summary, groves, related fragments); completed fragments with replay per completed time version; related locked fragments with their teasers (spec rewritten before M8) |
+| Chronicle | Character cards (portrait, back story, home grove; other details in the Chronicle spec); other-time hints for unheard Day/Night versions; completed fragments with replay per completed time version; related locked fragments with their teasers (spec rewritten before M8) |
 | Journal | Write or record thoughts about the story, private to Replaceplace staff; see what your ideas grew into; optional check-in (spec rewritten before M9) |
-| Settings | Text size; audio mixer (Story, Music, Surroundings); Hush on/off; arrival chime; playback speed; headphones tip; accessibility (accessible trigger, reduced motion, high-contrast markers); downloads; privacy (what we collect, Delete my data, Reset device ID); staff sign-in (preview mode); about |
+| Settings | Text size; audio mixer (Story, Music, Surroundings); Hush on/off; arrival chime; playback speed; headphones tip; accessibility (accessible trigger, reduced motion, high-contrast markers); downloads; privacy (what we collect, where progress lives and that it travels with the phone's backup, Delete my data, Reset device ID); staff sign-in (preview mode); about |
 | Downloads | Grove packs (manifest, narration, music, images) and the region pack (ambience library, landcover grid) are downloaded before a walk so playback is smooth with the screen locked. The base map is online only. |
 
 ### 3.2 Admin web app (Next.js, hosted)
-Staff sign-in and invites · regions · groves (polygon, access notes, fragments, prerequisites across groves, story order, teasers, physical markers with printable QR codes) · revisions (Day/Night versions, transcripts, Story Contingency or Correction) · releases (batch publish, scheduling, the publish checklist) · Story Notes (threads, private character notes, Indigeny notes) · characters (public intro, portrait, card lines) · audio and image library with loudness and format checks · ambience profiles, layers and zones · music zones, cues and stems with a condition builder · **Listening Simulator** (AUDIO_SPEC §8) · Journal inbox and questions (M9) · dashboard · archive export (revisions, transcripts, Story Notes and metadata, so the content is preserved independently of the app) · audit log · staff.
+Staff sign-in and invites · regions · groves (polygon, fragments, prerequisites across groves, story order, teasers, physical markers with printable QR codes, Embark journey passages) · revisions (Day/Night versions, transcripts, other-time hints, Story Contingency or Correction, change teasers) · releases (batch publish, scheduling, the publish checklist) · Story Notes (threads, private character notes, Indigeny notes) · characters (back story, portrait, home grove, card lines) · audio and image library with loudness and format checks · ambience profiles, layers and zones · music zones, cues and stems with a condition builder · **Listening Simulator** (AUDIO_SPEC §8) · Journal inbox and questions (M9) · dashboard · archive export (revisions, transcripts, Story Notes and metadata, so the content is preserved independently of the app) · audit log · staff.
 
 ### 3.3 Not in v1
-AI generation of any kind; listener accounts or social features; public display of Journal entries; public credits for listeners; rings or story seasons; crossroads votes; leaderboards or gamification; push notifications; in-app payments; turn-by-turn navigation; binaural or 3D audio; bar-synced musical transitions; offline maps; languages other than English for content.
+AI generation of any kind; listener accounts or social features; public display of Journal entries; public credits for listeners; rings or story seasons; crossroads votes; leaderboards or gamification; push notifications; in-app payments; turn-by-turn navigation; driving directions or any car information; printable guides; binaural or 3D audio; bar-synced musical transitions; offline maps; languages other than English for content.
 
 ---
 
@@ -106,15 +109,15 @@ AI generation of any kind; listener accounts or social features; public display 
 │                          [⌖]   │
 │  ( Exploring Salt Marsh · Stop ) │
 │ ┌─────────┬─────────┬─────────┐ │
-│ │Chronicle│  (TBD)  │ Journal │ │
+│ │Chronicle│ Embark  │ Journal │ │
 │ └─────────┴─────────┴─────────┘ │
 └────────────────────────────────┘
 ```
-- **Marker states:** playable now (100% opacity, tier color); locked or outside its time window (35%, tier color); in range (pulsing halo, static with reduced motion); completed and changed-since-completed states are decided in DESIGN before M5; retired (hidden). Physical markers use a distinct glyph.
+- **Marker states:** playable now (100% opacity, tier color); locked or outside its time window (35%, tier color); in range (pulsing halo, static with reduced motion); a fragment whose newest Story Contingency the listener hasn't heard **pulses slowly** (about once a second; a still ring with reduced motion) and tapping it shows the writers' **change teaser** (ADR 0005 §3); other completed states are designed before M5; retired (hidden). Physical markers use a distinct glyph.
 - **Never drawn:** sound or music zones. Sound is felt, not mapped.
 - **Tapping a locked or out-of-window marker** opens a small text pop-up with its teaser only: no title, transcript or audio.
 - **Tapping a playable marker** opens the marker sheet: tier, title, distance in feet, and "Walk here to listen" (or "Scan the marker to listen" for a physical marker); for completed fragments, "Open in Chronicle". There's no Play button: narration starts by itself on arrival.
-- **Grove sheet:** name, premise, access notes, website link, and download size.
+- **Grove sheet:** name, premise, website link, download size, and the same Embark choices (on foot, by bike, by transit) for that grove.
 
 ---
 
@@ -129,10 +132,17 @@ AI generation of any kind; listener accounts or social features; public display 
 6. **End:** 15 minutes after leaving all groves, after 3 hours, or by tapping Stop.
 
 ### 5.2 Chronicle (spec rewritten before M8)
-Character cards are the front door: a portrait, a summary that grows with each completed fragment, the groves the character appears in (open question: all groves, or only those where met), and their fragments. Completed fragments replay anywhere, narration only off site, for each time version completed on site. Related locked fragments show their teaser. After a Story Contingency, the superseded version leaves the Chronicle until the new one is completed on site.
+Character cards are the front door: a portrait, the back story and one **home grove** chosen by the writers (ADR 0005 §2); other card details (card lines, related fragments) are settled in the Chronicle spec. When a fragment has Day and Night versions and the listener has heard only one, the Chronicle shows the writers' **other-time hint** for the unheard one (ADR 0005 §4). Completed fragments replay anywhere, narration only off site, for each time version completed on site. Related locked fragments show their teaser. After a Story Contingency, the superseded version leaves the Chronicle until the new one is completed on site.
 
 ### 5.3 Journal (spec rewritten before M9)
 Listeners write or record thoughts about the story. Replaceplace's writers read them and author new content informed by them (Journal-informed authoring). Entries are private to staff. Listeners can see when an idea of theirs grew into the story.
+
+### 5.4 Embark
+1. Tap **Embark**. The map widens to show you and the **nearest grove's opening**, its first root fragment by story order (straight-line distance). A card shows the grove's name and distance with three choices: **On foot · By bike · By transit**.
+2. Pick one. InTell asks for a route (your location is sent only now and is never stored), draws it on the map with distance and time (transit adds its steps), and shows the writers' journey passage for that mode, if there is one. Walking and cycling routes carry a short beta note (Google's requirement).
+3. The card shrinks to a slim bar; **Refresh** recalculates. There are no spoken directions (one voice at a time).
+4. Arriving within range of the opening root clears the route, and the story begins on its own.
+Tapping any grove on the map offers the same choices for that grove. There is no driving option, and no car or parking information (principle 10).
 
 ---
 
@@ -151,11 +161,13 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 | FR-10 | Playback works with the screen locked from downloaded packs. The base map, Journal submission and sync need signal. |
 | FR-11 | Sync deletes any local asset not in the current manifests |
 | FR-12 | The Chronicle replays only versions completed on site; off site it plays narration only |
-| FR-13 | Location is never sent to the server; Journal entries send anchor ids only |
+| FR-13 | Location is sent to the server only for an Embark route the listener asks for, and is never stored or logged; Journal entries send anchor ids only |
 | FR-14 | Anonymous `device_id` (UUID v4, secure storage, resettable); age gate stored per device |
 | FR-15 | Events per TECH_SPEC §8; no coordinates or free text in telemetry |
 | FR-16 | Content reaches phones only through published releases (DATA_MODEL §10–11) |
 | FR-17 | **Staff preview mode:** a staff member signed in on the phone sees draft content from a chosen draft release, for that device only |
+| FR-18 | **Embark:** routes to the nearest grove's opening root by walk, bike or transit only, on InTell's map, via the `embark` relay (Routes API); per-device daily cap; no driving mode exists anywhere (ADR 0005 §5–6) |
+| FR-19 | **Progress backup:** the device database is stored where the OS backup includes it; a restore onto a new phone brings progress back (tested in M12) |
 
 ---
 
@@ -190,13 +202,13 @@ Listeners write or record thoughts about the story. Replaceplace's writers read 
 ## 9. Open questions (product owner decides; Cursor should not guess)
 1. Store name and bundle ID (placeholders: "InTell by Replaceplace", `org.replaceplace.intell`). Link domain: `LINK_DOMAIN` on replaceplace.com (proposed `intell.replaceplace.com`).
 2. The brand animation file (Lottie or Rive), its length and its palette.
-3. The center home-screen button.
-4. Character cards: list every grove a character appears in, or only groves where the listener met them?
-5. How completed and "changed since you heard it" markers look (DESIGN, before M5).
-6. Whether the Chronicle hints that another time version exists.
-7. Listener progress backup (device-only today): optional account sync or export/import? Decide before M5.
+3. ~~The center home-screen button~~ → **Embark** (ADR 0005).
+4. ~~Character card groves~~ → one writer-chosen home grove (ADR 0005).
+5. How completed markers look (DESIGN, before M5); the changed-since-heard **behavior** is decided (pulse + change teaser, ADR 0005).
+6. ~~Other-time hint~~ → yes, writer-composed (ADR 0005).
+7. ~~Listener progress backup~~ → on the phone, carried by the OS backup; no accounts (ADR 0005).
 8. Children and the Journal: confirm the under-13 rule and the children's-privacy approach with counsel before M9.
 9. Who triages Journal entries, and the target turnaround to "read" (recommended 14 days).
 10. The accessible trigger on or off by default.
 11. The audio engine choice, pending the M1 device tests (ADR 0001).
-12. A printable grove guide (transcripts and a route map) as the business plan's non-phone way to take part: in v1 or later?
+12. ~~A printable grove guide~~ → no; everything is on the phone (ADR 0005).

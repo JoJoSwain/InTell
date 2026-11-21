@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { RELEASE_STATUS_LABELS } from "@/lib/releases/links";
 
 const styles: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -6,6 +7,7 @@ const styles: Record<string, string> = {
   published: "bg-primary/15 text-primary",
   publishing: "bg-water/20 text-water",
   failed: "bg-destructive/15 text-destructive",
+  cancelled: "border border-border text-muted-foreground bg-transparent",
   retired: "border border-border text-muted-foreground bg-transparent",
   unpublished: "border border-destructive/40 text-destructive bg-transparent",
 };
@@ -13,20 +15,25 @@ const styles: Record<string, string> = {
 export function StatusBadge({
   status,
   className,
+  label,
 }: {
   status: string;
   className?: string;
+  /** Override display text (e.g. "Publishing…"). */
+  label?: string;
 }) {
   const key = status.toLowerCase();
+  const text = label ?? RELEASE_STATUS_LABELS[key] ?? status;
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize",
+        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
         styles[key] ?? "bg-muted text-muted-foreground",
         className,
       )}
+      aria-label={`Status: ${text}`}
     >
-      {status}
+      {text}
     </span>
   );
 }

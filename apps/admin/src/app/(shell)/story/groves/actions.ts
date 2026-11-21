@@ -208,6 +208,9 @@ export async function saveFragment(formData: FormData) {
 
   if (visibility === "physical") {
     if (!markerCode) markerCode = generateMarkerCode();
+  } else {
+    // Non-physical fragments must not keep a leftover marker from a remounted form.
+    markerCode = null;
   }
 
   let triggerRadiusM = DEFAULT_TRIGGER_RADIUS_M;

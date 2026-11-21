@@ -2,6 +2,12 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { roundCoord } from "./from-shared/canonicalJson.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
+import {
+  itemKey,
+  loadReleaseOverlay,
+  projectEntity,
+  type ReleaseOverlay,
+} from "./packSource.ts";
 
 function maxTs(values: (string | null | undefined)[]): string {
   let best = "1970-01-01T00:00:00.000Z";
@@ -20,49 +26,103 @@ type SnapRow = {
   published_at: string;
 };
 
+export type AssembleOptions = {
+  /** When set, assemble from the preview source (release overlay). */
+  previewReleaseId?: string;
+  /** Preloaded overlay (avoids re-fetch when assembling many groves). */
+  overlay?: ReleaseOverlay;
+};
+
 export async function buildGrovePackObject(
   supabase: SupabaseClient,
   groveId: string,
+  options: AssembleOptions = {},
 ): Promise<{ pack: Record<string, unknown>; assetShas: string[]; bytesTotal: number }> {
   const watermarks: string[] = [];
   const assetMap = new Map<string, { sha: string; ext: string; bytes: number; kind: string }>();
+  const overlay =
+    options.overlay ??
+    (options.previewReleaseId
+      ? await loadReleaseOverlay(supabase, options.previewReleaseId)
+      : null);
+  const preview = !!overlay;
 
-  const { data: groveSnapRow, error: gErr } = await supabase
-    .from("published_snapshots")
-    .select("entity, entity_id, data, published_at")
-    .eq("entity", "grove")
-    .eq("entity_id", groveId)
-    .maybeSingle();
-  if (gErr || !groveSnapRow) throw new Error(`grove snapshot missing: ${gErr?.message}`);
-  const groveSnap = parseSnapshot("grove", groveSnapRow.data);
-  if (groveSnap.status !== "published") {
-    throw new Error(`grove snapshot not published: ${groveSnap.status}`);
+  let groveSnap;
+  let grovePublishedAt = new Date().toISOString();
+  if (overlay?.items.has(itemKey("grove", groveId))) {
+    const data = await projectEntity(supabase, "grove", groveId);
+    groveSnap = parseSnapshot("grove", data);
+    watermarks.push(grovePublishedAt);
+  } else {
+    const { data: groveSnapRow, error: gErr } = await supabase
+      .from("published_snapshots")
+      .select("entity, entity_id, data, published_at")
+      .eq("entity", "grove")
+      .eq("entity_id", groveId)
+      .maybeSingle();
+    if (gErr || !groveSnapRow) throw new Error(`grove snapshot missing: ${gErr?.message}`);
+    groveSnap = parseSnapshot("grove", groveSnapRow.data);
+    if (groveSnap.status !== "published" && !preview) {
+      throw new Error(`grove snapshot not published: ${groveSnap.status}`);
+    }
+    grovePublishedAt = groveSnapRow.published_at;
+    watermarks.push(groveSnapRow.published_at);
   }
-  watermarks.push(groveSnapRow.published_at);
 
   const { data: fragRows } = await supabase
     .from("published_snapshots")
     .select("entity, entity_id, data, published_at")
     .eq("entity", "fragment");
 
-  const fragSnaps = ((fragRows ?? []) as SnapRow[])
-    .map((row) => {
-      const data = parseSnapshot("fragment", row.data);
-      return { row, data };
-    })
-    .filter((f) => f.data.groveId === groveId)
-    .filter((f) => f.data.status === "published" || f.data.status === "retired");
+  const fragById = new Map<
+    string,
+    { row: SnapRow; data: ReturnType<typeof parseSnapshot<"fragment">> }
+  >();
+  for (const row of (fragRows ?? []) as SnapRow[]) {
+    const data = parseSnapshot("fragment", row.data);
+    if (data.groveId !== groveId) continue;
+    if (data.status !== "published" && data.status !== "retired") continue;
+    fragById.set(data.id, { row, data });
+  }
 
+  // Overlay fragment projections from the release
+  if (overlay) {
+    for (const key of overlay.items) {
+      if (!key.startsWith("fragment:")) continue;
+      const fid = key.slice("fragment:".length);
+      const dataRaw = await projectEntity(supabase, "fragment", fid);
+      const data = parseSnapshot("fragment", dataRaw);
+      if (data.groveId !== groveId) continue;
+      if (data.status !== "published" && data.status !== "retired" && data.status !== "draft") {
+        continue;
+      }
+      fragById.set(fid, {
+        row: {
+          entity: "fragment",
+          entity_id: fid,
+          data: dataRaw,
+          published_at: new Date().toISOString(),
+        },
+        data,
+      });
+    }
+  }
+
+  const fragSnaps = [...fragById.values()];
   for (const f of fragSnaps) watermarks.push(f.row.published_at);
 
   const fragIds = fragSnaps.map((f) => f.data.id);
 
-  // Current playable revisions only
+  // Current playable revisions only (preview: release revision wins)
   const revisions: Record<string, unknown>[] = [];
   for (const fid of fragIds) {
-    const { data: curId } = await supabase.rpc("fn_current_revision", {
-      p_fragment_id: fid,
-    });
+    let curId: string | null = overlay?.revisionByFragment.get(fid) ?? null;
+    if (!curId) {
+      const { data } = await supabase.rpc("fn_current_revision", {
+        p_fragment_id: fid,
+      });
+      curId = data ? String(data) : null;
+    }
     if (!curId) continue;
     const { data: rev } = await supabase
       .from("fragment_revisions")
@@ -70,10 +130,26 @@ export async function buildGrovePackObject(
       .eq("id", curId)
       .single();
     if (!rev) continue;
-    const { data: contingencyRevisionNo } = await supabase.rpc(
-      "fn_contingency_revision_no",
-      { p_fragment_id: fid },
-    );
+    let contingencyRevisionNo: number;
+    if (overlay?.revisionByFragment.get(fid) === String(rev.id)) {
+      const { data: chain } = await supabase
+        .from("fragment_revisions")
+        .select("revision_no, change_kind")
+        .eq("fragment_id", fid)
+        .lte("revision_no", rev.revision_no as number);
+      const contingents = (chain ?? [])
+        .filter((r) => r.change_kind === "contingency")
+        .map((r) => Number(r.revision_no));
+      contingencyRevisionNo =
+        contingents.length > 0
+          ? Math.max(...contingents)
+          : Number(rev.revision_no);
+    } else {
+      const { data } = await supabase.rpc("fn_contingency_revision_no", {
+        p_fragment_id: fid,
+      });
+      contingencyRevisionNo = (data as number) ?? Number(rev.revision_no);
+    }
     const { data: versions } = await supabase
       .from("revision_versions")
       .select("*")

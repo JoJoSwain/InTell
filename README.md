@@ -1,6 +1,6 @@
 # Replaceplace · InTell (v2)
 
-Monorepo for **InTell**, Replaceplace’s native InDigeny place-story app.
+Monorepo for **InTell**, Replaceplace’s native place-story app and story pathway. *Find your place in story.*
 
 > Specs (authoritative): [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) and the docs it lists.  
 > Architecture synthesis: [`docs/intell-v2-architecture.md`](docs/intell-v2-architecture.md)  

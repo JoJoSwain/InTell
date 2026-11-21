@@ -11,7 +11,11 @@ Next.js App Router staff tools for Replaceplace. M3b: auth, shell, regions, staf
 pnpm install
 pnpm exec supabase start
 pnpm db:setup-local
-pnpm exec supabase functions serve &
+# Optional for a second edge process: create supabase/.env.local with
+# SUPABASE_URL / ANON / SERVICE_ROLE from `pnpm exec supabase status -o env`
+# (gitignored). After db reset, if edge is unhealthy: stop then start again.
+# CI starts `functions serve` in parallel; local often uses the built-in edge runtime.
+pnpm exec supabase functions serve --env-file supabase/.env.local &
 
 # copy apps/admin/.env.example → apps/admin/.env.local and fill local URL + anon key
 # (from `pnpm exec supabase status`)
@@ -19,6 +23,7 @@ pnpm --filter @intell/admin dev
 ```
 
 Open http://localhost:3000. Never put the service role key in admin env files.
+Deploy edge includes `preview` (staff JWT; 1-hour signed URLs).
 
 ## Environment (names only)
 
@@ -39,7 +44,7 @@ See `apps/admin/.env.example` and the root `.env.example`. Required for the admi
 
 1. `supabase login` then `supabase link --project-ref <staging-ref>` (ref from the dashboard; do not commit it).
 2. `supabase db push` — apply migrations.
-3. `supabase functions deploy` — deploy `invite-staff`, `publish`, `unpublish`, `build-pack`, `purge-assets`, `run-jobs`.
+3. `supabase functions deploy` — deploy `invite-staff`, `publish`, `unpublish`, `build-pack`, `purge-assets`, `run-jobs`, `preview`.
 4. Hosted Vault / `run-jobs` URL setup (same idea as `pnpm db:setup-local`).
 5. **Auth dashboard**
    - Disable sign-ups; anonymous sign-ins off; MFA off.

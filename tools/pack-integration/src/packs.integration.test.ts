@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, beforeAll } from "vitest";
-import { GrovePack, RegionPack, canonicalJson } from "@intell/shared";
+import { GrovePack, PreviewManifest, RegionPack, canonicalJson } from "@intell/shared";
 import { DEMO, supabaseEnv } from "./env";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -756,4 +756,141 @@ describe.sequential("M3a pack integration", () => {
     expect(liveAfter.contentSha).toBe(liveBefore.contentSha);
     expect(await indexGroveVersion(DEMO.groveId)).toBe(idxBefore);
   }, 300_000);
+
+  it("D1: editing a published revision is refused; live pack unchanged", async () => {
+    const liveBefore = await fetchLiveGrovePack(DEMO.groveId);
+    const { client } = await ensureEditor();
+
+    const { error: revErr } = await client
+      .from("fragment_revisions")
+      .update({ change_note: `should-fail-${Date.now()}` })
+      .eq("id", DEMO.frag1RevId);
+    expect(revErr).toBeTruthy();
+
+    const { data: versions } = await svc
+      .from("revision_versions")
+      .select("id, transcript")
+      .eq("revision_id", DEMO.frag1RevId)
+      .limit(1);
+    const versionId = versions?.[0]?.id as string | undefined;
+    expect(versionId).toBeTruthy();
+
+    const { error: verErr } = await client
+      .from("revision_versions")
+      .update({ transcript: `tamper-${Date.now()}` })
+      .eq("id", versionId!);
+    expect(verErr).toBeTruthy();
+
+    const liveAfter = await fetchLiveGrovePack(DEMO.groveId);
+    expect(liveAfter.contentSha).toBe(liveBefore.contentSha);
+    expect(liveAfter.version).toBe(liveBefore.version);
+  }, 120_000);
+
+  it("preview: anon refused; staff gets PreviewManifest with staging URLs", async () => {
+    // Prior suite cases may leave the seed draft release mid-publish; restore draft.
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
+    const anonRes = await invoke("preview", { releaseId: DEMO.draftReleaseId }, anonKey!);
+    expect([401, 403]).toContain(anonRes.status);
+
+    const { jwt } = await ensureEditor();
+    const okRes = await invoke("preview", { releaseId: DEMO.draftReleaseId }, jwt);
+    expect(okRes.status, await okRes.clone().text()).toBe(200);
+    const body = await okRes.json();
+    const parsed = PreviewManifest.parse(body);
+    expect(parsed.schema).toBe("preview/1");
+    expect(parsed.releaseId).toBe(DEMO.draftReleaseId);
+    expect(new Date(parsed.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(JSON.stringify(parsed)).not.toMatch(/marker_code|markerCode/i);
+    expect(JSON.stringify(parsed)).not.toMatch(/storyNotes|indigeny_earth/i);
+
+    // Published release is not previewable
+    const pubRes = await invoke("preview", { releaseId: DEMO.publishedReleaseId }, jwt);
+    expect(pubRes.status).toBe(409);
+
+    // Staged assets should use staging signed URLs (or public URL for already-public)
+    for (const a of parsed.assets) {
+      expect(a.url.length).toBeGreaterThan(0);
+      expect(a.url).not.toMatch(/marker/i);
+    }
+    const staging = parsed.assets.filter((a) => a.url.includes("staging-"));
+    // Draft release overlay should include at least one staged asset when seed has drafts
+    expect(staging.length + parsed.assets.filter((a) => a.url.includes("public-media")).length).toBe(
+      parsed.assets.length,
+    );
+  }, 120_000);
+
+  it("preview: viewer/moderator forbidden", async () => {
+    const email = `m3d-viewer-${Date.now()}@test.local`;
+    const password = "test-password-viewer-1";
+    const { data: created, error } = await svc.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (error || !created.user) throw new Error(error?.message ?? "createUser");
+    await svc.from("staff").insert({
+      user_id: created.user.id,
+      display_name: "M3d Viewer",
+      role: "viewer",
+      active: true,
+    });
+    const authClient = createClient(url!, anonKey!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: session, error: signErr } = await authClient.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signErr || !session.session) throw new Error(signErr?.message ?? "signIn");
+    const res = await invoke(
+      "preview",
+      { releaseId: DEMO.draftReleaseId },
+      session.session.access_token,
+    );
+    expect(res.status).toBe(403);
+  }, 60_000);
+
+  it("preview: admin can preview (staff lookup filtered by user_id)", async () => {
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
+    const email = `m3d-admin-${Date.now()}@test.local`;
+    const password = "test-password-admin-1";
+    const { data: created, error } = await svc.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (error || !created.user) throw new Error(error?.message ?? "createUser");
+    await svc.from("staff").insert({
+      user_id: created.user.id,
+      display_name: "M3d Admin",
+      role: "admin",
+      active: true,
+    });
+    const authClient = createClient(url!, anonKey!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: session, error: signErr } = await authClient.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signErr || !session.session) throw new Error(signErr?.message ?? "signIn");
+
+    const res = await invoke(
+      "preview",
+      { releaseId: DEMO.draftReleaseId },
+      session.session.access_token,
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    const parsed = PreviewManifest.parse(await res.json());
+    expect(parsed.schema).toBe("preview/1");
+    expect(parsed.releaseId).toBe(DEMO.draftReleaseId);
+  }, 60_000);
 });

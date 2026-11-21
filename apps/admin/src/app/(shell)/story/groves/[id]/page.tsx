@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   canEditStory,
+  canPublishRelease,
   canWriteStoryNotes,
   isActiveStaff,
   loadStaff,
@@ -16,6 +17,7 @@ import {
   releaseBadgeKind,
   UnreleasedBadge,
 } from "@/components/unreleased-badge";
+import { UnpublishButton } from "@/components/unpublish-button";
 import { GroveForm } from "../grove-form";
 import { FragmentForm } from "../fragment-form";
 import { PrereqGraph } from "../prereq-graph";
@@ -130,6 +132,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
 
   const canEdit = canEditStory(staff.role);
   const canNotes = canWriteStoryNotes(staff.role);
+  const canUnpublish = canPublishRelease(staff.role);
   const addingNew = sp.new === "1" || sp.new === "true";
   const selectedId = addingNew ? undefined : (sp.fragment ?? fragIds[0]);
   const selected = selectedId
@@ -194,9 +197,14 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
           </h1>
           <p className="mt-2 text-textMuted">{grove.slug}</p>
         </div>
-        <UnreleasedBadge
-          kind={releaseBadgeKind(grove.id, unreleasedIds, publishedIds)}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <UnreleasedBadge
+            kind={releaseBadgeKind(grove.id, unreleasedIds, publishedIds)}
+          />
+          {canUnpublish && publishedIds.has(grove.id) ? (
+            <UnpublishButton entity="grove" id={grove.id} />
+          ) : null}
+        </div>
       </div>
 
       {checklist.length ? (
@@ -281,11 +289,20 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
       ) : null}
 
       <section className="mt-12 max-w-xl">
-        <h2 className="font-serif text-xl font-semibold">
-          {selected ? "Edit fragment" : "Add fragment"}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-serif text-xl font-semibold">
+            {selected ? "Edit fragment" : "Add fragment"}
+          </h2>
+          {canUnpublish && selected && publishedIds.has(selected.id as string) ? (
+            <UnpublishButton
+              entity="fragment"
+              id={selected.id as string}
+            />
+          ) : null}
+        </div>
         <div className="mt-4">
           <FragmentForm
+            key={selected ? `frag-${selected.id}` : "frag-new"}
             groveId={id}
             canEdit={canEdit}
             canNotes={canNotes}

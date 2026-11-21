@@ -48,7 +48,7 @@ Conditions and reasons:
 - **All groves are within phone signal**, so force 1 (offline maps) no longer applies. Listeners with weak signal still have their story, sound and markers from downloaded packs; only the background map needs a connection.
 - **Grove audio is still downloaded before a walk** (DATA_MODEL §12). That's for smooth locked-screen playback and battery, not connectivity.
 - **One map for listeners and staff.** The admin uses the Google Maps JavaScript API, so staff place fragments on the same map listeners see. Polygons are drawn with **Terra Draw** and its Google Maps adapter, because Google's own Drawing Library was discontinued in 2026.
-- **Cost:** the native Maps SDK for Android and iOS is unlimited at no charge. Admin web map loads fall well within the monthly free usage at our staff size. A billing account is still required.
+- **Cost:** the native Maps SDK for Android and iOS is unlimited at no charge **only for maps without a Map ID**. A phone map created with a Map ID (cloud-based styling, advanced markers) is billed as Dynamic Maps, which has a monthly free allowance and per-1,000 pricing beyond it (corrected 2026-11-20). Decide in M5 whether the phone map uses a Map ID, and set a quota cap if it does. Admin web map loads fall well within the monthly free usage at our staff size. Embark routes (ADR 0005) use the Routes API, which is billed per request with its own free allowance. A billing account is still required.
 - **Markers:** locked fragments are now shown (ADR 0004), so marker counts are higher. Use cheap marker views (memoized, `tracksViewChanges` off once drawn) and add clustering only if the 300-marker performance target fails.
 
 ## Consequences

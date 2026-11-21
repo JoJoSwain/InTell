@@ -1,13 +1,13 @@
 # ADR 0004: Product realignment before Milestone 3
 
 ## Status
-**Accepted**, 2026-11-20. Decided by the product owner (Jordan "JoJo" Swain) with the architect (Claude) in the M3 design review. This ADR amends PRODUCT_SPEC, DATA_MODEL, AUDIO_SPEC, TECH_SPEC, JOURNAL_SPEC, PARTICIPATION_SPEC, DESIGN, BUILD_PLAN, AGENTS.md and ADR 0003. Where any of those docs still disagree with this ADR, **this ADR wins** until the doc is rewritten.
+**Accepted**, 2026-11-20. Decided by the product owner (Jordan "JoJo" Swain) with the architect (Claude) in the M3 design review. This ADR amends PRODUCT_SPEC, DATA_MODEL, AUDIO_SPEC, TECH_SPEC, JOURNAL_SPEC, PARTICIPATION_SPEC, DESIGN, BUILD_PLAN, AGENTS.md and ADR 0003. Where any of those docs still disagree with this ADR, **this ADR wins** until the doc is rewritten. **Amended by [ADR 0005](./0005-listener-experience.md)** (2026-11-20 evening), which resolves the open questions below and corrects the naming in Purpose.
 
 ## Context
 M2 shipped the database, playability, packs and the publish pipeline from the v2 specs. Before building the admin (M3), the product owner reviewed every M3 component against Replaceplace's purpose and how the team will actually work: 5–10 Replaceplace staff who write, record and publish all content themselves. Many v2 assumptions (outside contributors and consents, landowner approvals, story seasons, public votes, offline maps, protected coordinates) no longer hold.
 
 ## Purpose (governs every design choice)
-**Indigeny** is the phenomenon Replaceplace explores: the embodied struggle between **Earth** (the physical environment) and **World** (cultural practice, history, social norms), lived through the **body**. **InTell** (the definitive app name) exists to bring that phenomenon forward, so people explore themselves and their relationship with Place through stories encountered in real places. InDigeny is the name of Replaceplace's story pathway; InTell is the app.
+**Indigeny** is the phenomenon Replaceplace explores: the embodied struggle between **Earth** (the physical environment) and **World** (cultural practice, history, social norms), lived through the **body**. **InTell** (the definitive app name) exists to bring that phenomenon forward, so people explore themselves and their relationship with Place through stories encountered in real places. **InTell** is both the app and Replaceplace's story pathway; **Indigeny** is the phenomenon all of Replaceplace's pathways explore, not a pathway (corrected by ADR 0005).
 
 **The core experience** is a person physically present in a real place, encountering root, branch and leaf fragments at GPS points, inside sound effects and a soundtrack shaped by geofenced zones. The **Chronicle** and the **Journal** are supporting features. They must never compete with, or substitute for, being on site.
 
@@ -15,7 +15,7 @@ M2 shipped the database, playability, packs and the publish pipeline from the v2
 
 ### Places
 1. **Geographically flexible.** Nothing in the app or admin is specific to one site or region. Groves can be authored anywhere with GPS. The Farmington Bird Refuge (the George S. and Dolores Doré Eccles Wildlife Education Center) is the first grove, not a special case.
-2. **Sites merge into groves.** "Site" is informal staff shorthand only and never appears in the app or marketing. The `sites` table goes; its fields (access notes, website and gatherings links, the wildlife-speaker setting) move onto `groves`. Groves belong directly to a region. Regions stay: timezone, sun reference point, and the shared surroundings and music pack.
+2. **Sites merge into groves.** "Site" is informal staff shorthand only and never appears in the app or marketing. The `sites` table goes; its fields (access notes, website and gatherings links, the wildlife-speaker setting) move onto `groves`. (ADR 0005 later removes access notes entirely: arrival logistics are left to the listener.) Groves belong directly to a region. Regions stay: timezone, sun reference point, and the shared surroundings and music pack.
 3. **No landowner approvals.** `site_approvals`, the site check in playability, the `SITE_APPROVAL` checklist code and approval expiry are removed. Replaceplace doesn't request landowner approval to place stories.
 4. **One story world.** All groves are parts of one story. Characters and threads are story-wide and can appear in any grove (as major or minor characters). **Prerequisites can cross groves** (plot bridges between places).
 
@@ -34,11 +34,11 @@ M2 shipped the database, playability, packs and the publish pipeline from the v2
 14. **Day and Night.** Every story fragment, sound-effect layer and music cue is tagged **Day** or **Night**. These are the only two time windows; dawn and dusk are removed. Day and night are determined from **sunrise and sunset for the region** (its timezone and sun reference point); publishers choose only Day or Night. A fragment has a Day version, a Night version or both (at least one). Completing **either** version satisfies prerequisites. A fragment with only one version shows at 35% outside its window. The version is chosen when playback starts and plays to the end. The tag lives where a file is used (fragment version, ambience layer, music cue), so one uploaded file can be placed under both tags without a second upload.
 
 ### Supporting features
-15. **Chronicle** (replaces the v2 Journal's look-back role). Characters are the primary navigation: each character card has a portrait, a summary that grows as the listener completes fragments (one authored card line per fragment–character link), the groves they appear in, and their related fragments. The Chronicle also lists fragments the listener has completed and related locked fragments (with the same teaser). **A fragment becomes replayable in the Chronicle only after the listener has completed it in situ**: inside its radius, by scanning its physical marker, or by the accessible trigger **within 35 ft of its GPS point** (see decision 28). After that, it can be replayed anywhere, anytime (narration only off site). Replay is **per time version**: hearing the Day version on site unlocks Day replay only; completing the Night version on site adds Night replay.
+15. **Chronicle** (replaces the v2 Journal's look-back role). Characters are the primary navigation (card contents amended by ADR 0005: a required portrait, the back story and one writer-chosen home grove instead of every grove they appear in): each character card has a portrait, a summary that grows as the listener completes fragments (one authored card line per fragment–character link), the groves they appear in, and their related fragments. The Chronicle also lists fragments the listener has completed and related locked fragments (with the same teaser). **A fragment becomes replayable in the Chronicle only after the listener has completed it in situ**: inside its radius, by scanning its physical marker, or by the accessible trigger **within 35 ft of its GPS point** (see decision 28). After that, it can be replayed anywhere, anytime (narration only off site). Replay is **per time version**: hearing the Day version on site unlocks Day replay only; completing the Night version on site adds Night replay.
 16. **After a Story Contingency, the old version leaves the Chronicle** (option A). Listeners replay only the current revision's versions that they've completed since its latest contingency. Corrections replace the old file without affecting replay.
 17. **Journal** (replaces Grow and seeds). Listeners write or record thoughts (plot, characters, what they noticed). Replaceplace's writers read them and author new content informed by them. Nothing a listener submits is ever played, shown to other users or credited. In docs this is **Journal-informed authoring**; it is human authorship. The no-AI-generation rule is unchanged.
 18. **Participation features removed:** Rings (all of them: ring tables and links, planting windows, Listening Day, Journal growth bands), Crossroads (votes, attestation, outcome-gated revisions), the Ledger and all public credit names, Echo Leaves, sound seeds, and memory seeds becoming storyteller fragments. Kept for M9: Journal entries (text or voice, private to staff), questions, the lineage of an entry ("your idea grew"), and the optional check-in.
-19. **Home screen:** the map, with **Chronicle** (bottom left), **Journal** (bottom right) and a **third center button to be decided**. **Settings** is at the top right.
+19. **Home screen:** the map, with **Chronicle** (bottom left), **Journal** (bottom right) and the **Embark** button in the center (ADR 0005: routes to the nearest grove's opening root on foot, by bike or by transit). **Settings** is at the top right.
 20. **Story Notes** is the staff-only planning area: story-wide threads, private character notes, and each fragment's **Indigeny note** (Earth / World / Body: the physical feature, the cultural or fictional element meeting it, and what the listener is invited to do or notice). Never in packs.
 
 ### Publishing and operations
@@ -56,13 +56,16 @@ M2 shipped the database, playability, packs and the publish pipeline from the v2
 28. **Hands-free, one story at a time** (decided 2026-11-20). Narration starts **automatically** when the listener arrives: no Play button for a first listen (a successful physical-marker scan also plays automatically). **Only one story fragment plays at a time**, layered with the surroundings and soundtrack; a second trigger waits in a queue of one and never overlaps or interrupts. The 70 ft spacing guideline keeps this rare. **Accessible play becomes an automatic, more forgiving trigger:** with the setting on, an unlocked standard fragment starts on a single location fix within 35 ft of its GPS point. It needs location, with no fallback when location is off. Pause and lock-screen controls remain during playback; Chronicle replay remains a deliberate choice.
 
 ## Open questions (product owner)
-- Do character cards list **every** grove a character appears in, or only groves where the listener has met them? (Spoilers vs. invitation to travel.)
-- How a completed fragment that has a newer Story Contingency looks on the map (M5, design).
-- Whether the Chronicle hints that another time version exists ("a night version waits here").
-- Listener progress lives only on the phone. Is that acceptable for a long-running story, or do we add optional account sync or export/import (decide before M5)?
+Resolved by [ADR 0005](./0005-listener-experience.md) on 2026-11-20:
+- ~~Which groves a character card lists~~ → one writer-chosen **home grove** (ADR 0005 §2).
+- ~~How a completed fragment with a newer Story Contingency looks~~ → it **pulses** until heard; tapping shows a writer-composed **change teaser** (§3).
+- ~~Whether the Chronicle hints at the other time version~~ → yes, a writer-composed **other-time hint** (§4).
+- ~~Where listener progress lives~~ → on the phone, carried by the phone's own **iCloud/Google backup**; no accounts (§1).
+- ~~The center home-screen button~~ → **Embark** (§5); no cars anywhere in the experience (§6).
+- ~~A printable grove guide~~ → **no**; everything is on the phone (§7).
+
+Still open:
 - Journal entries from children under 13: the age gate stays, and the children's-privacy approach needs counsel review before M9.
-- The center home-screen button.
-- A printable grove guide as a non-phone way to take part (v1 or later). The archive export is kept (M11) so content is preserved independently of the app.
 
 ## Consequences
 - **M3 starts with a schema realignment PR** that brings the merged M2 schema, functions, packs, tests and seed in line with this ADR (new migrations only; merged migrations aren't edited). See `docs/briefs/M3-admin.md`.
