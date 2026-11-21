@@ -79,14 +79,14 @@ export default async function ReleaseDetailPage({ params }: Props) {
   if (!release) notFound();
   const r = release as ReleaseRow;
 
+  // Composite PK (release_id, entity, entity_id) — no surrogate id column.
   const { data: items } = await supabase
     .from("release_items")
-    .select("id, entity, entity_id")
+    .select("entity, entity_id")
     .eq("release_id", id)
     .order("entity");
 
   const itemRows = (items ?? []) as {
-    id: string;
     entity: string;
     entity_id: string;
   }[];
@@ -316,7 +316,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
             const href = itemHref(item.entity, item.entity_id);
             return (
               <li
-                key={item.id}
+                key={`${item.entity}:${item.entity_id}`}
                 className="flex flex-wrap items-center justify-between gap-2 py-3"
               >
                 <div>
