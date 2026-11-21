@@ -25,14 +25,17 @@ select is(
   array[
     'fn_admin_upsert_region(p_id uuid, p_name text, p_slug text, p_timezone text, p_sun_wkt text, p_bounds_geojson text)',
     'fn_draft_check(p_grove_id uuid)',
+    -- D2: BEFORE INSERT trigger assigns revision_no under fragment FOR UPDATE
+    'fn_fragment_revision_assign_no()',
     'fn_publish_check(p_release_id uuid)',
     'fn_require_editor_or_service()',
     'fn_snapshot_projection_guarded(p_entity text, p_entity_id uuid)',
+    'fn_unpublish_preview(p_entity text, p_ids uuid[])',
     'fn_unreleased(p_grove_id uuid)',
     'get_pack_index()',
     'has_role(roles staff_role[])'
   ]::text[],
-  'security definer execute grants for anon/authenticated match M3c allowlist'
+  'security definer execute grants for anon/authenticated match M3d allowlist'
 );
 
 select * from finish();
