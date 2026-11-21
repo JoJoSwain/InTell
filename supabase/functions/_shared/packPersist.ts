@@ -20,6 +20,8 @@ export type PackPersistInput = {
   reason?: string;
   /** When set, build is live=false until fn_release_go_live. */
   releaseId?: string | null;
+  /** Grove opening root coords (M3e); omitted for region / missing opening. */
+  opening?: { lat: number; lng: number } | null;
 };
 
 export type PackPersistResult =
@@ -133,6 +135,14 @@ export async function persistPackIfChanged(
     .eq("id", input.scopeId);
   if (bumpErr) throw new Error(`bump ${table}: ${bumpErr.message}`);
 
+  const opening =
+    input.scope === "grove" && input.opening
+      ? {
+          opening_lat: input.opening.lat,
+          opening_lng: input.opening.lng,
+        }
+      : { opening_lat: null, opening_lng: null };
+
   const { error: insErr } = await client.from("pack_builds").insert({
     scope: input.scope,
     scope_id: input.scopeId,
@@ -145,6 +155,7 @@ export async function persistPackIfChanged(
     reason: input.reason ?? null,
     release_id: releaseId,
     live,
+    ...opening,
   });
   if (insErr) throw new Error(`pack_builds insert: ${insErr.message}`);
 

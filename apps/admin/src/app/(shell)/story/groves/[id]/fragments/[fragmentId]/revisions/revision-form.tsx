@@ -10,6 +10,7 @@ export type VersionInitial = {
   narration_asset_id: string;
   transcript: string;
   vtt: string;
+  other_time_hint?: string;
 };
 
 export type RevisionFormInitial = {
@@ -17,6 +18,7 @@ export type RevisionFormInitial = {
   revision_no?: number;
   change_kind?: "contingency" | "correction" | "";
   change_note?: string;
+  change_teaser?: string;
   status?: string;
   day?: VersionInitial | null;
   night?: VersionInitial | null;
@@ -90,6 +92,21 @@ function VersionFields({
           aria-label={`${label} VTT`}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
         />
+      </label>
+      <label className="block text-sm">
+        <span className="text-textMuted">Other-time hint (en)</span>
+        <textarea
+          name={`${window}_other_time_hint`}
+          rows={2}
+          defaultValue={initial?.other_time_hint ?? ""}
+          disabled={readOnly}
+          aria-label={`${label} other-time hint`}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-textMuted">
+          Required when this revision has both Day and Night. Example: &quot;After
+          dusk, River speaks of something else.&quot;
+        </span>
       </label>
     </fieldset>
   );
@@ -182,6 +199,24 @@ export function RevisionForm({
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
+
+      {!isFirst ? (
+        <label className="block text-sm">
+          <span className="text-textMuted">Change teaser (en)</span>
+          <textarea
+            name="change_teaser_en"
+            rows={2}
+            defaultValue={initial?.change_teaser ?? ""}
+            disabled={readOnly}
+            aria-label="Change teaser"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-textMuted">
+            Shown to listeners when they tap a fragment whose story has changed.
+            Required for Story Contingency after revision 1.
+          </span>
+        </label>
+      ) : null}
 
       <p className="text-xs text-textMuted">
         Language is always English (en). No AI generation.

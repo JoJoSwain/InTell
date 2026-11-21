@@ -27,6 +27,8 @@ export async function saveCharacter(formData: FormData) {
   const publicIntro = String(formData.get("public_intro_en") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const portrait = String(formData.get("portrait_image_id") ?? "").trim() || null;
+  const homeGrove =
+    String(formData.get("home_grove_id") ?? "").trim() || null;
 
   if (!name) throw new Error("name required");
 
@@ -36,6 +38,7 @@ export async function saveCharacter(formData: FormData) {
     public_intro: asL10n(publicIntro),
     notes,
     portrait_image_id: portrait,
+    home_grove_id: homeGrove,
   };
 
   if (id) {

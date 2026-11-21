@@ -19,6 +19,7 @@ import {
 } from "@/components/unreleased-badge";
 import { UnpublishButton } from "@/components/unpublish-button";
 import { GroveForm } from "../grove-form";
+import { JourneyForm } from "../journey-form";
 import { FragmentForm } from "../fragment-form";
 import { PrereqGraph } from "../prereq-graph";
 
@@ -41,11 +42,22 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: grove } = await supabase
     .from("groves")
     .select(
-      "id, region_id, slug, name, premise, access_notes, website_url, gatherings_url, allows_speaker_wildlife_sounds, boundary_geojson, status",
+      "id, region_id, slug, name, premise, website_url, gatherings_url, allows_speaker_wildlife_sounds, boundary_geojson, status",
     )
     .eq("id", id)
     .maybeSingle();
   if (!grove) notFound();
+
+  const { data: journeys } = await supabase
+    .from("grove_journeys")
+    .select("mode, passage")
+    .eq("grove_id", id);
+  const journeyByMode = Object.fromEntries(
+    ((journeys ?? []) as { mode: string; passage: unknown }[]).map((j) => [
+      j.mode,
+      l10nEn(j.passage),
+    ]),
+  );
 
   const { data: regions } = await supabase
     .from("regions")
@@ -225,12 +237,28 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
               name_en: l10nEn(grove.name),
               premise_en: l10nEn(grove.premise),
               slug: grove.slug,
-              access_notes: geoJsonString(grove.access_notes) || "{}",
               website_url: grove.website_url ?? "",
               gatherings_url: grove.gatherings_url ?? "",
               allows_speaker_wildlife_sounds:
                 grove.allows_speaker_wildlife_sounds,
               boundaryJson: geoJsonString(grove.boundary_geojson),
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="mt-12 max-w-xl" aria-labelledby="journeys-heading">
+        <h2 id="journeys-heading" className="font-serif text-xl font-semibold">
+          Journey passages
+        </h2>
+        <div className="mt-4">
+          <JourneyForm
+            groveId={grove.id}
+            canEdit={canNotes}
+            initial={{
+              walk: journeyByMode.walk ?? "",
+              bike: journeyByMode.bike ?? "",
+              transit: journeyByMode.transit ?? "",
             }}
           />
         </div>

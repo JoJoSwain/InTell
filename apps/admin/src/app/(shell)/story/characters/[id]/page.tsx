@@ -26,7 +26,7 @@ export default async function CharacterDetailPage({ params }: Props) {
   const { data: character } = await supabase
     .from("characters")
     .select(
-      "id, name, public_name, public_intro, notes, portrait_image_id, status",
+      "id, name, public_name, public_intro, notes, portrait_image_id, home_grove_id, status",
     )
     .eq("id", id)
     .maybeSingle();
@@ -36,6 +36,13 @@ export default async function CharacterDetailPage({ params }: Props) {
     .from("image_assets")
     .select("id, title")
     .order("title");
+
+  // A4: every grove except unpublished (draft + published), all regions
+  const { data: groves } = await supabase
+    .from("groves")
+    .select("id, name, status")
+    .neq("status", "unpublished")
+    .order("slug");
 
   const editable = canManageCharacters(staff.role);
   const canUnpublish =
@@ -78,17 +85,19 @@ export default async function CharacterDetailPage({ params }: Props) {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-textMuted">Public intro (en)</span>
+            <span className="text-textMuted">Back story (en)</span>
             <textarea
               name="public_intro_en"
               rows={4}
               defaultValue={l10nEn(character.public_intro)}
-              aria-label="Public intro"
+              aria-label="Back story"
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-textMuted">Portrait</span>
+            <span className="text-textMuted">
+              Portrait (required to release)
+            </span>
             <select
               name="portrait_image_id"
               defaultValue={character.portrait_image_id ?? ""}
@@ -99,6 +108,30 @@ export default async function CharacterDetailPage({ params }: Props) {
               {((images ?? []) as { id: string; title: string }[]).map((img) => (
                 <option key={img.id} value={img.id}>
                   {img.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-textMuted">
+              Home grove (required to release)
+            </span>
+            <select
+              name="home_grove_id"
+              defaultValue={character.home_grove_id ?? ""}
+              aria-label="Home grove"
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+            >
+              <option value="">(none)</option>
+              {(
+                (groves ?? []) as {
+                  id: string;
+                  name: unknown;
+                  status: string;
+                }[]
+              ).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {l10nEn(g.name) || g.id.slice(0, 8)} ({g.status})
                 </option>
               ))}
             </select>

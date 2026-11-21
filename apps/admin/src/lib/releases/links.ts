@@ -23,14 +23,21 @@ export const RELEASE_ITEM_ENTITIES = [
 
 export type ReleaseItemEntity = (typeof RELEASE_ITEM_ENTITIES)[number];
 
+export type EntityHrefContext = {
+  groveId?: string;
+  fragmentId?: string;
+  characterId?: string;
+};
+
 export function entityAdminHref(
   entity: StoryEntity,
   entityId: string | undefined | null,
-  ctx?: { groveId?: string; fragmentId?: string },
+  ctx?: EntityHrefContext,
 ): string | null {
   if (!entityId) return null;
   switch (entity) {
     case "grove":
+      // NO_ROOT deep-links to the grove's fragments list
       return `/story/groves/${entityId}`;
     case "fragment":
       return ctx?.groveId
@@ -51,6 +58,21 @@ export function entityAdminHref(
     default:
       return null;
   }
+}
+
+/** Build href context from a checklist failure that may carry G3 keys. */
+export function hrefContextFromFailure(f: {
+  grove_id?: string;
+  fragment_id?: string;
+  character_id?: string;
+  entity?: string;
+  entity_id?: string;
+}): EntityHrefContext {
+  return {
+    groveId: f.grove_id,
+    fragmentId: f.fragment_id,
+    characterId: f.character_id ?? (f.entity === "character" ? f.entity_id : undefined),
+  };
 }
 
 export const RELEASE_STATUS_LABELS: Record<string, string> = {

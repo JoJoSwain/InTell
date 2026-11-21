@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { roundCoord } from "./from-shared/canonicalJson.ts";
+import { isL10nBlank } from "./from-shared/l10n.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
 import {
   itemKey,
@@ -37,7 +38,12 @@ export async function buildGrovePackObject(
   supabase: SupabaseClient,
   groveId: string,
   options: AssembleOptions = {},
-): Promise<{ pack: Record<string, unknown>; assetShas: string[]; bytesTotal: number }> {
+): Promise<{
+  pack: Record<string, unknown>;
+  assetShas: string[];
+  bytesTotal: number;
+  opening: { lat: number; lng: number } | null;
+}> {
   const watermarks: string[] = [];
   const assetMap = new Map<string, { sha: string; ext: string; bytes: number; kind: string }>();
   const overlay =
@@ -172,7 +178,7 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         kind: asset.kind,
       });
-      packedVersions.push({
+      const versionEntry: Record<string, unknown> = {
         lang: v.language,
         timeWindow: v.time_window,
         assetSha: asset.sha256,
@@ -180,17 +186,35 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         transcript: v.transcript,
         ...(v.vtt ? { vtt: v.vtt } : {}),
-      });
+      };
+      if (!isL10nBlank(v.other_time_hint)) {
+        versionEntry.otherTimeHint = v.other_time_hint;
+      }
+      packedVersions.push(versionEntry);
     }
     watermarks.push(String(rev.updated_at ?? ""));
-    revisions.push({
+    const contingencyNo = contingencyRevisionNo ?? Number(rev.revision_no);
+    const revisionEntry: Record<string, unknown> = {
       id: rev.id,
       fragmentId: rev.fragment_id,
       revisionNo: rev.revision_no,
       changeKind: rev.change_kind,
-      contingencyRevisionNo: contingencyRevisionNo ?? rev.revision_no,
+      contingencyRevisionNo: contingencyNo,
       versions: packedVersions,
-    });
+    };
+    // changeTeaser from the contingency revision even when corrections followed
+    if (contingencyNo > 1) {
+      const { data: contingencyRev } = await supabase
+        .from("fragment_revisions")
+        .select("change_teaser")
+        .eq("fragment_id", fid)
+        .eq("revision_no", contingencyNo)
+        .maybeSingle();
+      if (contingencyRev && !isL10nBlank(contingencyRev.change_teaser)) {
+        revisionEntry.changeTeaser = contingencyRev.change_teaser;
+      }
+    }
+    revisions.push(revisionEntry);
   }
 
   // Characters linked to included fragments with published snapshots
@@ -200,43 +224,60 @@ export async function buildGrovePackObject(
   }
   const characters = [];
   for (const cid of [...charIds].sort()) {
-    const { data: crow } = await supabase
-      .from("published_snapshots")
-      .select("data, published_at")
-      .eq("entity", "character")
-      .eq("entity_id", cid)
-      .maybeSingle();
+    let crow: { data: unknown; published_at: string } | null = null;
+    if (overlay?.items.has(itemKey("character", cid))) {
+      const dataRaw = await projectEntity(supabase, "character", cid);
+      crow = { data: dataRaw, published_at: new Date().toISOString() };
+    } else {
+      const { data } = await supabase
+        .from("published_snapshots")
+        .select("data, published_at")
+        .eq("entity", "character")
+        .eq("entity_id", cid)
+        .maybeSingle();
+      crow = data;
+    }
     if (!crow) continue;
     const c = parseSnapshot("character", crow.data);
-    if (c.status !== "published" && c.status !== "retired") continue;
+    if (c.status !== "published" && c.status !== "retired" && !preview) continue;
+    if (!c.homeGroveId) {
+      throw new Error(`character ${cid} missing homeGroveId (PACK_BUILD_FAILED)`);
+    }
     watermarks.push(crow.published_at);
-    let portraitSha: string | undefined;
-    let portraitAlt: Record<string, string> | undefined;
-    if (c.portraitImageId) {
-      const { data: irow } = await supabase
+    if (!c.portraitImageId) {
+      throw new Error(`character ${cid} missing portrait (PACK_BUILD_FAILED)`);
+    }
+    let irow: { data: unknown } | null = null;
+    if (overlay?.items.has(itemKey("image", c.portraitImageId))) {
+      irow = { data: await projectEntity(supabase, "image", c.portraitImageId) };
+    } else {
+      const { data } = await supabase
         .from("published_snapshots")
         .select("data")
         .eq("entity", "image")
         .eq("entity_id", c.portraitImageId)
         .maybeSingle();
-      if (irow) {
-        const img = parseSnapshot("image", irow.data);
-        portraitSha = img.sha256;
-        portraitAlt = img.altText;
-        assetMap.set(img.sha256, {
-          sha: img.sha256,
-          ext: img.ext,
-          bytes: img.bytes,
-          kind: "image",
-        });
-      }
+      irow = data;
     }
+    if (!irow) {
+      throw new Error(
+        `character ${cid} portrait image missing (PACK_BUILD_FAILED)`,
+      );
+    }
+    const img = parseSnapshot("image", irow.data);
+    assetMap.set(img.sha256, {
+      sha: img.sha256,
+      ext: img.ext,
+      bytes: img.bytes,
+      kind: "image",
+    });
     characters.push({
       id: c.id,
       publicName: c.publicName,
       publicIntro: c.publicIntro,
-      ...(portraitSha ? { portraitSha } : {}),
-      ...(portraitAlt ? { portraitAlt } : {}),
+      portraitSha: img.sha256,
+      portraitAlt: img.altText,
+      homeGroveId: c.homeGroveId,
     });
   }
 
@@ -457,8 +498,48 @@ export async function buildGrovePackObject(
 
   const assets = [...assetMap.values()].sort((a, b) => a.sha.localeCompare(b.sha));
 
+  // G1: opening is first published root by storyOrder then id (retired excluded).
+  // Preview may use draft roots that are about to publish.
+  const openingFrag = fragSnaps
+    .filter((f) => {
+      if (f.data.tier !== "root") return false;
+      if (f.data.status === "published") return true;
+      if (
+        preview &&
+        f.data.status !== "retired" &&
+        f.data.status !== "unpublished"
+      ) {
+        return true;
+      }
+      return false;
+    })
+    .sort(
+      (a, b) =>
+        a.data.storyOrder - b.data.storyOrder ||
+        a.data.id.localeCompare(b.data.id),
+    )[0];
+  if (!openingFrag) {
+    throw new Error(
+      `grove ${groveId} has no published root opening (PACK_BUILD_FAILED)`,
+    );
+  }
+  const [openingLng, openingLat] = openingFrag.data.location.coordinates;
+  const opening = {
+    lat: roundCoord(openingLat),
+    lng: roundCoord(openingLng),
+  };
+
+  const journeysRaw = groveSnap.journeys ?? {};
+  const journeys: Record<string, unknown> = {};
+  for (const mode of ["walk", "bike", "transit"] as const) {
+    const passage = journeysRaw[mode];
+    if (passage && !isL10nBlank(passage)) {
+      journeys[mode] = passage;
+    }
+  }
+
   const pack: Record<string, unknown> = {
-    schema: 2,
+    schema: 3,
     groveId,
     regionId: groveSnap.regionId,
     packVersion: 0,
@@ -467,7 +548,6 @@ export async function buildGrovePackObject(
       id: groveSnap.id,
       name: groveSnap.name,
       premise: groveSnap.premise,
-      accessNotes: groveSnap.accessNotes,
       ...(groveSnap.websiteUrl ? { websiteUrl: groveSnap.websiteUrl } : {}),
       ...(groveSnap.gatheringsUrl
         ? { gatheringsUrl: groveSnap.gatheringsUrl }
@@ -477,6 +557,8 @@ export async function buildGrovePackObject(
       ...(groveSnap.growthCueAssetSha
         ? { growthCueAssetSha: groveSnap.growthCueAssetSha }
         : {}),
+      openingFragmentId: openingFrag.data.id,
+      journeys,
     },
     characters,
     fragments,
@@ -506,6 +588,7 @@ export async function buildGrovePackObject(
     pack,
     assetShas: assets.map((a) => a.sha.toLowerCase()),
     bytesTotal: assets.reduce((n, a) => n + a.bytes, 0),
+    opening,
   };
 }
 
@@ -515,7 +598,7 @@ export async function buildGrovePack(
   reason?: string,
   releaseId?: string,
 ): Promise<PackPersistResult> {
-  const { pack, assetShas, bytesTotal } = await buildGrovePackObject(
+  const { pack, assetShas, bytesTotal, opening } = await buildGrovePackObject(
     supabase,
     groveId,
   );
@@ -527,5 +610,6 @@ export async function buildGrovePack(
     bytesTotal,
     reason,
     releaseId,
+    opening,
   });
 }

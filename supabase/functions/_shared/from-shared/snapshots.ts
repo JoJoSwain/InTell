@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AccessNotes, L10n } from "./l10n.ts";
+import { L10n } from "./l10n.ts";
 import { MusicCondition, StemRule } from "./music.ts";
 
 const Uuid = z.string().uuid();
@@ -34,7 +34,6 @@ export const GroveSnapshot = z
     regionId: Uuid,
     name: L10n,
     premise: L10n,
-    accessNotes: AccessNotes,
     websiteUrl: z.string().nullable().optional(),
     gatheringsUrl: z.string().nullable().optional(),
     allowsSpeakerWildlifeSounds: z.boolean(),
@@ -42,6 +41,14 @@ export const GroveSnapshot = z
     growthCueAssetId: Uuid.nullable().optional(),
     growthCueAssetSha: Sha256.nullable().optional(),
     status: PublishStatus,
+    journeys: z
+      .object({
+        walk: L10n.optional(),
+        bike: L10n.optional(),
+        transit: L10n.optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -101,6 +108,7 @@ export const CharacterSnapshot = z
     portraitImageId: Uuid.nullable().optional(),
     portraitSha: Sha256.nullable().optional(),
     portraitAlt: L10n.nullable().optional(),
+    homeGroveId: Uuid.nullable().optional(),
     status: PublishStatus,
   })
   .strict();

@@ -521,8 +521,12 @@ Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired
 
 ---
 
-## 11. Publish checklist (`fn_publish_check` returns `{ok, failures:[{code, severity:'error'|'warning', message, entity, entity_id}], …}`)
+## 11. Publish checklist (`fn_publish_check` returns `{ok, failures:[{code, severity:'error'|'warning', message, entity, entity_id, grove_id?, fragment_id?, character_id?}], …}`)
 `ok` is true when there are no `error` entries. Warnings never block.
+
+**Blank L10n (G2).** `fn_l10n_blank(jsonb)` (and the matching TypeScript `isL10nBlank`) is true for `{}`, a missing `en`, or an `en` that's blank after trimming. Checklist codes that require authored text (`NO_TEASER`, `NO_CHANGE_TEASER`, `NO_TIME_HINT`, `NO_ALT_TEXT`) use this predicate. Snapshot and pack assembly omit blank journey passages and other-time hints the same way.
+
+**Deep-link context (G3).** Issue objects may carry optional `grove_id` / `fragment_id` (fragment-, revision- and version-scoped codes) and `character_id` (character codes) so the admin can deep-link to the field that fixes the failure. Older callers that only set `entity` + `entity_id` remain valid.
 
 | Code | Severity | Rule |
 |---|---|---|
@@ -593,7 +597,7 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
 `public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack` (`schema: 2`): `timezone`, `sunReference: {lat, lng}`, `ambienceProfiles` with their layers (each with `timeWindow`) and asset shas, `landcover: {gridSha, h3Resolution, classes} | null`, region-wide `ambienceZones` and `musicZones`/cues not tied to a grove, `uiCues`, `assets`. Profile and layer names are plain strings (staff-facing), as in SQL.
 
 ### 12.3 Index
-`get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox, opening?}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists. For grove rows, `opening: {lat, lng}` is the published opening root's point (M3e), so the phone can find the nearest grove for Embark without downloading every grove pack.
+`get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox, opening?}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists. For grove rows, `opening: {lat, lng}` is the published opening root's point (M3e), so the phone can find the nearest grove for Embark without downloading every grove pack. **Storage:** `pack_builds` carries nullable `opening_lat` / `opening_lng` (both null or both set). `build-pack` writes them from the opening root after assembling a grove pack; the index reads them. Region rows and builds without an opening omit the field.
 
 ### 12.4 Rules
 - Packs **never** include: marker codes (only their hashes), Story Notes (thread titles and notes, character notes, Indigeny notes), Journal entries, internal change notes, or anything from an unpublished release.
@@ -612,7 +616,7 @@ Signed URL TTL is **1 hour**. Staged asset shas get signed URLs; already-public 
 PreviewManifest {
   schema: "preview/1",
   releaseId, generatedAt, expiresAt,
-  groves: GrovePack[],   // schema 2 until M3e, then schema 3
+  groves: GrovePack[],   // schema 3
   assets: [{ sha, ext, url, expiresAt }]
 }
 ```

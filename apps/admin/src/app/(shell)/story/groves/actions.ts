@@ -44,19 +44,6 @@ async function requireNotesWriter() {
   return { supabase, staff };
 }
 
-function parseAccessNotes(raw: string): Record<string, unknown> {
-  if (!raw.trim()) return {};
-  try {
-    const v = JSON.parse(raw) as unknown;
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      return v as Record<string, unknown>;
-    }
-  } catch {
-    throw new Error("access notes must be JSON object");
-  }
-  throw new Error("access notes must be JSON object");
-}
-
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -71,7 +58,6 @@ export async function saveGrove(formData: FormData) {
   const regionId = String(formData.get("region_id") ?? "");
   const nameEn = String(formData.get("name_en") ?? "").trim();
   const premiseEn = String(formData.get("premise_en") ?? "").trim();
-  const accessRaw = String(formData.get("access_notes") ?? "");
   const websiteUrl = String(formData.get("website_url") ?? "").trim() || null;
   const gatheringsUrl =
     String(formData.get("gatherings_url") ?? "").trim() || null;
@@ -98,7 +84,6 @@ export async function saveGrove(formData: FormData) {
     throw new Error("boundary must be a GeoJSON Polygon");
   }
 
-  const accessNotes = parseAccessNotes(accessRaw);
   const name = asL10n(nameEn);
   const premise = asL10n(premiseEn);
   const slug = slugInput || slugify(nameEn);
@@ -112,7 +97,6 @@ export async function saveGrove(formData: FormData) {
         region_id: regionId,
         name,
         premise,
-        access_notes: accessNotes,
         website_url: websiteUrl,
         gatherings_url: gatheringsUrl,
         allows_speaker_wildlife_sounds: wildlife,
@@ -143,7 +127,6 @@ export async function saveGrove(formData: FormData) {
       region_id: regionId,
       name,
       premise,
-      access_notes: accessNotes,
       website_url: websiteUrl,
       gatherings_url: gatheringsUrl,
       allows_speaker_wildlife_sounds: wildlife,
@@ -435,4 +418,38 @@ export async function saveFragmentCharacters(formData: FormData) {
 
   revalidatePath(`/story/groves/${groveId}`);
   redirect(`/story/groves/${groveId}?fragment=${fragmentId}`);
+}
+
+const JOURNEY_MODES = ["walk", "bike", "transit"] as const;
+
+/** Writer+ may upsert grove journey passages (ADR 0005 / M3e). */
+export async function saveGroveJourneys(formData: FormData) {
+  const { supabase } = await requireNotesWriter();
+  const groveId = String(formData.get("grove_id") ?? "");
+  if (!groveId) throw new Error("grove required");
+
+  for (const mode of JOURNEY_MODES) {
+    const text = String(formData.get(`journey_${mode}`) ?? "").trim();
+    if (!text) {
+      const { error } = await supabase
+        .from("grove_journeys")
+        .delete()
+        .eq("grove_id", groveId)
+        .eq("mode", mode);
+      if (error) throw new Error(error.message);
+      continue;
+    }
+    const { error } = await supabase.from("grove_journeys").upsert(
+      {
+        grove_id: groveId,
+        mode,
+        passage: asL10n(text),
+      },
+      { onConflict: "grove_id,mode" },
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath(`/story/groves/${groveId}`);
+  redirect(`/story/groves/${groveId}`);
 }

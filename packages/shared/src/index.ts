@@ -1,4 +1,4 @@
-export { AccessNotes, L10n, pickL10n } from "./schemas/l10n";
+export { isL10nBlank, L10n, pickL10n } from "./schemas/l10n";
 export {
   TelemetryEvent,
   EVENT_NAMES,
