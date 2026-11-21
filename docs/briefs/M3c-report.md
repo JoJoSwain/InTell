@@ -2,9 +2,9 @@
 
 **Branch:** `m3c-authoring` (PR #9 → `master`)  
 **Plan:** `docs/briefs/M3c-plan.md` · **Plan review (wins):** `docs/briefs/M3c-plan-review.md` · **Impl review:** `docs/briefs/M3c-review.md`  
-**Status:** C1–C4 review fixes landed; local suite green; **stopped for verification**. M3d not started.  
+**Status:** C1–C4 review fixes landed; CI + Vercel green on `6141335`; **stopped for verification**. M3d not started.  
 **Date:** 2026-11-20  
-**Verified head (pre-review-fixes):** `19a77f6` / docs tip `90416bf` / review `af4e5da` — see **Review fixes** for the new tip.
+**Verified head:** `61413355a889dc874fae52c0379b60cfab11f639` (review was `af4e5da`; this docs amend may tip the branch after).
 
 ---
 
@@ -170,7 +170,7 @@ Against `docs/briefs/M3c-review.md` (committed as `af4e5da`). Review wins over e
 | SHA | Summary |
 |---|---|
 | `af4e5da` | docs: add M3c implementation review |
-| `940bea7` | C1–C4 + N1/N2 fixes, tests, report + screenshot |
+| `6141335` | C1–C4 + N1/N2 fixes, tests, report + screenshot |
 
 ### What changed
 
@@ -212,6 +212,9 @@ Fixed by SVG `<a>` + `<text>` (no foreignObject) and group-indexed keys. After t
 
 ### CI / Vercel
 
-Recorded after push of this tip on PR #9 (fill in once green): tip SHA, GitHub Actions, Vercel preview.
+| Check | On `6141335` |
+|---|---|
+| GitHub Actions (all 6 checks) | **PASS** |
+| Vercel preview | **PASS** — `Deployment has completed` · `intell-admin-git-m3c-authoring-replaceplace.vercel.app` |
 
 **Stop for verification. Do not start M3d.**
