@@ -46,3 +46,24 @@ Writers will be typing real story text into these fields, so a save that silentl
 - PR #14 CI and Vercel status on the new head
 
 **Then stop for verification.** After M3e merges, the next brief is `docs/briefs/M3f-api-keys.md` (Supabase's new API keys; implement directly, then stop for review).
+
+---
+
+## Verification (Nov 21, tip `515267c`)
+
+**Verified. PR #14 is ready to merge.** CI (`check`, `db`) and Vercel are green on `515267c`, and GitHub reports the branch mergeable with no conflicts.
+
+- **R1: confirmed fixed.** The doubling was real and reached the database: a later save wrote the doubled text. `JourneyForm` now submits without a React form action, which skips React's automatic form reset, and then does a full page load. `saveGroveJourneys` returns instead of redirecting. The test uses unique values per run and asserts the exact text after save, after a reload, and in the stored `grove_journeys.passage.en`. Revision create gets the same exact checks, before and after a reload, for the change teaser and both other-time hints. The regenerated screenshot shows one passage.
+- **N1: confirmed.** `preview` returns 422 with "<name> needs a home grove before preview." or "<name> needs a portrait before preview.", and an integration case covers it.
+
+### Follow-ups (not blocking this merge)
+
+- **F1. Check the other text forms for the same doubling. Required before writers enter real story content.** The report puts the cause down to "soft-nav form restoration", but that doesn't explain why only the journey form was hit. Many forms share its pattern: `<form action={serverAction}>`, textareas with `defaultValue`, and a redirect back to the same page. They are the grove, fragment, fragment Indigeny, character, region, notes, release and revision-edit forms. The M3c fragment-teaser test shows that a prefilled field survives one save. But the journey fields started empty, and no test does a second save without edits, which is the step that writes doubled text to the database. For each of those forms, add a Playwright "save twice" check:
+  - fill one empty textarea and one prefilled one, then save
+  - save again without editing
+  - reload, then assert the exact values on screen and in the stored row
+
+  Give any form that doubles the journey-form fix, as one shared helper rather than copies. For revision edit, the new remount key covers the teaser and hints but not the transcripts, so the sweep has to cover the transcripts.
+- **F2 (nit).** `preview` finds incomplete characters by matching the error message against a regex. A typed build error carrying a code and the character name would hold up better. Do this the next time `buildGrovePack` changes (M4).
+
+**Next:** merge PR #14, then `docs/briefs/M3f-api-keys.md`. F1 runs after M3f and the staging go-live, before writers start real content.
