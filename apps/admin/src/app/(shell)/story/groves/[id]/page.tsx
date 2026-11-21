@@ -302,6 +302,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
         </div>
         <div className="mt-4">
           <FragmentForm
+            key={selected ? `frag-${selected.id}` : "frag-new"}
             groveId={id}
             canEdit={canEdit}
             canNotes={canNotes}
