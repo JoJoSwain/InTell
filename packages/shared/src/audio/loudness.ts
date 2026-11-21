@@ -143,9 +143,9 @@ function designTruePeakPhases(): Float64Array[] {
     h[i] = v;
     sum += v;
   }
-  // Normalize so DC gain of the interpolator is 1.
+  // Each polyphase branch needs unity DC gain → whole filter sums to OVERSAMPLE.
   for (let i = 0; i < totalTaps; i++) {
-    h[i] = (h[i] ?? 0) / sum;
+    h[i] = ((h[i] ?? 0) * OVERSAMPLE) / sum;
   }
   const phases: Float64Array[] = [];
   for (let p = 0; p < OVERSAMPLE; p++) {
@@ -258,10 +258,12 @@ export function measureLoudness(
   }
 
   // --- Max short-term (ungated 3 s windows) ---
+  // Clips under 3 s: ungated K-weighted mean square of the whole clip (C3).
+  // integrated stays gated BS.1770 (may be −∞ when shorter than one 400 ms block).
   let maxShortTerm: number;
   if (durationSec < SHORT_TERM_SEC) {
-    // Clips shorter than 3 s: short-term equals integrated of the whole clip.
-    maxShortTerm = integrated;
+    const z = weightedMeanSquare(weighted, weights, 0, length);
+    maxShortTerm = loudnessFromWeightedMs(z);
   } else {
     let maxMs = 0;
     let found = false;

@@ -40,6 +40,13 @@ export function GroveForm({
   return (
     <form action={saveGrove} className="space-y-4">
       {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
+      {initial ? (
+        <input
+          type="hidden"
+          name="original_boundary"
+          value={initial.boundaryJson}
+        />
+      ) : null}
       <input type="hidden" name="boundary" value={boundary} />
       <label className="block text-sm">
         <span className="text-textMuted">Region</span>

@@ -1,4 +1,5 @@
-﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
   
@@ -116,9 +117,9 @@ isOneToOne: false
                   ]
                 },"audio_assets": {
                   Row: {
-                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"max_short_term_lufs": number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string
+                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"max_short_term_lufs": number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string,"fn_check_audio_asset": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "fn_check_audio_asset"
                   Insert: {
                     "bitrate_kbps"?: number | null,"bytes": number,"channels": number,"created_at"?: string,"created_by"?: string | null,"duration_ms": number,"ext": string,"id"?: string,"is_public"?: boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags"?: (string)[],"title": string,"true_peak_dbtp"?: number | null,"updated_at"?: string
                   }
@@ -410,9 +411,9 @@ isOneToOne: false
                   ]
                 },"fragments": {
                   Row: {
-                    "created_at": string,"grove_id": string,"id": string,"indigeny_body": string | null,"indigeny_earth": string | null,"indigeny_world": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"teaser": NonNullable<Json>,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"]
+                    "created_at": string,"grove_id": string,"id": string,"indigeny_body": string | null,"indigeny_earth": string | null,"indigeny_world": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"teaser": NonNullable<Json>,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"],"fn_check_fragment_local": Json | null,"location_geojson": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "fn_check_fragment_local" | "location_geojson"
                   Insert: {
                     "created_at"?: string,"grove_id": string,"id"?: string,"indigeny_body"?: string | null,"indigeny_earth"?: string | null,"indigeny_world"?: string | null,"is_ending"?: boolean,"location": unknown,"marker_code"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order": number,"teaser"?: NonNullable<Json>,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
                   }
@@ -450,9 +451,9 @@ isOneToOne: false
                   ]
                 },"groves": {
                   Row: {
-                    "access_notes": NonNullable<Json>,"allows_speaker_wildlife_sounds": boolean,"boundary": unknown,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null
+                    "access_notes": NonNullable<Json>,"allows_speaker_wildlife_sounds": boolean,"boundary": unknown,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null,"boundary_geojson": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "boundary_geojson"
                   Insert: {
                     "access_notes"?: NonNullable<Json>,"allows_speaker_wildlife_sounds"?: boolean,"boundary": unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
@@ -910,8 +911,29 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "fn_call_run_jobs":
+            "boundary_geojson":
+{ Args: { "g": Omit<Database["public"]['Tables']["groves"]['Row'], Database["public"]['Tables']["groves"]['ComputedFields']> }; Returns: Json
+                           },
+"fn_admin_upsert_region":
+{ Args: { "p_bounds_geojson": string,"p_id": string,"p_name": string,"p_slug": string,"p_sun_wkt": string,"p_timezone": string }; Returns: string
+                           },
+"fn_audio_bitrate_target":
+{ Args: { "p_kind": Database["public"]['Enums']["asset_kind"] }; Returns: number
+                           },
+"fn_audio_loudness_target":
+{ Args: { "p_kind": Database["public"]['Enums']["asset_kind"] }; Returns: number
+                           },
+"fn_call_run_jobs":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"fn_check_audio_asset":
+{ Args: { "p_asset": Omit<Database["public"]['Tables']["audio_assets"]['Row'], Database["public"]['Tables']["audio_assets"]['ComputedFields']> }; Returns: Json
+                           },
+"fn_check_fragment_local":
+{ Args: { "p_frag": Omit<Database["public"]['Tables']["fragments"]['Row'], Database["public"]['Tables']["fragments"]['ComputedFields']> }; Returns: Json
+                           },
+"fn_check_issue":
+{ Args: { "p_code": string,"p_entity": string,"p_entity_id": string,"p_message": string,"p_severity": string }; Returns: Json
                            },
 "fn_contingency_revision_no":
 { Args: { "p_fragment_id": string }; Returns: number
@@ -922,11 +944,11 @@ isOneToOne: false
 "fn_current_revision":
 { Args: { "p_fragment_id": string }; Returns: string
                            },
-"fn_draft_check":
-{ Args: { "p_grove_id": string }; Returns: Json
-                           },
 "fn_daily_expiry_and_retention":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"fn_draft_check":
+{ Args: { "p_grove_id": string }; Returns: Json
                            },
 "fn_enqueue_due_releases":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -939,6 +961,12 @@ isOneToOne: false
                            },
 "fn_enqueue_rebuild_pack":
 { Args: { "p_grove_id"?: string,"p_region_id"?: string,"p_release_id"?: string }; Returns: undefined
+                           },
+"fn_entity_in_release_or_published":
+{ Args: { "p_entity": string,"p_entity_id": string,"p_release_id": string,"p_statuses"?: (string)[] }; Returns: boolean
+                           },
+"fn_is_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "fn_is_editor_or_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -970,14 +998,14 @@ isOneToOne: false
 "fn_revision_is_playable":
 { Args: { "p_revision_id": string }; Returns: boolean
                            },
-"fn_snapshot_projection":
-{ Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
-                           },
 "fn_set_fragment_location":
 { Args: { "p_fragment_id": string,"p_lat": number,"p_lng": number }; Returns: undefined
                            },
 "fn_set_grove_boundary":
-{ Args: { "p_grove_id": string,"p_geojson": string }; Returns: undefined
+{ Args: { "p_geojson": string,"p_grove_id": string }; Returns: undefined
+                           },
+"fn_snapshot_projection":
+{ Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
                            },
 "fn_snapshot_projection_guarded":
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
@@ -986,13 +1014,18 @@ isOneToOne: false
 { Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
                            },
 "fn_unreleased":
-{ Args: { "p_grove_id"?: string }; Returns: { entity: string; entity_id: string }[]
+{ Args: { "p_grove_id"?: string }; Returns: {
+              "entity": string,"entity_id": string
+            }[]
                            },
 "get_pack_index":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "has_role":
 { Args: { "roles": (Database["public"]['Enums']["staff_role"])[] }; Returns: boolean
+                           },
+"location_geojson":
+{ Args: { "f": Omit<Database["public"]['Tables']["fragments"]['Row'], Database["public"]['Tables']["fragments"]['ComputedFields']> }; Returns: Json
                            }
           }
           Enums: {

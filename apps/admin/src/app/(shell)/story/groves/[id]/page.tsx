@@ -39,7 +39,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: grove } = await supabase
     .from("groves")
     .select(
-      "id, region_id, slug, name, premise, access_notes, website_url, gatherings_url, allows_speaker_wildlife_sounds, boundary, status",
+      "id, region_id, slug, name, premise, access_notes, website_url, gatherings_url, allows_speaker_wildlife_sounds, boundary_geojson, status",
     )
     .eq("id", id)
     .maybeSingle();
@@ -53,7 +53,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: fragments } = await supabase
     .from("fragments")
     .select(
-      "id, grove_id, title, teaser, tier, visibility, location, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body",
+      "id, grove_id, title, teaser, tier, visibility, location_geojson, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body",
     )
     .eq("grove_id", id)
     .order("story_order");
@@ -119,7 +119,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   ]);
 
   let checklist: ChecklistFailure[] = [];
-  if (canEditStory(staff.role)) {
+  {
     const { data: check } = await supabase.rpc("fn_draft_check", {
       p_grove_id: id,
     });
@@ -222,7 +222,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
               gatherings_url: grove.gatherings_url ?? "",
               allows_speaker_wildlife_sounds:
                 grove.allows_speaker_wildlife_sounds,
-              boundaryJson: geoJsonString(grove.boundary),
+              boundaryJson: geoJsonString(grove.boundary_geojson),
             }}
           />
         </div>
@@ -300,15 +300,15 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
             initial={
               selected
                 ? (() => {
-                    const loc = coordsFromGeo(selected.location);
+                    const loc = coordsFromGeo(selected.location_geojson);
                     return {
                       id: selected.id as string,
                       title_en: l10nEn(selected.title),
                       teaser_en: l10nEn(selected.teaser),
                       tier: selected.tier as string,
                       visibility: selected.visibility as string,
-                      lat: loc.lat,
-                      lng: loc.lng,
+                      lat: loc?.lat ?? null,
+                      lng: loc?.lng ?? null,
                       story_order: selected.story_order as number,
                       is_ending: selected.is_ending as boolean,
                       trigger_radius_m: selected.trigger_radius_m as number,
@@ -324,8 +324,8 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
                       teaser_en: "",
                       tier: "leaf",
                       visibility: "standard",
-                      lat: 41.1,
-                      lng: -111.9,
+                      lat: null,
+                      lng: null,
                       story_order: (fragments ?? []).length,
                       is_ending: false,
                       trigger_radius_m: 10.67,

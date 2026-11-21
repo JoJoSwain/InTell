@@ -84,6 +84,9 @@ export async function analyzeAudioFile(
   const bitrateKbps =
     durationSec > 0 ? Math.round((file.size * 8) / durationSec / 1000) : 0;
 
+  const finiteOrNull = (n: number | null | undefined): number | null =>
+    n !== null && n !== undefined && Number.isFinite(n) ? n : null;
+
   return {
     durationMs,
     channels: containerChannels ?? decodedChannels,
@@ -92,8 +95,8 @@ export async function analyzeAudioFile(
     ext,
     loudness,
     loudnessError,
-    maxShortTermLufs: loudness?.maxShortTerm ?? null,
-    loudnessLufs: loudness?.integrated ?? null,
-    truePeakDbtp: loudness?.truePeak ?? null,
+    maxShortTermLufs: finiteOrNull(loudness?.maxShortTerm),
+    loudnessLufs: finiteOrNull(loudness?.integrated),
+    truePeakDbtp: finiteOrNull(loudness?.truePeak),
   };
 }

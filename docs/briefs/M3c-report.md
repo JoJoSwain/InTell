@@ -1,10 +1,10 @@
 # M3c authoring — implementation report
 
 **Branch:** `m3c-authoring` (PR #9 → `master`)  
-**Plan:** `docs/briefs/M3c-plan.md` · **Plan review (wins):** `docs/briefs/M3c-plan-review.md`  
-**Status:** Implementation complete; CI + Vercel green on `19a77f6`; **stopped for architect review**. M3d not started.  
+**Plan:** `docs/briefs/M3c-plan.md` · **Plan review (wins):** `docs/briefs/M3c-plan-review.md` · **Impl review:** `docs/briefs/M3c-review.md`  
+**Status:** C1–C4 review fixes landed; local suite green; **stopped for verification**. M3d not started.  
 **Date:** 2026-11-20  
-**Verified head:** `19a77f674ab9342ae71b82dab3b578f4fa1380b5` (this docs amend may tip the branch after).
+**Verified head (pre-review-fixes):** `19a77f6` / docs tip `90416bf` / review `af4e5da` — see **Review fixes** for the new tip.
 
 ---
 
@@ -159,4 +159,59 @@ None blocking M3c acceptance. Optional follow-ups:
 1. Whether seed demo tones should stay `.wav` (they correctly emit `AUDIO_FORMAT` warnings in the library list).
 2. Hosted staging `db push` of the four M3c migrations (JoJo / ops) — local/CI is the M3c bar per review A18.
 
-**Stop for architect review. Do not start M3d.**
+---
+
+## 13. Review fixes (C1–C4 + nits)
+
+Against `docs/briefs/M3c-review.md` (committed as `af4e5da`). Review wins over earlier plan answers (notably C3 vs plan-review answer 3).
+
+### Commits since `90416bf`
+
+| SHA | Summary |
+|---|---|
+| `af4e5da` | docs: add M3c implementation review |
+| `940bea7` | C1–C4 + N1/N2 fixes, tests, report + screenshot |
+
+### What changed
+
+| Item | Fix |
+|---|---|
+| **C1** | `boundary_geojson` / `location_geojson` invoker computed columns; admin selects those; deleted coordinate fallback; geometry RPCs only when changed; Playwright re-save tests; pgTAP `068` |
+| **C2** | True-peak filter normalized so whole FIR sums to `OVERSAMPLE` (per-phase unity DC); intersample cases at 12 kHz / 8 kHz |
+| **C3** | Under 3 s: `maxShortTerm` = ungated whole-clip K-weighted MS; `integrated` stays gated; non-finite → `null` before insert |
+| **C4** | See below |
+| **N1** | Writer marker PATCH targets physical seed `DEM00001`; asserts **403** and code unchanged |
+| **N2** | `fn_draft_check` allows all active staff; badges shown to all staff on grove page |
+| **N3** | **Deferred** — short-term O(n) segment sums + Web Worker for `analyzeAudioFile` |
+
+### C4 — the two Next.js “2 Issues”
+
+1. **Hydration mismatch** from `next/link` inside SVG `<foreignObject>` in `PrereqGraph`.
+2. **Duplicate React keys** on OR-junction / edge keys that keyed only by `fragmentId` (collided when multiple groups targeted the same fragment).
+
+Fixed by SVG `<a>` + `<text>` (no foreignObject) and group-indexed keys. After the fix, the grove editor shows **no** Issues badge; console had no error/warning on load.
+
+### Suite (local, this amend)
+
+| Command | Result |
+|---|---|
+| `pnpm db:setup-local` | **PASS** — through `20261121140005_m3c_geojson_computed.sql` |
+| `pnpm exec supabase test db` | **PASS** — Files=**28**, Tests=**148** (new `068_m3c_geojson_computed`) |
+| `pnpm test:integration` | **PASS** — **16** |
+| Playwright | **PASS** — **10** (new C1 geometry re-save; N1 physical marker 403) |
+| `pnpm lint && pnpm typecheck && pnpm test` | **PASS** (shared **80** incl. C2/C3 loudness cases; admin vitest 5) |
+| `pnpm --filter @intell/admin build` | **PASS** |
+
+**Named new tests:** `068_m3c_geojson_computed` (C1); `EBU3341_true_peak_12kHz_phase45_intersample` / `EBU3341_true_peak_8kHz_phase60_intersample` (C2); `EBU3341_short_oneshot_200ms_ungated_maxShortTerm` / `EBU3341_short_oneshot_1_5s_ungated_maxShortTerm` (C3); Playwright `C1: teaser-only / name-only saves leave geometry unchanged`.
+
+### Screenshot
+
+| Shot | Path |
+|---|---|
+| Grove editor after C1 (seed Beginning coords + GeoJSON boundary; no Issues badge) | `docs/briefs/m3c-screenshots/grove-editor-c1-fixed.png` |
+
+### CI / Vercel
+
+Recorded after push of this tip on PR #9 (fill in once green): tip SHA, GitHub Actions, Vercel preview.
+
+**Stop for verification. Do not start M3d.**

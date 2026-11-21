@@ -1,8 +1,7 @@
-/** Parse GeoJSON Point / geography from PostgREST into lat/lng. */
+/** Parse GeoJSON Point into lat/lng. Returns null when unreadable — never invent coordinates. */
 export function coordsFromGeo(
   value: unknown,
-  fallback: { lat: number; lng: number } = { lat: 41.1, lng: -111.9 },
-): { lat: number; lng: number } {
+): { lat: number; lng: number } | null {
   if (value && typeof value === "object" && value !== null) {
     const v = value as { type?: string; coordinates?: number[] };
     if (Array.isArray(v.coordinates) && v.coordinates.length >= 2) {
@@ -11,16 +10,30 @@ export function coordsFromGeo(
       if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
     }
   }
-  return fallback;
+  return null;
 }
 
 export function geoJsonString(value: unknown): string {
   if (!value) return "";
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    // Reject EWKB hex / non-JSON strings so the form never posts them as "GeoJSON".
+    const t = value.trim();
+    if (!t.startsWith("{") && !t.startsWith("[")) return "";
+    return value;
+  }
   try {
     return JSON.stringify(value, null, 2);
   } catch {
     return "";
+  }
+}
+
+/** Canonical JSON for comparing GeoJSON payloads (ignore whitespace / key order). */
+export function geoJsonEqual(a: string, b: string): boolean {
+  try {
+    return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b));
+  } catch {
+    return a.trim() === b.trim();
   }
 }
 

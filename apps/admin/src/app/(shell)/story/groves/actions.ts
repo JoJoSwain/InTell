@@ -16,7 +16,7 @@ import {
   loadStaff,
 } from "@/lib/staff";
 import { generateMarkerCode } from "@/lib/markers/code";
-import { asL10n } from "@/lib/geo";
+import { asL10n, geoJsonEqual } from "@/lib/geo";
 
 async function requireEditor() {
   const supabase = await createClient();
@@ -77,6 +77,9 @@ export async function saveGrove(formData: FormData) {
     String(formData.get("gatherings_url") ?? "").trim() || null;
   const wildlife = formData.get("allows_speaker_wildlife_sounds") === "on";
   const boundaryGeoJson = String(formData.get("boundary") ?? "").trim();
+  const originalBoundary = String(
+    formData.get("original_boundary") ?? "",
+  ).trim();
   const slugInput = String(formData.get("slug") ?? "").trim();
 
   if (!regionId || !nameEn) throw new Error("region and name required");
@@ -99,6 +102,8 @@ export async function saveGrove(formData: FormData) {
   const name = asL10n(nameEn);
   const premise = asL10n(premiseEn);
   const slug = slugInput || slugify(nameEn);
+  const boundaryChanged =
+    !id || !originalBoundary || !geoJsonEqual(boundaryGeoJson, originalBoundary);
 
   if (id) {
     const { error } = await supabase
@@ -116,11 +121,13 @@ export async function saveGrove(formData: FormData) {
       .eq("id", id);
     if (error) throw new Error(error.message);
 
-    const { error: bErr } = await supabase.rpc("fn_set_grove_boundary", {
-      p_grove_id: id,
-      p_geojson: JSON.stringify(geo),
-    });
-    if (bErr) throw new Error(bErr.message);
+    if (boundaryChanged) {
+      const { error: bErr } = await supabase.rpc("fn_set_grove_boundary", {
+        p_grove_id: id,
+        p_geojson: JSON.stringify(geo),
+      });
+      if (bErr) throw new Error(bErr.message);
+    }
 
     revalidatePath("/story/groves");
     revalidatePath(`/story/groves/${id}`);
@@ -171,8 +178,12 @@ export async function saveFragment(formData: FormData) {
   const teaserEn = String(formData.get("teaser_en") ?? "").trim();
   const tier = String(formData.get("tier") ?? "leaf");
   const visibility = String(formData.get("visibility") ?? "standard");
-  const lat = Number(formData.get("lat"));
-  const lng = Number(formData.get("lng"));
+  const latRaw = String(formData.get("lat") ?? "").trim();
+  const lngRaw = String(formData.get("lng") ?? "").trim();
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  const originalLatRaw = String(formData.get("original_lat") ?? "").trim();
+  const originalLngRaw = String(formData.get("original_lng") ?? "").trim();
   const storyOrder = Number(formData.get("story_order") ?? 0);
   const isEnding = formData.get("is_ending") === "on";
   const radiusFt = Number(formData.get("radius_ft") ?? 35);
@@ -184,7 +195,14 @@ export async function saveFragment(formData: FormData) {
   const indigenyBody =
     String(formData.get("indigeny_body") ?? "").trim() || null;
 
-  if (!groveId || !titleEn || Number.isNaN(lat) || Number.isNaN(lng)) {
+  if (
+    !groveId ||
+    !titleEn ||
+    !latRaw ||
+    !lngRaw ||
+    Number.isNaN(lat) ||
+    Number.isNaN(lng)
+  ) {
     throw new Error("grove, title, lat and lng required");
   }
 
@@ -205,6 +223,12 @@ export async function saveFragment(formData: FormData) {
   const teaser = asL10n(teaserEn);
   // EWKT for PostgREST geography (GeoJSON objects fail parse); RPC sets canonical point.
   const locationEwkt = `SRID=4326;POINT(${lng} ${lat})`;
+  const locationChanged =
+    !id ||
+    !originalLatRaw ||
+    !originalLngRaw ||
+    Math.abs(Number(originalLatRaw) - lat) > 1e-9 ||
+    Math.abs(Number(originalLngRaw) - lng) > 1e-9;
 
   if (id) {
     const { error } = await supabase
@@ -225,12 +249,14 @@ export async function saveFragment(formData: FormData) {
       .eq("id", id);
     if (error) throw new Error(error.message);
 
-    const { error: locErr } = await supabase.rpc("fn_set_fragment_location", {
-      p_fragment_id: id,
-      p_lat: lat,
-      p_lng: lng,
-    });
-    if (locErr) throw new Error(locErr.message);
+    if (locationChanged) {
+      const { error: locErr } = await supabase.rpc("fn_set_fragment_location", {
+        p_fragment_id: id,
+        p_lat: lat,
+        p_lng: lng,
+      });
+      if (locErr) throw new Error(locErr.message);
+    }
 
     revalidatePath(`/story/groves/${groveId}`);
     redirect(`/story/groves/${groveId}?fragment=${id}`);

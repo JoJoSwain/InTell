@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { loadUsers, signIn } from "./auth";
+import { loadUsers, passwordGrant, signIn } from "./auth";
 
 /** Seed Farmington nearby / second grove + bridge fragment (see seed.sql). */
+const SEED_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
+const SEED_FRAG_BEGINNING = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
 const SEED_OTHER_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0";
 const SEED_BRIDGE_FRAG = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1";
 const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
@@ -131,5 +133,96 @@ test.describe("M3c grove authoring", () => {
     expect(new URL(url).search).toBe("");
     // Ensure seed other grove id is documented in suite
     expect(SEED_OTHER_GROVE).toBeTruthy();
+  });
+
+  test("C1: teaser-only / name-only saves leave geometry unchanged", async ({
+    page,
+    request,
+  }) => {
+    const auth = loadUsers();
+    const editor = auth.users.editor;
+    if (!editor) throw new Error("editor missing");
+
+    await signIn(page, editor.email, editor.password);
+
+    await page.goto(
+      `/story/groves/${SEED_GROVE}?fragment=${SEED_FRAG_BEGINNING}`,
+    );
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const latInput = page.getByLabel("Latitude");
+    const lngInput = page.getByLabel("Longitude");
+    await expect(latInput).not.toHaveValue("");
+    await expect(lngInput).not.toHaveValue("");
+    // Must not be the old hard-coded fallback
+    await expect(latInput).not.toHaveValue("41.1");
+    const latBefore = await latInput.inputValue();
+    const lngBefore = await lngInput.inputValue();
+
+    const teaser = page.getByLabel("Teaser");
+    const stamp = `C1-teaser-${Date.now()}`;
+    await teaser.click({ clickCount: 3 });
+    await teaser.press("Backspace");
+    await teaser.fill(stamp);
+    await expect(teaser).toHaveValue(stamp);
+    await page.getByRole("button", { name: "Save fragment" }).click();
+    await expect(page.getByLabel("Teaser")).toHaveValue(stamp, {
+      timeout: 15_000,
+    });
+    await expect(page.getByLabel("Latitude")).toHaveValue(latBefore);
+    await expect(page.getByLabel("Longitude")).toHaveValue(lngBefore);
+
+    const token = await passwordGrant(auth, "editor");
+    const locCheck = await request.get(
+      `${auth.supabaseUrl}/rest/v1/fragments?id=eq.${SEED_FRAG_BEGINNING}&select=location_geojson`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: auth.anonKey,
+        },
+      },
+    );
+    expect(locCheck.ok()).toBeTruthy();
+    const locRows = (await locCheck.json()) as {
+      location_geojson: { coordinates: number[] };
+    }[];
+    expect(locRows[0]?.location_geojson?.coordinates?.[1]).toBeCloseTo(
+      Number(latBefore),
+      5,
+    );
+    expect(locRows[0]?.location_geojson?.coordinates?.[0]).toBeCloseTo(
+      Number(lngBefore),
+      5,
+    );
+
+    // Grove name-only save
+    const boundaryBefore = await page.getByLabel("Boundary GeoJSON").inputValue();
+    expect(boundaryBefore.trim().startsWith("{")).toBeTruthy();
+    const groveName = page.getByLabel("Grove name");
+    const nameStamp = `Farmington C1 ${Date.now()}`;
+    await groveName.fill(nameStamp);
+    await page.getByRole("button", { name: "Save grove" }).click();
+    await expect(page.getByRole("heading", { name: nameStamp })).toBeVisible({
+      timeout: 15_000,
+    });
+    const boundaryAfter = await page.getByLabel("Boundary GeoJSON").inputValue();
+    expect(JSON.parse(boundaryAfter)).toEqual(JSON.parse(boundaryBefore));
+
+    const groveCheck = await request.get(
+      `${auth.supabaseUrl}/rest/v1/groves?id=eq.${SEED_GROVE}&select=boundary_geojson`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: auth.anonKey,
+        },
+      },
+    );
+    expect(groveCheck.ok()).toBeTruthy();
+    const groveRows = (await groveCheck.json()) as {
+      boundary_geojson: { type: string };
+    }[];
+    expect(groveRows[0]?.boundary_geojson?.type).toBe("Polygon");
   });
 });

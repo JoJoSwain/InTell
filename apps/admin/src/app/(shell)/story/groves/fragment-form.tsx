@@ -24,8 +24,9 @@ type FragmentInitial = {
   teaser_en: string;
   tier: string;
   visibility: string;
-  lat: number;
-  lng: number;
+  /** null when location could not be read — never invent coordinates. */
+  lat: number | null;
+  lng: number | null;
   story_order: number;
   is_ending: boolean;
   trigger_radius_m: number;
@@ -77,6 +78,15 @@ export function FragmentForm({
     return Math.round(metersToFeet(initial.trigger_radius_m));
   }, [initial]);
 
+  const latStr =
+    initial?.lat !== null && initial?.lat !== undefined
+      ? String(initial.lat)
+      : "";
+  const lngStr =
+    initial?.lng !== null && initial?.lng !== undefined
+      ? String(initial.lng)
+      : "";
+
   function onVisibilityChange(next: string) {
     setVisibility(next);
     if (next === "physical" && !markerCode) {
@@ -97,6 +107,12 @@ export function FragmentForm({
           ) : null}
           <input type="hidden" name="grove_id" value={groveId} />
           <input type="hidden" name="marker_code" value={markerCode} />
+          {latStr && lngStr ? (
+            <>
+              <input type="hidden" name="original_lat" value={latStr} />
+              <input type="hidden" name="original_lng" value={lngStr} />
+            </>
+          ) : null}
 
           <label className="block text-sm">
             <span className="text-textMuted">Title (en)</span>
@@ -154,7 +170,7 @@ export function FragmentForm({
                 type="number"
                 step="any"
                 required
-                defaultValue={initial?.lat}
+                defaultValue={latStr}
                 aria-label="Latitude"
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
               />
@@ -166,7 +182,7 @@ export function FragmentForm({
                 type="number"
                 step="any"
                 required
-                defaultValue={initial?.lng}
+                defaultValue={lngStr}
                 aria-label="Longitude"
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
               />

@@ -4,9 +4,9 @@
  * Hand-rolled SVG prereq graph (no new dependency — M3c answer 7).
  * Layers by longest prerequisite path; OR groups as junction nodes;
  * cross-grove members as labelled stubs.
+ *
+ * C4: avoid <foreignObject> + next/link (hydration mismatch in the SVG tree).
  */
-import Link from "next/link";
-
 export type GraphFragment = {
   id: string;
   title: string;
@@ -31,7 +31,6 @@ export function PrereqGraph({
   const byId = new Map(fragments.map((f) => [f.id, f]));
   const local = fragments.filter((f) => f.thisGrove);
 
-  // Longest path depth among local fragments (edges: member → fragment via group)
   const depth = new Map<string, number>();
   const visiting = new Set<string>();
 
@@ -91,14 +90,13 @@ export function PrereqGraph({
     label?: string;
   }[] = [];
 
-  for (const g of groups) {
+  groups.forEach((g, gi) => {
     const target = positions.get(g.fragmentId);
-    if (!target) continue;
-    // Junction slightly left of target
+    if (!target) return;
     const jx = target.x - 40;
     const jy = target.y;
     edges.push({
-      key: `j-${g.fragmentId}-${jx}`,
+      key: `j-${g.fragmentId}-${gi}`,
       x1: jx,
       y1: jy,
       x2: target.x - 50,
@@ -108,7 +106,7 @@ export function PrereqGraph({
       const src = positions.get(m);
       if (src) {
         edges.push({
-          key: `${m}-${g.fragmentId}-${mi}`,
+          key: `${m}-${g.fragmentId}-${gi}-${mi}`,
           x1: src.x + 50,
           y1: src.y,
           x2: jx,
@@ -117,7 +115,7 @@ export function PrereqGraph({
       } else {
         const stub = byId.get(m);
         edges.push({
-          key: `stub-${m}-${g.fragmentId}-${mi}`,
+          key: `stub-${m}-${g.fragmentId}-${gi}-${mi}`,
           x1: jx - 80,
           y1: jy + mi * 14 - 7,
           x2: jx,
@@ -126,7 +124,7 @@ export function PrereqGraph({
         });
       }
     });
-  }
+  });
 
   return (
     <div
@@ -161,6 +159,9 @@ export function PrereqGraph({
         {[...layers.entries()].flatMap(([, list]) =>
           list.map((f) => {
             const p = positions.get(f.id)!;
+            const href = `/story/groves/${groveId}?fragment=${f.id}`;
+            const label =
+              f.title.length > 14 ? `${f.title.slice(0, 12)}…` : f.title;
             return (
               <g key={f.id}>
                 <rect
@@ -173,25 +174,28 @@ export function PrereqGraph({
                   stroke="currentColor"
                   strokeOpacity={0.35}
                 />
-                <foreignObject x={p.x - 48} y={p.y - 10} width={96} height={20}>
-                  <Link
-                    href={`/story/groves/${groveId}?fragment=${f.id}`}
-                    className="block truncate text-center text-xs text-primary underline"
+                <a href={href} aria-label={f.title}>
+                  <text
+                    x={p.x}
+                    y={p.y + 4}
+                    textAnchor="middle"
+                    fontSize={11}
+                    fill="currentColor"
+                    className="fill-primary underline"
                   >
-                    {f.title}
-                  </Link>
-                </foreignObject>
+                    {label}
+                  </text>
+                </a>
               </g>
             );
           }),
         )}
-        {/* OR junctions */}
-        {groups.map((g) => {
+        {groups.map((g, gi) => {
           const target = positions.get(g.fragmentId);
           if (!target) return null;
           return (
             <circle
-              key={`or-${g.fragmentId}-${g.members.join(",")}`}
+              key={`or-${g.fragmentId}-${gi}`}
               cx={target.x - 40}
               cy={target.y}
               r={6}

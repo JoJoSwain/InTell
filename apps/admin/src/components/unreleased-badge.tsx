@@ -20,7 +20,7 @@ export function UnreleasedBadge({
       className={cn(
         "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
         kind === "draft"
-          ? "bg-muted text-muted-foreground"
+          ? "bg-muted text-textMuted"
           : "bg-water/20 text-water",
         className,
       )}

@@ -66,10 +66,18 @@ describe("measureLoudness EBU Tech 3341", () => {
     expect(Math.abs(maxShortTerm - -18.0)).toBeLessThanOrEqual(0.5);
   });
 
-  it("EBU3341_short_term_equals_integrated_when_under_3s", () => {
-    const channels = sineChannels(-23, 2, 2);
+  it("EBU3341_short_oneshot_200ms_ungated_maxShortTerm", () => {
+    // <400 ms: integrated is −∞; maxShortTerm is ungated whole-clip loudness.
+    const channels = sineChannels(-23, 0.2, 2);
     const { integrated, maxShortTerm } = measureLoudness(channels, SR);
-    expect(maxShortTerm).toBe(integrated);
+    expect(Number.isFinite(integrated)).toBe(false);
+    expect(Math.abs(maxShortTerm - -23.0)).toBeLessThanOrEqual(0.1);
+  });
+
+  it("EBU3341_short_oneshot_1_5s_ungated_maxShortTerm", () => {
+    const channels = sineChannels(-23, 1.5, 2);
+    const { maxShortTerm } = measureLoudness(channels, SR);
+    expect(Math.abs(maxShortTerm - -23.0)).toBeLessThanOrEqual(0.1);
   });
 
   it("EBU3341_true_peak_full_scale_sine", () => {
@@ -83,6 +91,43 @@ describe("measureLoudness EBU Tech 3341", () => {
     const channels = sineChannels(-6, 1, 2);
     const { truePeak } = measureLoudness(channels, SR);
     expect(Math.abs(truePeak - -6.0)).toBeLessThanOrEqual(0.2);
+  });
+
+  it("EBU3341_true_peak_12kHz_phase45_intersample", () => {
+    // 12 kHz (fs/4) sine at amp 0.5 with 45° offset: sample peak −9.03 dBFS,
+    // true peak −6.02 dBTP (+0.2 / −0.4 per EBU Tech 3341).
+    const n = Math.round(1 * SR);
+    const amp = 0.5;
+    const phase = Math.PI / 4;
+    const ch = new Float32Array(n);
+    let samplePeak = 0;
+    for (let i = 0; i < n; i++) {
+      const s = amp * Math.sin((2 * Math.PI * 12000 * i) / SR + phase);
+      ch[i] = s;
+      samplePeak = Math.max(samplePeak, Math.abs(s));
+    }
+    expect(20 * Math.log10(samplePeak)).toBeCloseTo(-9.03, 1);
+    const { truePeak } = measureLoudness([ch, ch], SR);
+    expect(truePeak).toBeLessThanOrEqual(-6.02 + 0.2);
+    expect(truePeak).toBeGreaterThanOrEqual(-6.02 - 0.4);
+  });
+
+  it("EBU3341_true_peak_8kHz_phase60_intersample", () => {
+    // Another frequency below fs/4 with phase offset → intersample peak above sample peak.
+    const n = Math.round(1 * SR);
+    const amp = 0.5;
+    const phase = Math.PI / 3;
+    const ch = new Float32Array(n);
+    let samplePeak = 0;
+    for (let i = 0; i < n; i++) {
+      const s = amp * Math.sin((2 * Math.PI * 8000 * i) / SR + phase);
+      ch[i] = s;
+      samplePeak = Math.max(samplePeak, Math.abs(s));
+    }
+    const sampleDbfs = 20 * Math.log10(samplePeak);
+    const { truePeak } = measureLoudness([ch], SR);
+    expect(Number.isFinite(truePeak)).toBe(true);
+    expect(truePeak).toBeGreaterThan(sampleDbfs + 0.3);
   });
 
   it("EBU3341_mono_channel_weight_1_0", () => {

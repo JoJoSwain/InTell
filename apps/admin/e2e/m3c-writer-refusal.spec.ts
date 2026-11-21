@@ -3,6 +3,9 @@ import { loadUsers, passwordGrant, signIn } from "./auth";
 
 const SEED_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const SEED_FRAG = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
+/** Physical seed fragment with marker DEM00001 (frag9). */
+const SEED_PHYSICAL_FRAG = "aaaaaaaa-bbbb-4ccc-8ddd-000000000038";
+const SEED_PHYSICAL_CODE = "DEM00001";
 
 test.describe("M3c writer refusal", () => {
   test("Story Notes OK; grove create / lat / marker rotate refused", async ({
@@ -81,19 +84,17 @@ test.describe("M3c writer refusal", () => {
     // RLS update finds 0 rows → P0002 or 400/403
     expect(locRes.ok()).toBeFalsy();
 
-    // Forced marker rotate refused
+    // Forced marker rotate on physical seed refused (F1 → 42501 / 403)
     const markerRes = await request.patch(
-      `${auth.supabaseUrl}/rest/v1/fragments?id=eq.${SEED_FRAG}`,
+      `${auth.supabaseUrl}/rest/v1/fragments?id=eq.${SEED_PHYSICAL_FRAG}`,
       {
         headers,
         data: { marker_code: "ABCD2345" },
       },
     );
-    // Writer column guard / RLS: should not apply the change
-    expect([401, 403, 400, 409].includes(markerRes.status()) || markerRes.status() === 204 || markerRes.status() === 200).toBeTruthy();
-    // Verify row unchanged for marker when writer tried (F1 / RLS)
+    expect(markerRes.status()).toBe(403);
     const check = await request.get(
-      `${auth.supabaseUrl}/rest/v1/fragments?id=eq.${SEED_FRAG}&select=marker_code`,
+      `${auth.supabaseUrl}/rest/v1/fragments?id=eq.${SEED_PHYSICAL_FRAG}&select=marker_code`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -102,8 +103,8 @@ test.describe("M3c writer refusal", () => {
       },
     );
     const rows = (await check.json()) as { marker_code: string | null }[];
-    // Seed frag1 is standard — marker stays null; writer must not set a code
-    expect(rows[0]?.marker_code).toBeNull();
+    expect(rows[0]?.marker_code).toBe(SEED_PHYSICAL_CODE);
     void SEED_GROVE;
+    void SEED_FRAG;
   });
 });
