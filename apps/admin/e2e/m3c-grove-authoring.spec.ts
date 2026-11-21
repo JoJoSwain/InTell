@@ -111,8 +111,17 @@ test.describe("M3c grove authoring", () => {
       timeout: 15_000,
     });
 
+    // Re-open Frag C (prereq save redirects to the grove list) then print
+    await page
+      .getByRole("link", { name: `Frag C ${stamp} · physical` })
+      .click();
+    await expect(page.getByRole("link", { name: "Print marker" })).toBeVisible({
+      timeout: 15_000,
+    });
+
     // Print page — no code in query string
     await page.getByRole("link", { name: "Print marker" }).click();
+    await page.waitForURL(/\/print\/marker\//, { timeout: 15_000 });
     await expect(page.getByLabel("Marker code")).toBeVisible({
       timeout: 15_000,
     });

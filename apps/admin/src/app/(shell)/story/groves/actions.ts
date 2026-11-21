@@ -127,7 +127,9 @@ export async function saveGrove(formData: FormData) {
     redirect(`/story/groves/${id}`);
   }
 
-  // Insert with GeoJSON boundary; PostgREST returns/accepts GeoJSON for geography.
+  // Placeholder EWKT so NOT NULL boundary is satisfied; real shape via invoker RPC.
+  const placeholder =
+    "SRID=4326;POLYGON((-180 -85,-180 85,180 85,180 -85,-180 -85))";
   const { data, error } = await supabase
     .from("groves")
     .insert({
@@ -139,7 +141,7 @@ export async function saveGrove(formData: FormData) {
       gatherings_url: gatheringsUrl,
       allows_speaker_wildlife_sounds: wildlife,
       slug,
-      boundary: geo,
+      boundary: placeholder,
     })
     .select("id")
     .single();
@@ -201,7 +203,8 @@ export async function saveFragment(formData: FormData) {
 
   const title = asL10n(titleEn);
   const teaser = asL10n(teaserEn);
-  const point = { type: "Point", coordinates: [lng, lat] };
+  // EWKT for PostgREST geography (GeoJSON objects fail parse); RPC sets canonical point.
+  const locationEwkt = `SRID=4326;POINT(${lng} ${lat})`;
 
   if (id) {
     const { error } = await supabase
@@ -245,7 +248,7 @@ export async function saveFragment(formData: FormData) {
       is_ending: isEnding,
       trigger_radius_m: triggerRadiusM,
       marker_code: markerCode,
-      location: point,
+      location: locationEwkt,
       indigeny_earth: indigenyEarth,
       indigeny_world: indigenyWorld,
       indigeny_body: indigenyBody,

@@ -15,18 +15,36 @@ test.describe("M3c off-spec upload", () => {
     await expect(page.getByRole("heading", { name: "Audio" })).toBeVisible();
 
     const stamp = Date.now();
-    await page.getByLabel("Title").fill(`Offspec ${stamp}`);
-    await page.getByLabel("Kind").selectOption("narration");
+    const title = `Offspec ${stamp}`;
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
+    await page.getByLabel("Kind", { exact: true }).selectOption("narration");
     const fixture = join(__dirname, "fixtures", "offspec-tone.wav");
     await page.getByLabel("Audio file").setInputFiles(fixture);
     await page.getByRole("button", { name: "Upload" }).click();
 
-    // Warnings appear during/after analyze (AUDIO_FORMAT for wav; LOUDNESS likely)
+    // New upload redirects to detail; duplicate-sha stays on the form with a link.
+    const detailHeading = page.getByRole("heading", { name: title });
+    const dupLink = page.getByRole("link", {
+      name: /This file is already in the library|already in the library/i,
+    });
+    // The duplicate message wraps a link to the existing title
+    const existingLink = page.locator('p[role="status"] a').first();
+
+    await Promise.race([
+      detailHeading.waitFor({ state: "visible", timeout: 30_000 }),
+      existingLink.waitFor({ state: "visible", timeout: 30_000 }),
+    ]).catch(() => undefined);
+
+    if (await existingLink.isVisible().catch(() => false)) {
+      await existingLink.click();
+    }
+
     await expect(
-      page
-        .getByLabel("Checklist issues")
-        .or(page.getByText("AUDIO_FORMAT"))
-        .or(page.getByText("LOUDNESS")),
-    ).toBeVisible({ timeout: 30_000 });
+      page.getByLabel("AUDIO_FORMAT: format differs from AUDIO_SPEC").first(),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel(/LOUDNESS:/).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    void dupLink;
   });
 });

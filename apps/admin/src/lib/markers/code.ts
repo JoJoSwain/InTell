@@ -22,12 +22,9 @@ export function isValidMarkerCode(code: string): boolean {
 export async function hashMarkerCode(code: string): Promise<string> {
   const upper = code.toUpperCase();
   const data = new TextEncoder().encode(upper);
-  if (typeof globalThis.crypto?.subtle?.digest === "function") {
-    const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
-    return [...new Uint8Array(digest)]
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-  const { createHash } = await import("node:crypto");
-  return createHash("sha256").update(upper, "utf8").digest("hex");
+  // Web Crypto only — safe for client components (no node:crypto).
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
