@@ -51,12 +51,6 @@ type ReleaseRow = {
   created_by: string | null;
 };
 
-type ItemRow = {
-  id: string;
-  entity: string;
-  entity_id: string;
-};
-
 function toLocalDatetimeValue(iso: string | null): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
@@ -91,7 +85,11 @@ export default async function ReleaseDetailPage({ params }: Props) {
     .eq("release_id", id)
     .order("entity");
 
-  const itemRows = (items ?? []) as ItemRow[];
+  const itemRows = (items ?? []) as {
+    id: string;
+    entity: string;
+    entity_id: string;
+  }[];
 
   const [
     { data: groves },
