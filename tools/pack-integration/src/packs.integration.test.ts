@@ -787,6 +787,12 @@ describe.sequential("M3a pack integration", () => {
   }, 120_000);
 
   it("preview: anon refused; staff gets PreviewManifest with staging URLs", async () => {
+    // Prior suite cases may leave the seed draft release mid-publish; restore draft.
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
     const anonRes = await invoke("preview", { releaseId: DEMO.draftReleaseId }, anonKey!);
     expect([401, 403]).toContain(anonRes.status);
 
