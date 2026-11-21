@@ -116,14 +116,14 @@ isOneToOne: false
                   ]
                 },"audio_assets": {
                   Row: {
-                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string
+                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"max_short_term_lufs": number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "bitrate_kbps"?: number | null,"bytes": number,"channels": number,"created_at"?: string,"created_by"?: string | null,"duration_ms": number,"ext": string,"id"?: string,"is_public"?: boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags"?: (string)[],"title": string,"true_peak_dbtp"?: number | null,"updated_at"?: string
+                    "bitrate_kbps"?: number | null,"bytes": number,"channels": number,"created_at"?: string,"created_by"?: string | null,"duration_ms": number,"ext": string,"id"?: string,"is_public"?: boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags"?: (string)[],"title": string,"true_peak_dbtp"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "bitrate_kbps"?: number | null,"bytes"?: number,"channels"?: number,"created_at"?: string,"created_by"?: string | null,"duration_ms"?: number,"ext"?: string,"id"?: string,"is_public"?: boolean,"kind"?: Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"sample_rate"?: number,"sha256"?: string,"staging_path"?: string,"tags"?: (string)[],"title"?: string,"true_peak_dbtp"?: number | null,"updated_at"?: string
+                    "bitrate_kbps"?: number | null,"bytes"?: number,"channels"?: number,"created_at"?: string,"created_by"?: string | null,"duration_ms"?: number,"ext"?: string,"id"?: string,"is_public"?: boolean,"kind"?: Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"sample_rate"?: number,"sha256"?: string,"staging_path"?: string,"tags"?: (string)[],"title"?: string,"true_peak_dbtp"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -922,6 +922,9 @@ isOneToOne: false
 "fn_current_revision":
 { Args: { "p_fragment_id": string }; Returns: string
                            },
+"fn_draft_check":
+{ Args: { "p_grove_id": string }; Returns: Json
+                           },
 "fn_daily_expiry_and_retention":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -970,11 +973,20 @@ isOneToOne: false
 "fn_snapshot_projection":
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
                            },
+"fn_set_fragment_location":
+{ Args: { "p_fragment_id": string,"p_lat": number,"p_lng": number }; Returns: undefined
+                           },
+"fn_set_grove_boundary":
+{ Args: { "p_grove_id": string,"p_geojson": string }; Returns: undefined
+                           },
 "fn_snapshot_projection_guarded":
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
                            },
 "fn_unpublish_commit":
 { Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
+                           },
+"fn_unreleased":
+{ Args: { "p_grove_id"?: string }; Returns: { entity: string; entity_id: string }[]
                            },
 "get_pack_index":
 { Args: Record<PropertyKey, never>; Returns: Json

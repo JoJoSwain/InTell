@@ -8,7 +8,7 @@
 --   farmington grove ..... aaaaaaaa-bbbb-4ccc-8ddd-000000000010
 --   frag4 ................ aaaaaaaa-bbbb-4ccc-8ddd-000000000033
 --   frag8 ................ aaaaaaaa-bbbb-4ccc-8ddd-000000000037  (standard, Day-only versions)
---   frag9 ................ aaaaaaaa-bbbb-4ccc-8ddd-000000000038  (physical DEMO-001)
+--   frag9 ................ aaaaaaaa-bbbb-4ccc-8ddd-000000000038  (physical DEM00001)
 --   frag10 ............... aaaaaaaa-bbbb-4ccc-8ddd-000000000039
 --   frag4 rev1 ........... aaaaaaaa-bbbb-4ccc-8ddd-000000000043
 --   frag4 rev2 correction  aaaaaaaa-bbbb-4ccc-8ddd-00000000004b
@@ -499,7 +499,7 @@ begin
      10.67, null, 8, '{"en":"Standard overlook on the marsh loop (Day-only narration)."}'::jsonb, 'draft'),
     (c_frag9_id, c_grove_id, 'leaf', false,
      '{"en":"Hidden Post"}'::jsonb, v_pt_frag9, 'physical',
-     10.67, 'DEMO-001', 9, '{"en":"Physical — marker required."}'::jsonb, 'draft'),
+     10.67, 'DEM00001', 9, '{"en":"Physical — marker required."}'::jsonb, 'draft'),
     (c_frag10_id, c_grove_id, 'leaf', false,
      '{"en":"Two Ways"}'::jsonb, v_pt_frag10, 'standard',
      10.67, null, 10, '{"en":"OR-test leaf; rev2 is a contingency."}'::jsonb, 'draft');

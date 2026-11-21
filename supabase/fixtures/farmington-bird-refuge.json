@@ -251,7 +251,7 @@
         -111.92196390715493
       ],
       "visibility": "physical",
-      "marker_code": "DEMO-001",
+      "marker_code": "DEM00001",
       "radius_m": 10.67,
       "requires": [
         [

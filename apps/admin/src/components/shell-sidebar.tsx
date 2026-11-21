@@ -8,6 +8,48 @@ import { canManageStaff, canViewAudit } from "@/lib/staff";
 
 type NavItem = { href: string; label: string; show: boolean };
 
+function NavSection({
+  title,
+  items,
+  pathname,
+}: {
+  title: string;
+  items: NavItem[];
+  pathname: string;
+}) {
+  const visible = items.filter((i) => i.show);
+  if (!visible.length) return null;
+  return (
+    <div>
+      <p className="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <ul className="mt-2 space-y-1">
+        {visible.map((item) => {
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                className={cn(
+                  "block rounded-md px-2 py-2 text-sm",
+                  active
+                    ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/70",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function ShellSidebar({
   role,
   displayName,
@@ -16,6 +58,15 @@ export function ShellSidebar({
   displayName: string;
 }) {
   const pathname = usePathname();
+  const story: NavItem[] = [
+    { href: "/story/groves", label: "Groves", show: true },
+    { href: "/story/characters", label: "Characters", show: true },
+    { href: "/story/notes", label: "Story Notes", show: true },
+  ];
+  const media: NavItem[] = [
+    { href: "/media/audio", label: "Audio", show: true },
+    { href: "/media/images", label: "Images", show: true },
+  ];
   const ops: NavItem[] = [
     { href: "/regions", label: "Regions", show: true },
     { href: "/audit", label: "Audit", show: canViewAudit(role) },
@@ -36,36 +87,9 @@ export function ShellSidebar({
         </p>
       </div>
       <nav className="mt-8 space-y-6" aria-label="Ops">
-        <div>
-          <p className="px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Ops
-          </p>
-          <ul className="mt-2 space-y-1">
-            {ops
-              .filter((i) => i.show)
-              .map((item) => {
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "block rounded-md px-2 py-2 text-sm",
-                        active
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/70",
-                      )}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-          </ul>
-        </div>
+        <NavSection title="Story" items={story} pathname={pathname} />
+        <NavSection title="Media" items={media} pathname={pathname} />
+        <NavSection title="Ops" items={ops} pathname={pathname} />
       </nav>
       <form action="/auth/sign-out" method="post" className="mt-auto px-2">
         <button
