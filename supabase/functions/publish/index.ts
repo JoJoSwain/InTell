@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { MusicCondition } from "../_shared/from-shared/music.ts";
 import { serviceClient, userClient, getAuthHeader } from "../_shared/clients.ts";
-import { json } from "../_shared/http.ts";
+import {
+  json,
+  matchesSecretKey,
+  serviceCredentialFrom,
+  timingSafeEqual,
+} from "../_shared/http.ts";
+import { publishableKey } from "../_shared/keys.ts";
 import { copyStagingImageToPublic, copyStagingToPublic } from "../_shared/storage.ts";
 
 const Body = z.object({
@@ -13,17 +19,28 @@ const Body = z.object({
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  const auth = getAuthHeader(req);
-  if (!auth) return json({ error: "unauthorized" }, 401);
 
-  // Staff JWT or service role (scheduled publish_release jobs)
-  const svc = serviceClient();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const bearer = auth.replace(/^Bearer\s+/i, "");
-  const isService = bearer.length > 0 && bearer === serviceKey;
+  // Service path (run-jobs) or staff editor JWT — check credentials first.
+  const credential = serviceCredentialFrom(req);
+  const pub = publishableKey();
+  const isService =
+    credential.length > 0 &&
+    !(pub && timingSafeEqual(credential, pub)) &&
+    matchesSecretKey(credential);
 
   if (!isService) {
+    const auth = getAuthHeader(req);
+    if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
+      return json({ error: "unauthorized" }, 401);
+    }
+    const jwt = auth.slice("Bearer ".length).trim();
+    if (!jwt) return json({ error: "unauthorized" }, 401);
+
     const caller = userClient(auth);
+    const { data: userData, error: userErr } = await caller.auth.getUser(jwt);
+    if (userErr || !userData.user) {
+      return json({ error: "unauthorized" }, 401);
+    }
     const { data: allowed, error: roleErr } = await caller.rpc(
       "fn_is_editor_or_admin",
     );
@@ -31,6 +48,8 @@ Deno.serve(async (req) => {
       return json({ error: "editor required", detail: roleErr?.message }, 403);
     }
   }
+
+  const svc = serviceClient();
 
   let body: z.infer<typeof Body>;
   try {

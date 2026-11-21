@@ -1,5 +1,6 @@
 import { serviceClient } from "../_shared/clients.ts";
-import { json, requireServiceRole } from "../_shared/http.ts";
+import { json, requireServiceCaller } from "../_shared/http.ts";
+import { serviceKey } from "../_shared/keys.ts";
 import { functionsBaseUrl } from "../_shared/supabase.ts";
 
 const MAX_ATTEMPTS = 5;
@@ -13,10 +14,12 @@ type JobRow = {
 };
 
 async function invoke(path: string, body: Record<string, unknown>): Promise<void> {
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const key = serviceKey();
   const res = await fetch(`${functionsBaseUrl()}/${path}`, {
     method: "POST",
     headers: {
+      apikey: key,
+      // Transition: receivers still accept Bearer while callers move to apikey.
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
@@ -29,7 +32,7 @@ async function invoke(path: string, body: Record<string, unknown>): Promise<void
 }
 
 Deno.serve(async (req) => {
-  const denied = requireServiceRole(req);
+  const denied = requireServiceCaller(req);
   if (denied) return denied;
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 

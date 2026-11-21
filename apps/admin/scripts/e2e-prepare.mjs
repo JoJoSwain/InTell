@@ -34,12 +34,19 @@ function statusEnv() {
 const env = statusEnv();
 const url = process.env.SUPABASE_URL || env.API_URL || env.SUPABASE_URL;
 const service =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || env.SERVICE_ROLE_KEY;
-const anon = process.env.SUPABASE_ANON_KEY || env.ANON_KEY;
+  process.env.SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  env.SECRET_KEY ||
+  env.SERVICE_ROLE_KEY;
+const anon =
+  process.env.PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  env.PUBLISHABLE_KEY ||
+  env.ANON_KEY;
 
 if (!url || !service) {
   console.error(
-    "Need SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or supabase status)",
+    "Need SUPABASE_URL and SECRET_KEY / SERVICE_ROLE_KEY (or supabase status)",
   );
   process.exit(1);
 }

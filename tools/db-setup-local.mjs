@@ -1,6 +1,7 @@
 /**
  * M2a: `supabase db reset`, then write run-jobs Vault secrets from status env.
  * Secrets are never committed; seed.sql does not write them.
+ * M3f: prefer SECRET_KEY (new API keys), fall back to SERVICE_ROLE_KEY.
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -39,9 +40,12 @@ run("node tools/sync-edge-shared.mjs");
 run("pnpm exec supabase db reset");
 
 const env = parseEnv(run("pnpm exec supabase status -o env", { capture: true }));
-const serviceKey = env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey =
+  env.SECRET_KEY ||
+  env.SERVICE_ROLE_KEY ||
+  env.SUPABASE_SERVICE_ROLE_KEY;
 if (!serviceKey) {
-  console.error("SERVICE_ROLE_KEY missing from supabase status -o env");
+  console.error("SECRET_KEY / SERVICE_ROLE_KEY missing from supabase status -o env");
   process.exit(1);
 }
 
@@ -53,7 +57,7 @@ const esc = (s) => s.replace(/'/g, "''");
 const sql = `create extension if not exists supabase_vault with schema vault;
 delete from vault.secrets where name in ('run_jobs_url','run_jobs_service_key');
 select vault.create_secret('${esc(runJobsUrl)}', 'run_jobs_url', 'M2a local run-jobs URL');
-select vault.create_secret('${esc(serviceKey)}', 'run_jobs_service_key', 'M2a local service role key');
+select vault.create_secret('${esc(serviceKey)}', 'run_jobs_service_key', 'M3f local secret key for run-jobs');
 `;
 
 const tmp = path.join(os.tmpdir(), "intell-vault-setup.sql");
@@ -96,7 +100,7 @@ if (!fs.existsSync(edgeEnvLocal)) {
     "Note: supabase/.env.local is missing (gitignored). Local `supabase functions serve --env-file supabase/.env.local` needs it.",
   );
   console.log(
-    "Create supabase/.env.local with SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY from `pnpm exec supabase status -o env`.",
+    "Create supabase/.env.local with SUPABASE_URL, SUPABASE_ANON_KEY or publishable, SUPABASE_SERVICE_ROLE_KEY or secret from `pnpm exec supabase status -o env`.",
   );
   console.log(
     "After db reset, if edge runtime is unhealthy, run `pnpm exec supabase stop` then `pnpm exec supabase start`. CI starts `functions serve` in parallel.",

@@ -1,9 +1,9 @@
 import { serviceClient } from "../_shared/clients.ts";
-import { json, requireServiceRole } from "../_shared/http.ts";
+import { json, requireServiceCaller } from "../_shared/http.ts";
 import { reconcilePublicMedia } from "../_shared/purgeReconcile.ts";
 
 Deno.serve(async (req) => {
-  const denied = requireServiceRole(req);
+  const denied = requireServiceCaller(req);
   if (denied) return denied;
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   void req.json().catch(() => ({}));

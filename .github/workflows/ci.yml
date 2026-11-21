@@ -51,15 +51,17 @@ jobs:
           # In-network URL for pg_net from the DB container (verify empirically)
           RUN_JOBS_URL: http://host.docker.internal:54321/functions/v1/run-jobs
         run: pnpm db:setup-local
-      - name: Serve edge functions (JWT verification on)
+      - name: Serve edge functions (per-function verify_jwt from config.toml)
         run: pnpm exec supabase functions serve &
       - name: Wait for functions
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          export SERVICE_ROLE_KEY
+          KEY="${SECRET_KEY:-$SERVICE_ROLE_KEY}"
+          export KEY
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:54321/functions/v1/run-jobs" \
-              -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+              -H "apikey: ${KEY}" \
+              -H "Authorization: Bearer ${KEY}" \
               -H "Content-Type: application/json" \
               -d '{}' || true)
             if echo "$code" | grep -qE '200|401|403|405'; then
@@ -75,10 +77,15 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
+          PUB="${PUBLISHABLE_KEY:-$ANON_KEY}"
+          SEC="${SECRET_KEY:-$SERVICE_ROLE_KEY}"
+          export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$PUB"
+          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUB"
           export SUPABASE_URL="$API_URL"
-          export SUPABASE_ANON_KEY="$ANON_KEY"
-          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export SUPABASE_ANON_KEY="$PUB"
+          export SUPABASE_SERVICE_ROLE_KEY="$SEC"
+          export SECRET_KEY="$SEC"
+          export PUBLISHABLE_KEY="$PUB"
           pnpm --filter @intell/admin test:e2e:install
           pnpm --filter @intell/admin e2e:prepare
           pnpm --filter @intell/admin test:e2e

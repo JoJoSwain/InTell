@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "echo \"pack-integration: use pnpm test:integration (needs Docker)\"",
+    "test": "vitest run src/keys.unit.test.ts",
     "test:integration": "vitest run",
     "lint": "node --check src/env.ts",
     "typecheck": "node --check src/env.ts"

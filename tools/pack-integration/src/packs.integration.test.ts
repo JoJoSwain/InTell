@@ -11,8 +11,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 const env = supabaseEnv();
 const url = env.API_URL || env.SUPABASE_URL;
-const serviceKey = env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-const anonKey = env.ANON_KEY || env.SUPABASE_ANON_KEY;
+const serviceKey =
+  env.SECRET_KEY || env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+const anonKey =
+  env.PUBLISHABLE_KEY || env.ANON_KEY || env.SUPABASE_ANON_KEY;
 if (!url || !serviceKey || !anonKey) {
   throw new Error("supabase status missing keys — run supabase start");
 }
@@ -29,14 +31,48 @@ async function invoke(
   body: unknown,
   key: string = serviceKey!,
 ): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  // Service secret: send apikey (+ Bearer during transition). Staff JWTs: Bearer only.
+  if (key === serviceKey) {
+    headers.apikey = key;
+    headers.Authorization = `Bearer ${key}`;
+  } else {
+    headers.Authorization = `Bearer ${key}`;
+  }
+  return fetch(`${url}/functions/v1/${name}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+async function invokeRaw(
+  name: string,
+  body: unknown,
+  headers: Record<string, string>,
+): Promise<Response> {
   return fetch(`${url}/functions/v1/${name}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
+      ...headers,
     },
     body: JSON.stringify(body),
   });
+}
+
+function psql(sql: string): string {
+  return execSync(
+    `docker exec -i supabase_db_Replaceplace psql -U postgres -d postgres -v ON_ERROR_STOP=1 -t -A`,
+    {
+      encoding: "utf8",
+      shell: true,
+      input: sql,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  ).trim();
 }
 
 async function queuedJobCount(): Promise<number> {
@@ -416,7 +452,58 @@ describe.sequential("M3a pack integration", () => {
     expect((await invoke("run-jobs", {})).status).toBe(200);
   }, 60_000);
 
-  it("writer cannot publish release; editor auth is not 403", async () => {
+  it("M3f: service functions refuse missing/wrong/publishable/staff credentials", async () => {
+    const { jwt: editorJwt } = await ensureEditor();
+    const wrong = "sb_secret_definitely-not-a-real-key";
+
+    for (const name of ["build-pack", "purge-assets", "run-jobs"] as const) {
+      const body =
+        name === "build-pack"
+          ? { grove_id: DEMO.groveId, reason: "m3f-auth" }
+          : {};
+
+      const missing = await invokeRaw(name, body, {});
+      expect(missing.status, `${name} no key`).toBe(401);
+
+      const badApi = await invokeRaw(name, body, { apikey: wrong });
+      expect(badApi.status, `${name} wrong apikey`).toBe(403);
+
+      const badBearer = await invokeRaw(name, body, {
+        Authorization: `Bearer ${wrong}`,
+      });
+      expect(badBearer.status, `${name} wrong bearer`).toBe(403);
+
+      const publishable = await invokeRaw(name, body, {
+        apikey: anonKey!,
+        Authorization: `Bearer ${anonKey}`,
+      });
+      expect(publishable.status, `${name} publishable`).toBe(403);
+
+      const staff = await invokeRaw(name, body, {
+        Authorization: `Bearer ${editorJwt}`,
+      });
+      expect(staff.status, `${name} staff JWT`).toBe(403);
+
+      const okApi = await invokeRaw(name, body, { apikey: serviceKey! });
+      expect(okApi.status, `${name} secret apikey`).toBe(200);
+    }
+  }, 120_000);
+
+  it("M3f: publish accepts editor JWT and service key; refuses writer and empty", async () => {
+    const noCred = await invokeRaw("publish", { releaseId: DEMO.draftReleaseId }, {});
+    expect(noCred.status).toBe(401);
+
+    // Nonexistent release: proves service auth, avoids mutating demo draft.
+    const missingRelease = "00000000-0000-4000-8000-000000000099";
+    const serviceOk = await invokeRaw(
+      "publish",
+      { releaseId: missingRelease },
+      { apikey: serviceKey! },
+    );
+    expect([401, 403].includes(serviceOk.status), `service → ${serviceOk.status}`).toBe(
+      false,
+    );
+
     const writerEmail = `m3a-writer-${Date.now()}@test.local`;
     const password = "test-password-writer-1";
     const { data: w, error: wErr } = await svc.auth.admin.createUser({
@@ -453,6 +540,25 @@ describe.sequential("M3a pack integration", () => {
     const { jwt: editorJwt } = await ensureEditor();
     const allowed = await invoke("publish", { release_id: DEMO.draftReleaseId }, editorJwt);
     expect(allowed.status).not.toBe(403);
+    expect(allowed.status).not.toBe(401);
+  }, 60_000);
+
+  it("M3f: fn_call_run_jobs → pg_net → run-jobs returns 200", async () => {
+    const beforeId = Number(psql("select coalesce(max(id), 0) from net._http_response;") || "0");
+    psql("select public.fn_call_run_jobs();");
+
+    let status: number | null = null;
+    for (let i = 0; i < 40; i++) {
+      const row = psql(
+        `select status_code from net._http_response where id > ${beforeId} order by id desc limit 1;`,
+      );
+      if (row) {
+        status = Number(row);
+        if (status === 200) break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(status, "pg_net status_code for run-jobs").toBe(200);
   }, 60_000);
 
   it("staged edit does not leak into live pack until release includes it", async () => {

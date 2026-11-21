@@ -17,9 +17,10 @@ export function getSupabaseUrl(): string {
 }
 
 export function getSupabaseAnonKey(): string {
+  // M3f: publishable is primary; keep ANON_KEY fallback for one milestone.
   return (
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     ""
   );
 }

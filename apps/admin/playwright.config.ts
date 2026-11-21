@@ -36,16 +36,23 @@ export default defineConfig({
             process.env.API_URL ||
             ""
           ).trim();
-          const anon = (
+          const publishable = (
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+            process.env.PUBLISHABLE_KEY ||
             process.env.SUPABASE_ANON_KEY ||
             process.env.ANON_KEY ||
             ""
           ).trim();
           if (url) env.NEXT_PUBLIC_SUPABASE_URL = url;
           else delete env.NEXT_PUBLIC_SUPABASE_URL;
-          if (anon) env.NEXT_PUBLIC_SUPABASE_ANON_KEY = anon;
-          else delete env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          if (publishable) {
+            env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
+            env.NEXT_PUBLIC_SUPABASE_ANON_KEY = publishable;
+          } else {
+            delete env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+            delete env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          }
           return env;
         })(),
       },

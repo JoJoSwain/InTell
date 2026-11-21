@@ -31,13 +31,16 @@ function parseEnv(text) {
 function loadStackEnv() {
   // Prefer process env so we don't call `supabase status` after `functions serve`
   // (on Windows that can stop the edge_runtime container).
+  const secret =
+    process.env.SECRET_KEY ||
+    process.env.SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
   const fromProcess = {
     API_URL: process.env.API_URL || process.env.SUPABASE_URL,
     SUPABASE_URL: process.env.SUPABASE_URL || process.env.API_URL,
-    SERVICE_ROLE_KEY:
-      process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
-    SUPABASE_SERVICE_ROLE_KEY:
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY,
+    SECRET_KEY: process.env.SECRET_KEY || secret,
+    SERVICE_ROLE_KEY: secret,
+    SUPABASE_SERVICE_ROLE_KEY: secret,
   };
   if (fromProcess.API_URL && fromProcess.SERVICE_ROLE_KEY) return fromProcess;
 
@@ -48,9 +51,21 @@ function loadStackEnv() {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
     });
-    return parseEnv(text);
+    const parsed = parseEnv(text);
+    const resolved =
+      parsed.SECRET_KEY ||
+      parsed.SERVICE_ROLE_KEY ||
+      parsed.SUPABASE_SERVICE_ROLE_KEY;
+    if (resolved) {
+      parsed.SECRET_KEY = parsed.SECRET_KEY || resolved;
+      parsed.SERVICE_ROLE_KEY = resolved;
+      parsed.SUPABASE_SERVICE_ROLE_KEY = resolved;
+    }
+    return parsed;
   } catch (e) {
-    console.error("supabase status failed; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+    console.error(
+      "supabase status failed; set SUPABASE_URL and SECRET_KEY / SERVICE_ROLE_KEY",
+    );
     process.exit(1);
   }
 }
