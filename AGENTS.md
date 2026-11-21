@@ -4,7 +4,7 @@ Instructions for every coding agent working in this repo: Cursor, Claude Code, c
 
 ## 1. What we're building
 
-**InTell** is Replaceplace's native, map-first audio app for the InDigeny story pathway. It exists to bring forward **Indigeny**, the embodied struggle between Earth (the physical environment) and World (cultural practice, history, social norms), so people explore themselves and their relationship with Place through stories met in real places (ADR 0004).
+**InTell** is Replaceplace's native, map-first audio app and its **story pathway** (*Find your place in story*). It exists to bring forward **Indigeny**, the phenomenon all of Replaceplace's pathways explore: the embodied struggle between Earth (the physical environment) and World (cultural practice, history, social norms), so people explore themselves and their relationship with Place through stories met in real places (ADRs 0004 and 0005).
 
 **The core experience** is being physically present in a real place. Three audio layers play together on the phone:
 
@@ -56,13 +56,15 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
 ## 5. Hard constraints (never violate)
 
 - **The place comes first.** Every feature serves the on-site encounter. The Chronicle and the Journal support it and never substitute for it.
-- **Minimal UI.** Home is the map with Chronicle (bottom left), Journal (bottom right), one center button (to be decided) and Settings (top right). No extra tabs, feeds, search, lists of nearby content, percentages, streaks, badges, leaderboards or push notifications. Sound and music zones are never drawn on the map.
+- **Minimal UI.** Home is the map with Chronicle (bottom left), **Embark** (center), Journal (bottom right) and Settings (top right). No extra tabs, feeds, search, lists of nearby content, percentages, streaks, badges, leaderboards or push notifications. Sound and music zones are never drawn on the map.
 - **No AI generation** of text, narration, music or sound anywhere: not in the app, the admin or the publish pipeline. Journal-informed authoring is done by Replaceplace's human writers.
 - **Replaceplace-only content.** Everything that plays is produced by Replaceplace staff. Nothing a listener submits is ever played, shown to other users or credited.
 - **Hands-free, one story at a time.** Narration starts automatically on arrival; there is no Play button for a first listen. Only one story fragment ever plays at a time: a second trigger waits in a queue of one and never overlaps (surroundings and soundtrack play alongside narration as usual).
 - **In situ first.** A fragment is first heard only on site: automatically by proximity (or by the accessible-play trigger within 35 ft of its point), or by scanning its physical marker. It becomes replayable in the Chronicle (anywhere, narration only off site) only after it has been **completed** on site, and only for the time version (Day or Night) that was completed.
 - **Locked means teaser only.** Locked and out-of-window fragments appear on the map at 35% opacity. Tapping one shows only its authored teaser: never its title, transcript or audio. Marker codes never leave Postgres (packs carry only their sha256 hash) and are never logged.
-- **Location never leaves the device.** Request "While Using" permission only, never "Always" or Android `ACCESS_BACKGROUND_LOCATION`. Background location only during an exploring session. Journal entries send anchor ids, never coordinates.
+- **Location never leaves the device, except an Embark route request.** Request "While Using" permission only, never "Always" or Android `ACCESS_BACKGROUND_LOCATION`. Background location only during an exploring session. The only coordinates that ever leave the phone are the origin of an Embark route the listener asks for: sent to the `embark` relay and Google, and **never stored, logged, put in telemetry or sent to Sentry** (ADR 0005). Journal entries send anchor ids, never coordinates.
+- **No cars.** Embark offers walk, bike and transit only. Never add a driving mode, parking, or any car-related information or copy anywhere (ADR 0005 §6). The Routes API key lives only in edge-function secrets.
+- **Progress stays on the phone** (no listener accounts or progress sync) and must live where the OS backup includes it (ADR 0005 §1).
 - **Packs gate playback.** Play only assets and revisions present in the currently installed pack manifests. Sync must delete every local asset whose sha isn't in a current manifest. Only published releases reach phones; drafts reach only a signed-in staff device in preview mode.
 - **Wildlife safety.** Layers flagged `wildlife_call` never play through the phone speaker and are muted in nesting months.
 - **Anonymous clients** may call only `get_pack_index`, public storage and the device edge functions. Never ship the Supabase service role key or any secret to mobile or browser code. `device_id` is a bearer secret: never display or fully log it, and endpoints return only that device's data.
@@ -88,7 +90,7 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
 
 - **ADR 0002 (map provider) is Accepted: Google Maps, online.** Phones use `react-native-maps` with Google; the admin uses the Google Maps JavaScript API. No offline map tiles.
 - **ADR 0001 (audio engine)** is produced by Milestone 1. No audio-layer code beyond the M1 spike until it's Accepted.
-- **ADR 0004 open questions** (character-card grove listing, the "changed since you heard it" marker, night-version hints in the Chronicle, listener progress backup, children and the Journal, the center home button). Don't decide these in code; ask.
+- **ADR 0004's open questions are resolved by ADR 0005** (Embark, the changed-fragment pulse and change teaser, character cards with one home grove, other-time hints, progress via OS backup, no printable guide), **except** children and the Journal, which needs counsel before M9. Don't decide that one in code; ask.
 - Product open questions: PRODUCT_SPEC §9.
 
 ## 8. Commands

@@ -15,6 +15,7 @@
 | [adr/](./adr/) | Architecture decision records |
 | [adr/0002-map-provider.md](./adr/0002-map-provider.md) | Map provider: Google Maps, online (Accepted) |
 | [adr/0004-product-realignment.md](./adr/0004-product-realignment.md) | **Product realignment (Accepted); read first** |
+| [adr/0005-listener-experience.md](./adr/0005-listener-experience.md) | **Listener experience (Accepted): Embark, no cars, story-change pulse, character cards, progress backup; read second** |
 | [briefs/](./briefs/) | Milestone task briefs |
 
 Prompt for Cursor (from BUILD_PLAN):

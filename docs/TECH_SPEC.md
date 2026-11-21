@@ -108,6 +108,8 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 - Foreground ("While Using") permission only. iOS `UIBackgroundModes: ["audio","location"]`, `showsBackgroundLocationIndicator: true`, `activityType: fitness`. Android foreground service: notification "InTell is playing your Grove" with a Stop action; no `ACCESS_BACKGROUND_LOCATION`.
 - Accuracy: `Balanced`, 10 m interval, while > 150 m from every candidate; `High`, 5 m interval, within 150 m.
 - Without a session: foreground watch only, for the puck and Grove entry.
+- **Embark (M5, ADR 0005 §5):** nearest grove = straight-line distance from the current fix to each grove's `opening` point in the pack index (no network needed). On a mode choice, the phone sends `{groveId, mode, origin}` to the `embark` relay and draws the returned polyline on the home map with Maps SDK; a slim bar shows mode, distance and time; Refresh re-requests. No spoken guidance. Arrival within the opening root's radius clears the route. The origin is never written to SQLite, telemetry or logs.
+- **Backup (ADR 0005 §1):** the SQLite database and downloaded packs live in locations the OS backup includes (iOS Application Support, not marked excluded; Android Auto Backup with the database included in `fullBackupContent`/`dataExtractionRules`), so restoring a phone restores progress. Tested in M12.
 
 ### 3.4 Packs, download and sync (DATA_MODEL §12)
 1. `get_pack_index()` → show Groves and sizes.
@@ -138,10 +140,10 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 - **Image upload:** sha256, dimensions and alt text → `staging-images/{sha}.{ext}` → `image_assets`.
 - **Editors:**
   - Regions (timezone, sun reference, bounds)
-  - Grove (Google map with Terra Draw polygon or pasted GeoJSON; access notes; fragments placed on the map or by coordinates; tier, visibility, radius in feet, teaser, story order; the prerequisite-group editor with fragments from any grove; validation badges)
+  - Grove (Google map with Terra Draw polygon or pasted GeoJSON; Embark journey passages per mode (optional); fragments placed on the map or by coordinates; tier, visibility, radius in feet, teaser, story order; the prerequisite-group editor with fragments from any grove; validation badges)
   - Physical markers: generate the code and print a QR page (`/print/marker/[fragmentId]`)
-  - Revision (Day/Night versions with narration and transcript; Story Contingency or Correction)
-  - Story Notes (threads, private character notes, Indigeny notes) and characters (public intro, portrait, card lines per fragment link)
+  - Revision (Day/Night versions with narration, transcript and, when both versions exist, an other-time hint each; Story Contingency or Correction; a change teaser for every contingency after revision 1)
+  - Story Notes (threads, private character notes, Indigeny notes) and characters (back story, required portrait, home grove, card lines per fragment link)
   - Releases (add items, run the checklist, publish now or schedule, see history)
   - Ambience (profiles, Day/Night layers with an audition button that runs the scheduler for 60 s) and music (Day/Night cues, condition builder → zod JSON; stems with state-gain rules; loop-point editor on a waveform) in M4
   - Zones (polygon drawing with layer toggles: groves, ambience, music, H3 landcover overlay) in M4
@@ -163,6 +165,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `invite-staff` | Admin (admin role) | Invites a staff member by email and creates their `staff` row; deactivates staff |
 | `export-archive` | Admin (editor+) | A zip of revisions, transcripts, Story Notes and metadata for preservation outside InTell (M11) |
 | `preview` | Staff JWT (writer, sound, editor, admin) | Returns a preview manifest for a `draft` / `scheduled` / `failed` release; 1-hour signed URLs for staged assets; published shas use public URLs (DATA_MODEL §12.5) |
+| `embark` | Mobile (M5) | Embark route: `{groveId, mode: walk\|bike\|transit, origin}` → looks up the grove's published opening point itself (so it can only route to groves) → Google Routes API `computeRoutes` (`WALK` / `BICYCLE` / `TRANSIT`, minimal field mask) with a server-only key → `{mode, distanceM, durationS, polyline, transitSteps?, betaNotice?}`. No `DRIVE`. Never stores or logs the origin; per-device daily cap via `embark_usage` plus a Google quota cap (ADR 0005 §5) |
 | `register-device` | Mobile | Upsert a device (platform, version, language, age gate) |
 | `ingest-events` | Mobile | Batched events (≤ 200), idempotent, 600/h |
 | `journal-entry`, `my-entries` | Mobile | Submit a Journal entry (text, or reserve a voice upload); list your entries and their lineage (M9) |
@@ -177,7 +180,8 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 - `anon` has no table grants (only `get_pack_index`, public storage and the device edge functions).
 - Marker codes never leave Postgres: packs carry sha256 hashes, and codes are never logged or sent to Sentry. QR codes are matched by hash.
 - `device_id` is a bearer secret: never displayed, never logged in full.
-- No raw coordinates leave the device; Journal entries send anchor ids.
+- No raw coordinates leave the device, **except** the origin of an Embark route the listener asks for: it goes to the `embark` relay and on to Google, and is never stored, logged, put in telemetry or sent to Sentry. Journal entries send anchor ids.
+- The Google Routes key is a Supabase function secret (`GOOGLE_ROUTES_API_KEY`), restricted to the Routes API, never in the app or the repo. `embark` accepts only `walk`, `bike` and `transit`.
 - Journal voice files live in a private bucket on a retention schedule.
 - Staff: invite-only accounts, Supabase password protections on (minimum length, leaked-password rejection, session expiry), an audit log on every publish, unpublish and staff change. No two-factor (ADR 0004).
 - Preview manifests and signed URLs are issued only to writer/sound/editor/admin staff JWTs and expire in **1 hour** (DATA_MODEL §12.5).
@@ -187,6 +191,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 ## 7. Configuration
 - Environments: `dev` (local Supabase), `staging` and `prod` (hosted Supabase + hosted admin), with separate EAS channels.
 - **Mobile** `extra`: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GOOGLE_MAPS_API_KEY_IOS`, `GOOGLE_MAPS_API_KEY_ANDROID`, `GOOGLE_MAP_ID`, `SENTRY_DSN`, `LINK_DOMAIN`, `WEBSITE_URL`, `PRIVACY_URL`, `JOURNAL_GUIDE_URL`.
+- **Edge function secrets (names only):** `GOOGLE_ROUTES_API_KEY` (M5, for `embark`; Supabase secrets, never in the repo).
 - **Admin:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAP_ID`, `NEXT_PUBLIC_LINK_DOMAIN`, `SENTRY_DSN`. No service role key.
 - **Universal links:** `LINK_DOMAIN` is on replaceplace.com (proposed `intell.replaceplace.com`). It serves `apple-app-site-association` and `assetlinks.json`, plus a fallback web page at `/f/{code}` that points to the app stores.
 
