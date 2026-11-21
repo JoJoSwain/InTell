@@ -14,7 +14,7 @@
 |---|---|
 | Full local suite green **with `auto_expose_new_tables = false`** | **PASS** |
 | pgTAP `111_m3g_service_role_grants` passes; `110_definer_grants` unchanged and passing | **PASS** |
-| CI + Vercel green on head that includes report + review | (confirmed after push of this report) |
+| CI + Vercel green on head that includes report + review | Re-triggered with empty commit `69cc71d` after a push/PR `db` port-race flake on `672ce87` (sibling run on that SHA succeeded) |
 
 ---
 
@@ -32,6 +32,8 @@ Confirmed in `supabase/config.toml`: `auto_expose_new_tables = false`. Stack res
 | `pnpm --filter @intell/admin build` | **PASS** |
 
 **Extra grants exposed by the config flip:** none. No suite failure required additional grants beyond the brief’s migration.
+
+**CI note:** tip `672ce87` had one `db` job fail with `address already in use` on `:54322` when push and pull_request workflows overlapped; the sibling `db` on the same SHA passed, and Vercel was green. Empty commit `69cc71d` re-triggers a clean run.
 
 ---
 
