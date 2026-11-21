@@ -44,26 +44,25 @@ See `apps/admin/.env.example` and the root `.env.example`. Required for the admi
 
 The hosted staging project uses Supabase's **new API keys** (publishable `sb_publishable_…` and secret `sb_secret_…`). There are **no function secrets to set for M3f** — `SUPABASE_*` keys are injected automatically. `GOOGLE_ROUTES_API_KEY` comes in M5.
 
-1. In the dashboard, under **Settings → API Keys**, create a **dedicated secret key named `run-jobs`**, used only by the cron/Vault path, so it can be rotated on its own. `requireServiceCaller` accepts any key in `SUPABASE_SECRET_KEYS`.
-2. `pnpm exec supabase login`, then `pnpm exec supabase link --project-ref <ref>` (ref from the dashboard; do not commit it).
-3. `pnpm exec supabase db push` **from master**.
-4. `pnpm exec supabase functions deploy`, which applies the per-function `verify_jwt` from `config.toml`.
-5. In the SQL editor, create the Vault secrets (type values only in the dashboard; never commit them):
+1. In the dashboard, under **Settings → API Keys**, create a **dedicated secret key named `run-jobs`** (or `run_jobs` if the form refuses the hyphen), used only by the cron/Vault path, so it can be rotated on its own. `requireServiceCaller` accepts any key in `SUPABASE_SECRET_KEYS`. Store it in the password manager only.
+2. Create the two Vault secrets in the dashboard under **Integrations → Vault → Secrets**, not in the SQL editor: the SQL editor keeps query history, so a key typed there stays stored with it. Migrations only read these secrets, so they can be created before or after `db push`.
+   - `run_jobs_url`: the Project URL with `/functions/v1/run-jobs` appended (`https://<ref>.supabase.co/functions/v1/run-jobs`, no trailing slash)
+   - `run_jobs_service_key`: the `run-jobs` secret key from step 1
+3. `pnpm exec supabase login`, then `pnpm exec supabase link --project-ref <ref>` (ref from the dashboard; do not commit it). If `link` asks for the database password, press Enter to skip.
+4. `pnpm exec supabase db push` **from master**. This applies migrations only: `seed.sql` is local-only, so staging starts with no demo content. Run step 5 right after, because pg_cron starts calling `run-jobs` every minute once the migrations land.
+5. `pnpm exec supabase functions deploy`, which applies the per-function `verify_jwt` from `config.toml`.
+6. Smoke test in the SQL editor:
 
    ```sql
-   select vault.create_secret(
-     'https://<ref>.supabase.co/functions/v1/run-jobs',
-     'run_jobs_url',
-     'Hosted run-jobs URL'
-   );
-   select vault.create_secret(
-     '<run-jobs secret key from Settings → API Keys>',
-     'run_jobs_service_key',
-     'Secret key for cron → run-jobs'
-   );
+   select public.fn_call_run_jobs();
+   -- wait a few seconds, then:
+   select status_code, error_msg, created
+   from net._http_response
+   order by id desc
+   limit 3;
    ```
 
-6. Smoke test: `select public.fn_call_run_jobs();`, then check the `run-jobs` logs return 200 and that no jobs are stuck.
+   Expect `200`. A `401`/`403` means `run_jobs_service_key` isn't a current secret key (if the key was created after the last deploy, run `functions deploy` again). A `404` means the functions aren't deployed or `run_jobs_url` is wrong. Also check that no rows in `public.jobs` are stuck in a failed state.
 7. **Auth dashboard**
    - Disable sign-ups; anonymous sign-ins off; MFA off.
    - Minimum password length **10**.
@@ -75,11 +74,18 @@ The hosted staging project uses Supabase's **new API keys** (publishable `sb_pub
 8. **Bootstrap the first admin (A4)** — no email and no service-key script:
    1. Supabase dashboard → **Authentication → Users → Add user → Create new user**.
    2. Enter the email and a password of at least 10 characters, and tick **Auto Confirm User**.
-   3. In the SQL editor, insert your staff row (replace the uuid):
+   3. In the SQL editor, insert your staff row, looked up by email so no uuid needs copying:
 
    ```sql
    insert into public.staff (user_id, display_name, role, active)
-   values ('<your-auth-user-uuid>', 'JoJo', 'admin', true);
+   select id, 'JoJo', 'admin', true
+   from auth.users
+   where email = '<your-admin-email>';
+
+   -- check: one row, role admin, active true
+   select u.email, s.display_name, s.role, s.active
+   from public.staff s
+   join auth.users u on u.id = s.user_id;
    ```
 
    After that, every other invite goes through the admin **Staff** page (`invite-staff`).
