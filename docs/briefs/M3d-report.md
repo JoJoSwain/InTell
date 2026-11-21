@@ -12,10 +12,10 @@
 
 | Check | Result |
 |---|---|
-| `pnpm db:setup-local` | **PASS** — migrations through `20261121160003_m3d_draft_check_revisions.sql` + seed + vault + seed-media; prints note when `supabase/.env.local` is missing |
-| `pnpm exec supabase test db` | **PASS** — Files=**31**, Tests=**161** (includes `069`/`070`/`071` M3d) |
-| `pnpm test:integration` | **PASS** — **19** tests (D1 published-revision edit refused; preview anon/staff/viewer; prior M3a cases) |
-| Playwright (`apps/admin`) | **PASS** — **14** tests (M3b/M3c regression + M3d from-scratch, writer refusal, schedule/checklist, unpublish confirm) |
+| `pnpm db:setup-local` | **PASS** — migrations through `20261121170001_m3d_review_e2_n1.sql` + seed + vault + seed-media |
+| `pnpm exec supabase test db` | **PASS** — Files=**32**, Tests=**168** (includes `069`–`072` M3d) |
+| `pnpm test:integration` | **PASS** — **20** tests (D1; preview anon/staff/viewer/**admin**; prior M3a) |
+| Playwright (`apps/admin`) | **PASS** — **14** tests (E1 hard publish + GrovePack; E4 Bridge Start stranded; schedule/writer) |
 | `pnpm lint && pnpm typecheck && pnpm test` | **PASS** — shared Vitest **81**; admin Vitest **5** |
 | `pnpm --filter @intell/admin build` | **PASS** |
 
@@ -93,33 +93,68 @@ Local preview edge: `supabase functions serve --env-file supabase/.env.local` (U
 
 ## 5. Deviations
 
-1. **From-scratch E2E cross-grove prereq** — deferred in Playwright for remount/flake risk; physical + Day-only + Contingency revision + release/publish covered. Cross-grove graph remains covered by M3c e2e + integration externalPrerequisites cases.
-2. **Publish → pack validate in the same Playwright test** — soft-asserts publishing/published; full GrovePack schema validation remains in integration (seed/demo packs + contingency). Brand-new grove may still hit sound/character deps that "Add missing" cannot insert until M4.
-3. **N3** — moved to M4 per review answer 18 (not implemented in M3d).
+1. **N3** — moved to M4 per review answer 18 (not implemented in M3d).
+2. Earlier soft-assert gaps on from-scratch publish are **closed by E1** (see Review fixes).
 
 ---
 
 ## 6. Open questions
 
-None blocking acceptance beyond the known ADR 0004 opens (center button, etc.) and M4 sound-entity release items.
+ADR 0005 (on this branch as docs) settles the prior ADR 0004 opens except children's Journal privacy. M4 still owns sound-entity release items. **Do not start M3e here.**
 
 ---
 
 ## 7. Git log (branch commits since plan)
 
-```
-3519c44 test(admin): hard-nav between fragment creates in m3c e2e
-c089b9f test(admin): disambiguate Physical fragment link in e2e
-1b01fcd test(admin): disambiguate DayOnly fragment link in e2e
-da847f2 test(admin): stabilize M3d from-scratch fragment creation
-8872cf9 fix(admin): reset fragment form state so marker codes do not leak
-169ddac fix(preview): import map for zod and reset draft before preview test
-ef1e590 fix(admin): release page ternary and harden M3d e2e
-7cdde2f test(admin): M3d Playwright specs and release detail polish
-eed4220 feat(admin): M3d revision editor, releases UI, and preview
-c617b32 feat(db): M3d revision immutability, unpublish preview, draft checks
-3da74e9 docs: add M3d plan review
-6dba209 docs: add M3d revisions/releases/preview plan
-```
+See `git log --oneline origin/master..HEAD` on `m3d-releases`. Implementation review: `docs/briefs/M3d-review.md` (`a9871d0`). ADR 0005 + M3e brief: `fdfe5c2` (docs only).
 
-CI / Vercel: recorded after push (update this report or a follow-up commit if needed).
+CI / Vercel: see **Review fixes** §N2 after the fix push.
+
+---
+
+## 8. Review fixes (`M3d-review.md` E1–E4 + nits)
+
+**Reviewed against:** `docs/briefs/M3d-review.md` (Changes requested). Review wins. Tip after fixes: recorded on push.
+
+### New commits since `f4d9448`
+- `fdfe5c2` docs: ADR 0005 + spec amendments + M3e brief (docs only; not implemented)
+- `a9871d0` docs: M3d implementation review
+- *(this push)* E1–E4 + N1–N2 implementation, tests, report
+
+### Suite after fixes
+| Check | Result |
+|---|---|
+| `pnpm db:setup-local` / `db reset` | **PASS** — through `20261121170001_m3d_review_e2_n1.sql` |
+| `pnpm exec supabase test db` | **PASS** — Files=**32**, Tests=**168** (adds `072_m3d_revision_release_guard`) |
+| `pnpm test:integration` | **PASS** — **20** tests (adds admin preview) |
+| Playwright | **PASS** — **14** tests (E1 from-scratch hard publish + GrovePack; E4 stranded Bridge Start) |
+| `pnpm lint && pnpm typecheck && pnpm test` | **PASS** |
+| `pnpm --filter @intell/admin build` | **PASS** |
+
+### E1 — from-scratch acceptance
+- Playwright now builds a **new** grove with physical + Day-only, sets a **cross-grove prerequisite on seed Beginning**, publishes in **one** release, drains `run-jobs` until **Status: Published** (no `publishing \|\| published`), loads `get_pack_index`, downloads the manifest, and **`GrovePack.parse`s** it.
+- Assertions: physical has `markerHash` (no code), Day-only revision has only `day`, `externalPrerequisites` lists Beginning.
+- **Root cause of the earlier "Add missing" / soft-assert gap:** the e2e checklist loop raced `Run checklist` → `router.refresh()` and often published with only grove+revisions, leaving `DEPENDENCY_UNPUBLISHED` on the two fragments. Not an M4 sound-entity problem for a grove with no sound entities. Fix: add grove + **fragments** + revisions explicitly, then drain jobs and hard-assert `published` + zod.
+
+### E2 — revision status / release_id bypass
+- Migration `20261121170001_m3d_review_e2_n1.sql`: for `auth.role() = 'authenticated'`, INSERT requires `status = draft` and `release_id is null`; UPDATE refuses changes to `status` or `release_id`.
+- pgTAP `072`: editor promote refused; published insert refused; `release_id` set refused; service-path publish/unpublish still works; writer insert still gets `revision_no` (N1).
+
+### E3 — admin preview
+- `preview` looks up staff with `auth.getUser()` + `.eq("user_id", …)`.
+- Integration: **preview: admin can preview (staff lookup filtered by user_id)** — **PASS**.
+
+### E4 — stranded warning visible
+- Unpublish Playwright targets **fragment** Beginning; confirm dialog names **Bridge Start** (cross-grove) before Cancel.
+- Screenshot `unpublish-confirm-stranded.png` replaced.
+- Warnings now include fragment titles in the message.
+
+### Nits
+- **N1 fixed:** revoked `EXECUTE` on the three trigger functions from `authenticated`; removed `fn_fragment_revision_assign_no()` from `110` allowlist; `072` proves writer insert still gets `revision_no`.
+- **N2 fixed:** CI/Vercel status recorded below after the fix-head push.
+
+### Deferred nits
+None — N1 and N2 done.
+
+### CI / Vercel (N2)
+*Filled after push on the fix head.*

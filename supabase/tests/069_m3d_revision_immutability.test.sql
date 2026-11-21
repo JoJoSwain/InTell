@@ -89,7 +89,11 @@ select is(
   'draft revisions remain editable'
 );
 
--- After publish, authenticated cannot edit
+-- After publish (service / no JWT role), authenticated cannot edit
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
+
 update public.fragment_revisions
    set status = 'published'
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000070';

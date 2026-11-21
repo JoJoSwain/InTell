@@ -95,7 +95,7 @@ export function UnpublishButton({
                       className="text-sm text-textMuted"
                     >
                       {w.code}: {w.message}
-                      {w.entity_id ? ` (${w.entity_id.slice(0, 8)})` : ""}
+                      {w.entity_id ? ` [${w.entity_id}]` : ""}
                     </li>
                   ))}
                 </ul>

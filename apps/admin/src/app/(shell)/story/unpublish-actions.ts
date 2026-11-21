@@ -36,6 +36,45 @@ function asWarnings(raw: unknown): ChecklistFailure[] {
   return raw as ChecklistFailure[];
 }
 
+function l10nTitle(title: unknown): string | null {
+  if (!title || typeof title !== "object") return null;
+  const en = (title as Record<string, unknown>).en;
+  return typeof en === "string" && en.trim() ? en.trim() : null;
+}
+
+/** Attach human fragment titles so stranded warnings name the dependent. */
+async function withFragmentTitles(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  warnings: ChecklistFailure[],
+): Promise<ChecklistFailure[]> {
+  const fragIds = [
+    ...new Set(
+      warnings
+        .filter((w) => w.entity === "fragment" && w.entity_id)
+        .map((w) => w.entity_id as string),
+    ),
+  ];
+  if (!fragIds.length) return warnings;
+  const { data } = await supabase
+    .from("fragments")
+    .select("id, title")
+    .in("id", fragIds);
+  const titles = new Map<string, string>();
+  for (const row of data ?? []) {
+    const name = l10nTitle(row.title);
+    if (name) titles.set(row.id as string, name);
+  }
+  return warnings.map((w) => {
+    if (w.entity !== "fragment" || !w.entity_id) return w;
+    const name = titles.get(w.entity_id);
+    if (!name) return w;
+    return {
+      ...w,
+      message: `${w.message}: ${name}`,
+    };
+  });
+}
+
 export async function previewUnpublish(
   entity: UnpublishEntity,
   ids: string[],
@@ -50,7 +89,11 @@ export async function previewUnpublish(
   });
   if (error) return { ok: false, error: error.message };
   const payload = data as { ok?: boolean; warnings?: unknown } | null;
-  return { ok: true, warnings: asWarnings(payload?.warnings) };
+  const warnings = await withFragmentTitles(
+    supabase,
+    asWarnings(payload?.warnings),
+  );
+  return { ok: true, warnings };
 }
 
 export async function confirmUnpublish(

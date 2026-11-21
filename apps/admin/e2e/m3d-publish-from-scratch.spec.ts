@@ -1,9 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { GrovePack } from "@intell/shared";
 import { loadUsers, signIn } from "./auth";
 
 const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
+/** Published seed Beginning — cross-grove prerequisite target. */
+const SEED_FRAG_BEGINNING = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
 const SHOTS = join(__dirname, "screenshots");
 
 /** Small polygon around Farmington sun reference (~41.1, -111.9). No Maps API. */
@@ -26,7 +29,6 @@ async function fillFirstRevisionDayOnly(
 ) {
   await expect(page.getByLabel("Story Contingency")).toBeVisible();
   await page.getByLabel("Include Day version").check();
-  // Seed narration assets are titled "TEST tone — narration …"
   const dayAsset = page.getByLabel("Day narration asset");
   await dayAsset.selectOption({ index: 1 });
   await page.getByLabel("Day transcript").fill(transcript);
@@ -36,19 +38,60 @@ async function fillFirstRevisionDayOnly(
   await expect(page.getByText(/Rev 1/)).toBeVisible({ timeout: 20_000 });
 }
 
+async function drainJobs(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  maxRounds = 40,
+) {
+  for (let i = 0; i < maxRounds; i++) {
+    const pendingRes = await fetch(
+      `${supabaseUrl}/rest/v1/jobs?status=in.(queued,running)&select=id`,
+      {
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          Prefer: "count=exact",
+        },
+      },
+    );
+    const contentRange = pendingRes.headers.get("content-range") ?? "";
+    const match = contentRange.match(/\/(\d+)$/);
+    const pending = match ? Number(match[1]) : 0;
+    if (pending === 0) return;
+    const res = await fetch(`${supabaseUrl}/functions/v1/run-jobs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!res.ok) {
+      throw new Error(`run-jobs ${res.status}: ${await res.text()}`);
+    }
+  }
+  throw new Error("jobs did not drain");
+}
+
 test.describe("M3d publish from scratch", () => {
   test.beforeAll(() => {
     mkdirSync(SHOTS, { recursive: true });
   });
 
-  test("grove → physical + Day-only → revision → release → publish", async ({
+  test("grove → physical + Day-only + cross-grove prereq → publish → GrovePack", async ({
     page,
     request,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(360_000);
     const auth = loadUsers();
     const editor = auth.users.editor;
     if (!editor) throw new Error("editor missing");
+    const serviceRoleKey = auth.serviceRoleKey;
+    if (!serviceRoleKey) {
+      throw new Error(
+        "serviceRoleKey missing — re-run pnpm --filter @intell/admin e2e:prepare",
+      );
+    }
 
     await signIn(page, editor.email, editor.password);
 
@@ -68,7 +111,7 @@ test.describe("M3d publish from scratch", () => {
     const groveUrl = page.url();
     const groveId = groveUrl.split("/").pop()!;
 
-    // --- Physical marker fragment (with teaser) ---
+    // --- Physical marker fragment ---
     await page.getByRole("link", { name: "New fragment" }).click();
     await page.getByLabel("Fragment title").fill(`Physical ${stamp}`);
     await page.getByLabel("Teaser").fill("Physical teaser");
@@ -80,13 +123,12 @@ test.describe("M3d publish from scratch", () => {
       timeout: 15_000,
     });
 
-    // Fresh navigation so FragmentForm remounts without Physical marker state.
     await page.goto(groveUrl);
     await expect(page.getByRole("heading", { name: groveName })).toBeVisible({
       timeout: 15_000,
     });
 
-    // --- Day-only fragment (revision will include Day, not Night) ---
+    // --- Day-only fragment with cross-grove prereq on seed Beginning ---
     await page.getByRole("link", { name: "New fragment" }).click();
     await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`DayOnly ${stamp}`);
@@ -97,11 +139,27 @@ test.describe("M3d publish from scratch", () => {
     await page.getByRole("button", { name: "Add fragment" }).click();
     await expect(
       page.getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) }).first(),
-    ).toBeVisible({
-      timeout: 20_000,
-    });
+    ).toBeVisible({ timeout: 20_000 });
 
-    // First revision on DayOnly — Story Contingency locked
+    await page
+      .getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Add OR group" }).click();
+    const multi = page.getByLabel("Prerequisite group 1 members");
+    await multi.evaluate((el, beginningId) => {
+      const select = el as HTMLSelectElement;
+      for (const opt of Array.from(select.options)) {
+        opt.selected = opt.value === beginningId;
+      }
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }, SEED_FRAG_BEGINNING);
+    await page.getByRole("button", { name: "Save prerequisites" }).click();
+    await expect(
+      page.getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // First revision on DayOnly — Story Contingency locked, Day only
     await page
       .getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) })
       .first()
@@ -113,7 +171,6 @@ test.describe("M3d publish from scratch", () => {
         "The first revision of a fragment is always a Story Contingency.",
       ),
     ).toBeVisible();
-    await expect(page.getByLabel("Story Contingency")).toBeVisible();
     await page.screenshot({
       path: join(SHOTS, "revision-first-contingency.png"),
       fullPage: true,
@@ -122,10 +179,12 @@ test.describe("M3d publish from scratch", () => {
       page,
       "Staff-typed day transcript for M3d DayOnly.",
     );
-    const dayRevisionUrl = page.url();
-    const dayRevisionId = dayRevisionUrl.split("/").pop()!;
+    // .../fragments/{fragmentId}/revisions/{revisionId}
+    const dayParts = page.url().split("/");
+    const dayRevisionId = dayParts[dayParts.length - 1]!;
+    const dayFragmentId = dayParts[dayParts.length - 3]!;
 
-    // First revision on Physical (needed so checklist can green)
+    // First revision on Physical
     await page.goto(groveUrl);
     await page
       .getByRole("link", { name: new RegExp(`Physical ${stamp}`) })
@@ -137,7 +196,9 @@ test.describe("M3d publish from scratch", () => {
       page,
       "Staff-typed day transcript for M3d Physical.",
     );
-    const physicalRevisionId = page.url().split("/").pop()!;
+    const physParts = page.url().split("/");
+    const physicalRevisionId = physParts[physParts.length - 1]!;
+    const physicalFragmentId = physParts[physParts.length - 3]!;
 
     // --- Release ---
     await page.getByRole("link", { name: "Releases" }).click();
@@ -148,29 +209,35 @@ test.describe("M3d publish from scratch", () => {
       page.getByRole("heading", { name: `M3d Release ${stamp}` }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByLabel("Release item entity type").selectOption("grove");
-    await page.getByLabel("Select Grove to add").selectOption(groveId);
-    await page.getByRole("button", { name: "Add release item" }).click();
-    await expect(
-      page.getByRole("heading", { name: `M3d Release ${stamp}` }),
-    ).toBeVisible({ timeout: 15_000 });
-
-    for (const revId of [dayRevisionId, physicalRevisionId]) {
-      await page.getByLabel("Release item entity type").selectOption("revision");
-      await page.getByLabel("Select Revision to add").selectOption(revId);
+    async function addItem(entity: string, entityId: string) {
+      await page.getByLabel("Release item entity type").selectOption(entity);
+      const label =
+        entity === "grove"
+          ? "Select Grove to add"
+          : entity === "fragment"
+            ? "Select Fragment to add"
+            : "Select Revision to add";
+      await page.getByLabel(label).selectOption(entityId);
       await page.getByRole("button", { name: "Add release item" }).click();
       await expect(
         page.getByRole("heading", { name: `M3d Release ${stamp}` }),
       ).toBeVisible({ timeout: 15_000 });
     }
 
-    // Checklist → add missing deps (characters, fragments, …) until stable
-    for (let i = 0; i < 6; i++) {
-      await page
-        .getByRole("button", { name: "Run publish checklist" })
-        .click();
-      // RunCheckButton refreshes; wait for either results or "no failures"
-      await page.waitForTimeout(2000);
+    // Include grove + fragments + revisions so the checklist can green without
+    // racing the "Add missing" button (that race was the earlier soft-assert gap).
+    await addItem("grove", groveId);
+    await addItem("fragment", dayFragmentId);
+    await addItem("fragment", physicalFragmentId);
+    await addItem("revision", dayRevisionId);
+    await addItem("revision", physicalRevisionId);
+
+    // Checklist → add any remaining DEPENDENCY_UNPUBLISHED items until stable
+    for (let i = 0; i < 8; i++) {
+      await page.getByRole("button", { name: "Run publish checklist" }).click();
+      await expect(
+        page.getByLabel("Checklist results").or(page.getByText(/no failures/i)),
+      ).toBeVisible({ timeout: 20_000 });
       const addMissing = page.getByRole("button", {
         name: "Add missing dependency items from checklist",
       });
@@ -189,96 +256,80 @@ test.describe("M3d publish from scratch", () => {
       fullPage: true,
     });
 
-    // Publish path — assert publishing/published when checklist can green.
-    // GAP: a brand-new grove may still fail region sound / character deps that
-    // "Add missing" cannot insert (sound entities have no M3d picker). In that
-    // case we keep the checklist screenshot and soft-assert status if Publish runs.
-    const publishBtn = page.getByRole("button", { name: "Publish release now" });
-    await expect(publishBtn).toBeVisible();
-    await publishBtn.click();
+    await page.getByRole("button", { name: "Publish release now" }).click();
 
-    const statusPublishingOrPublished = page.getByLabel(
-      /Status: (Publishing…|Published)/,
-    );
-    const statusFailed = page.getByLabel("Status: Failed");
-    const publishAlert = page.getByRole("alert");
+    // Reach publishing or published; then drain jobs until published.
+    await expect(
+      page.getByLabel(/Status: (Publishing…|Published|Failed)/),
+    ).toBeVisible({ timeout: 120_000 });
 
-    await Promise.race([
-      statusPublishingOrPublished
-        .waitFor({ state: "visible", timeout: 120_000 })
-        .then(() => "ok" as const),
-      statusFailed
-        .waitFor({ state: "visible", timeout: 120_000 })
-        .then(() => "failed" as const),
-      publishAlert
-        .waitFor({ state: "visible", timeout: 120_000 })
-        .then(() => "alert" as const),
-    ]);
-
-    if (await statusFailed.isVisible().catch(() => false)) {
-      // Keep failure evidence for humans; do not hard-fail the whole suite goal
-      // if remaining checklist codes are sound/region deps outside M3d UI scope.
+    if (await page.getByLabel("Status: Failed").isVisible().catch(() => false)) {
       await page.screenshot({
         path: join(SHOTS, "release-checklist-grouped.png"),
         fullPage: true,
       });
-      // Prefer green publish when possible — rethrow only if no grouped codes shown
-      const grouped = page.getByLabel("Checklist results");
-      if (!(await grouped.isVisible().catch(() => false))) {
-        throw new Error("release failed without checklist results UI");
-      }
-      return;
+      throw new Error("release failed checklist/publish — see screenshot");
     }
 
-    if (await publishAlert.isVisible().catch(() => false)) {
-      // Edge refused (checklist still red). Grouped screenshot already taken.
-      return;
-    }
+    await drainJobs(auth.supabaseUrl, serviceRoleKey);
 
-    // Soft-poll until published (pack rebuild is async via jobs)
-    const deadline = Date.now() + 180_000;
-    while (Date.now() < deadline) {
-      if (await page.getByLabel("Status: Published").isVisible().catch(() => false)) {
-        break;
-      }
-      if (await page.getByLabel("Status: Failed").isVisible().catch(() => false)) {
-        break;
-      }
-      await page.waitForTimeout(4000);
-      await page.reload();
-    }
+    await page.reload();
+    await expect(page.getByLabel("Status: Published")).toBeVisible({
+      timeout: 30_000,
+    });
 
-    const published = await page
-      .getByLabel("Status: Published")
-      .isVisible()
-      .catch(() => false);
-    const publishing = await page
-      .getByLabel("Status: Publishing…")
-      .isVisible()
-      .catch(() => false);
-    expect(published || publishing).toBeTruthy();
-
-    if (published) {
-      const idxRes = await request.post(
-        `${auth.supabaseUrl}/rest/v1/rpc/get_pack_index`,
-        {
-          headers: {
-            apikey: auth.anonKey,
-            Authorization: `Bearer ${auth.anonKey}`,
-            "Content-Type": "application/json",
-          },
-          data: {},
+    // Pack index → download → GrovePack zod
+    const idxRes = await request.post(
+      `${auth.supabaseUrl}/rest/v1/rpc/get_pack_index`,
+      {
+        headers: {
+          apikey: auth.anonKey,
+          Authorization: `Bearer ${auth.anonKey}`,
+          "Content-Type": "application/json",
         },
-      );
-      expect(idxRes.ok()).toBeTruthy();
-      const index = (await idxRes.json()) as unknown;
-      const blob = JSON.stringify(index);
-      // Live grove packs should mention our new grove id once rebuild finishes.
-      // GAP: if pack jobs lag behind the 3-minute poll, status Published may
-      // precede index membership — assertion is best-effort then.
-      if (blob.includes(groveId)) {
-        expect(blob).toContain(groveId);
-      }
-    }
+        data: {},
+      },
+    );
+    expect(idxRes.ok()).toBeTruthy();
+    const index = (await idxRes.json()) as {
+      id?: string;
+      scope?: string;
+      manifestPath?: string;
+    }[];
+    const entry = index.find((e) => e.scope === "grove" && e.id === groveId);
+    expect(entry?.manifestPath, JSON.stringify(index)).toBeTruthy();
+
+    const packRes = await request.get(
+      `${auth.supabaseUrl}/storage/v1/object/public/public-media/${entry!.manifestPath}`,
+    );
+    expect(packRes.ok(), await packRes.text()).toBeTruthy();
+    const packJson = await packRes.json();
+    const pack = GrovePack.parse(packJson);
+
+    expect(pack.groveId).toBe(groveId);
+    expect(JSON.stringify(pack)).not.toMatch(/marker_code/i);
+    expect(JSON.stringify(pack)).not.toMatch(/"markerCode"/);
+
+    const physical = pack.fragments.find((f) =>
+      (f.title.en ?? "").includes(`Physical ${stamp}`),
+    );
+    expect(physical).toBeTruthy();
+    expect(physical!.visibility).toBe("physical");
+    expect(physical!.markerHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(physical!.radiusM).toBeUndefined();
+
+    const dayOnly = pack.fragments.find((f) =>
+      (f.title.en ?? "").includes(`DayOnly ${stamp}`),
+    );
+    expect(dayOnly).toBeTruthy();
+    const dayRev = pack.revisions.find((r) => r.fragmentId === dayOnly!.id);
+    expect(dayRev).toBeTruthy();
+    expect(dayRev!.versions.map((v) => v.timeWindow).sort()).toEqual(["day"]);
+
+    expect(
+      pack.externalPrerequisites.some(
+        (e) => e.fragmentId === SEED_FRAG_BEGINNING,
+      ),
+    ).toBeTruthy();
   });
 });

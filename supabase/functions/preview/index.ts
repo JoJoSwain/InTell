@@ -26,9 +26,15 @@ Deno.serve(async (req) => {
   if (!auth) return json({ error: "unauthorized" }, 401);
 
   const caller = userClient(auth);
+  // Admins can SELECT every staff row under RLS — always filter by caller.
+  const { data: userData, error: userErr } = await caller.auth.getUser();
+  if (userErr || !userData.user) {
+    return json({ error: "staff required" }, 401);
+  }
   const { data: staff, error: staffErr } = await caller
     .from("staff")
     .select("role, active")
+    .eq("user_id", userData.user.id)
     .maybeSingle();
   if (staffErr || !staff?.active) {
     return json({ error: "staff required" }, 401);

@@ -853,4 +853,44 @@ describe.sequential("M3a pack integration", () => {
     );
     expect(res.status).toBe(403);
   }, 60_000);
+
+  it("preview: admin can preview (staff lookup filtered by user_id)", async () => {
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
+    const email = `m3d-admin-${Date.now()}@test.local`;
+    const password = "test-password-admin-1";
+    const { data: created, error } = await svc.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (error || !created.user) throw new Error(error?.message ?? "createUser");
+    await svc.from("staff").insert({
+      user_id: created.user.id,
+      display_name: "M3d Admin",
+      role: "admin",
+      active: true,
+    });
+    const authClient = createClient(url!, anonKey!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: session, error: signErr } = await authClient.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signErr || !session.session) throw new Error(signErr?.message ?? "signIn");
+
+    const res = await invoke(
+      "preview",
+      { releaseId: DEMO.draftReleaseId },
+      session.session.access_token,
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    const parsed = PreviewManifest.parse(await res.json());
+    expect(parsed.schema).toBe("preview/1");
+    expect(parsed.releaseId).toBe(DEMO.draftReleaseId);
+  }, 60_000);
 });

@@ -42,10 +42,10 @@ test.describe("M3d schedule and checklist UI", () => {
       fullPage: true,
     });
 
-    // Schedule with datetime-local (past-due is fine for Scheduled badge)
+    // Schedule far ahead so cron/enqueue cannot flip it to Publishing mid-assert.
     const local = page.getByLabel(/Publish at local time/);
     await expect(local).toBeVisible();
-    const d = new Date(Date.now() - 60_000);
+    const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const pad = (n: number) => String(n).padStart(2, "0");
     const value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     await local.fill(value);

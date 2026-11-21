@@ -84,6 +84,8 @@ writeFileSync(
     {
       supabaseUrl: url,
       anonKey: anon ?? "",
+      // Local demo service role only — gitignored; used to drain run-jobs in e2e.
+      serviceRoleKey: service,
       users,
       createdAt: new Date().toISOString(),
     },
