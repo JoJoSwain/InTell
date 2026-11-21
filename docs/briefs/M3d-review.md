@@ -72,3 +72,24 @@ The unpublish screenshot shows "No stranded-prerequisite warnings", so the featu
 - Which nits were fixed
 
 **Then stop for verification.** After M3d merges, the next brief is `docs/briefs/M3e-story-fields.md` (plan first, then stop).
+
+---
+
+## Verification (2026-11-20, head `9c86629`)
+
+**Verified. M3d is complete, and PR #11 may merge once CI and Vercel are green on the head that carries this note.** With it, **M3 is complete.**
+
+- **E1:** done. The from-scratch Playwright test builds a new grove with a physical fragment, a Day-only fragment and a **cross-grove prerequisite on seed Beginning**, publishes it in one release, drains `run-jobs`, and hard-asserts **Published**. It then fetches the manifest from `get_pack_index` and runs **`GrovePack.parse`**, checking that:
+  - the physical fragment has a 64-hex `markerHash`, no radius and no code text
+  - the Day-only revision has only `day`
+  - `externalPrerequisites` includes Beginning
+
+  Root cause of the earlier gap: a test race (`Run checklist` → `router.refresh()`) published before the fragments were added. It wasn't a product dependency on M4.
+- **E2:** done. `fn_fragment_revision_release_guard` (BEFORE INSERT OR UPDATE): authenticated inserts must be `draft` with no `release_id`, and authenticated updates can't change `status` or `release_id`. pgTAP `072` covers an editor promoting a draft, a published insert, setting `release_id`, and the service-path publish and unpublish.
+- **E3:** done. `preview` resolves the caller with `auth.getUser()` and filters `user_id`. The integration test "admin can preview" passes.
+- **E4:** done. Unpublishing seed Beginning names **Bridge Start** (the other grove) in the confirm dialog before Cancel, and the screenshot is replaced.
+- **N1** and **N2:** done. EXECUTE on the trigger functions is revoked from `authenticated`, the `110` allowlist is trimmed, and writer inserts still get `revision_no`. CI and Vercel are recorded after the push.
+
+Suite: pgTAP 168, integration 20, Playwright 14.
+
+**Next:** JoJo merges PR #11. Then the **M3e plan** (`docs/briefs/M3e-story-fields.md`): plan first, then stop.
