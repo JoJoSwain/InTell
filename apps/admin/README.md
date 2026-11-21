@@ -49,8 +49,8 @@ The hosted staging project uses Supabase's **new API keys** (publishable `sb_pub
    - `run_jobs_url`: the Project URL with `/functions/v1/run-jobs` appended (`https://<ref>.supabase.co/functions/v1/run-jobs`, no trailing slash)
    - `run_jobs_service_key`: the `run-jobs` secret key from step 1
 3. `pnpm exec supabase login`, then `pnpm exec supabase link --project-ref <ref>` (ref from the dashboard; do not commit it). If `link` asks for the database password, press Enter to skip.
-4. `pnpm exec supabase db push` **from master**. This applies migrations only: `seed.sql` is local-only, so staging starts with no demo content. Run step 5 right after, because pg_cron starts calling `run-jobs` every minute once the migrations land.
-5. `pnpm exec supabase functions deploy`, which applies the per-function `verify_jwt` from `config.toml`.
+4. `pnpm exec supabase db push --remote` **from master** (optional preview: `pnpm exec supabase db push --remote --dry-run`). With CLI 3.x, bare `db push` targets the **local** stack unless you pass `--remote`. This applies migrations only: `seed.sql` is local-only, so staging starts with no demo content. Run step 5 right after, because pg_cron starts calling `run-jobs` every minute once the migrations land.
+5. `pnpm exec supabase functions deploy`, which applies the per-function `verify_jwt` from `config.toml`. The command prints a `Target:` line — it must name the staging project, not local.
 6. Smoke test in the SQL editor:
 
    ```sql
