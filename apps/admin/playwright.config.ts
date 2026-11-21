@@ -25,7 +25,11 @@ export default defineConfig({
         env: (() => {
           // A17: inherit the process env, but never override .env.local with
           // empty NEXT_PUBLIC_SUPABASE_* values (Windows local runs).
-          const env: NodeJS.ProcessEnv = { ...process.env };
+          // Playwright wants Record<string, string>; ProcessEnv allows undefined.
+          const env: Record<string, string> = {};
+          for (const [key, value] of Object.entries(process.env)) {
+            if (typeof value === "string") env[key] = value;
+          }
           const url = (
             process.env.NEXT_PUBLIC_SUPABASE_URL ||
             process.env.SUPABASE_URL ||
