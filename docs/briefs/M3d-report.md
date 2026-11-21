@@ -157,5 +157,6 @@ CI / Vercel: see **Review fixes** §N2 after the fix push.
 None — N1 and N2 done.
 
 ### CI / Vercel (N2)
-- Tip `9c86629`: `check` green; `db` failed Playwright E1 — global `jobs` drain never emptied after integration leftovers. Fixed by waiting on **this release’s** `published` status while calling `run-jobs` (follow-up tip below).
-- Vercel Preview Comments: success on `9c86629`.
+- **PR head / E1–E4 tip:** `5c9318898525f5802ceec03aa4da1062887a2a5d` (`m3d-releases`). Verification commit `77a834a` is an ancestor of this tip, not the head.
+- Tip `9c86629`: `check` green; `db` failed Playwright E1 — global `jobs` drain never emptied after integration leftovers. Fixed in `5c93188` by waiting on **this release’s** `published` status while calling `run-jobs`.
+- Tip `5c93188` **fully green:** all CI checks success (`check`, `db`, Vercel Preview Comments × workflows). **Vercel:** Deployment has completed (success) — https://vercel.com/replaceplace/intell-admin/4jfAyGCrnhTLmD2iH4jxnUEVEQTn
