@@ -186,6 +186,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 - Staff: invite-only accounts, Supabase password protections on (minimum length, leaked-password rejection, session expiry), an audit log on every publish, unpublish and staff change. No two-factor (ADR 0004).
 - Preview manifests and signed URLs are issued only to writer/sound/editor/admin staff JWTs and expire in **1 hour** (DATA_MODEL §12.5).
 - **`verify_jwt = false` only for service-called functions** (`run-jobs`, `build-pack`, `purge-assets`, `publish`) that validate a secret key in-function (`requireServiceCaller` / publish service path), with tests proving every other caller is refused. Staff-JWT-only functions (`invite-staff`, `unpublish`, `preview`) keep `verify_jwt = true`. Service callers send the secret in the `apikey` header (Bearer still accepted during the transition).
+- **Explicit API-role grants.** Supabase no longer auto-grants new `public` objects to API roles (`anon`, `authenticated`, `service_role`). Every migration grants what each role needs explicitly. `service_role` is covered by the default privileges from M3g. Local `supabase/config.toml` sets `auto_expose_new_tables = false` to match hosted.
 
 ---
 

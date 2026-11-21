@@ -22,9 +22,10 @@ max_rows = 1000
 # db_pool = 10
 # Controls whether new tables, views, sequences and functions created in the `public` schema by
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
-# without explicit GRANTs, matching the cloud default. Set to `false` to require explicit GRANTs
-# instead. Left unset, a fresh project falls back to `true`.
-# auto_expose_new_tables = true
+# without explicit GRANTs. Hosted projects created since May 2026 default to false. Keep local/CI
+# aligned: require explicit GRANTs (M3g brief). service_role is covered by
+# 20261121200001_m3g_service_role_grants.sql default privileges.
+auto_expose_new_tables = false
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.
