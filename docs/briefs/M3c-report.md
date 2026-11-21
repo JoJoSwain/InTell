@@ -2,22 +2,23 @@
 
 **Branch:** `m3c-authoring` (PR #9 → `master`)  
 **Plan:** `docs/briefs/M3c-plan.md` · **Plan review (wins):** `docs/briefs/M3c-plan-review.md`  
-**Status:** Implementation complete locally; **stopped for architect review**. M3d not started.  
+**Status:** Implementation complete; CI + Vercel green on `19a77f6`; **stopped for architect review**. M3d not started.  
 **Date:** 2026-11-20  
-**Head SHA (at report write):** see latest commit on `m3c-authoring` after this file lands.
+**Verified head:** `19a77f674ab9342ae71b82dab3b578f4fa1380b5` (this docs amend may tip the branch after).
 
 ---
 
 ## 1. `git log --oneline` (vs `origin/master`)
 
 ```
-(docs) M3c-report + e2e/geo/screenshot fixes   ← this / follow-up commits
+19a77f6 feat(admin): finish M3c authoring and report for review
 6272160 fix(db): close gatherings RLS hole; fix M3c pgTAP fixtures
 b9f1039 fix(db): use asset_kind in M3c loudness helpers
 e197dcf feat(admin): M3c Story and Media authoring UI
 437321f feat(shared): add BS.1770-4 loudness and m4a container parser
 c425ef5 docs: add M3c plan review
 72e5e5d docs: add M3c authoring plan
+(+ docs amend confirming CI/Vercel on 19a77f6)
 ```
 
 Note: stray loudness-only PR #10 (from a subagent branch) was **closed**; all M3c work is on PR #9 / `m3c-authoring`.
@@ -34,8 +35,8 @@ Note: stray loudness-only PR #10 (from a subagent branch) was **closed**; all M3
 | Playwright (`apps/admin`) | **PASS** — **9** tests |
 | `pnpm lint && pnpm typecheck && pnpm test` | **PASS** (shared 77; admin vitest 5) |
 | `pnpm --filter @intell/admin build` | **PASS** |
-
-CI / Vercel: pushed with this report; confirm green on PR #9 before merge.
+| **CI on `19a77f6`** (GitHub Actions `check` + `db`, all 6 checks) | **PASS** |
+| **Vercel preview** on `19a77f6` | **PASS** — Status `Deployment has completed`. Preview host: `intell-admin-git-m3c-authoring-replaceplace.vercel.app` |
 
 ---
 
