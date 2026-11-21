@@ -80,3 +80,24 @@ In Vercel, set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAP_ID`
 - PR #9 CI and Vercel status on the new head
 
 **Then stop for verification. Do not start M3d.**
+
+---
+
+## Verification (2026-11-20, head `e39dc32`)
+
+**Verified. M3c is complete, and PR #9 may merge once the push below is green.**
+
+- **C1:** done.
+  - `boundary_geojson(groves)` and `location_geojson(fragments)` are invoker computed columns, granted to `authenticated` and not `anon`, with pgTAP in `068`.
+  - The admin selects them, and the coordinate fallback is gone: unreadable geometry gives empty, required fields.
+  - The geometry setters run only when the geometry changed.
+  - Playwright covers teaser-only and name-only re-saves.
+  - The new screenshot shows the seed fragment's real coordinates (40.9612, −111.9290) and a GeoJSON boundary.
+- **C2:** done. The filter now sums to `OVERSAMPLE`, so each phase has about unity gain. The 12 kHz/45° and 8 kHz/60° intersample cases pass within +0.2 / −0.4 dB.
+- **C3:** done. Clips under 3 s use the ungated whole-clip loudness for `maxShortTerm`. Non-finite values become `null` before insert. The 200 ms and 1.5 s cases are covered.
+- **C4:** done. One issue was a hydration mismatch from `next/link` inside SVG `foreignObject`; the other was duplicate React keys in the prerequisite graph. Both are fixed, and the screenshot shows no Issues badge.
+- **N1** and **N2:** done. **N3** (O(n) short-term sums and a Web Worker) is deferred; carry it as an M3d or M4 follow-up.
+
+Suite: pgTAP 148, integration 16, Playwright 10, shared unit 80, admin unit 5. CI and Vercel are green on `6141335`.
+
+**Next:** JoJo merges PR #9, then the M3d plan.
