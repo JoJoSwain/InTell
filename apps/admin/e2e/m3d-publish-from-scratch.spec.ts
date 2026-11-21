@@ -129,6 +129,7 @@ test.describe("M3d publish from scratch", () => {
     await page.goto(groveUrl);
     await page
       .getByRole("link", { name: new RegExp(`Physical ${stamp}`) })
+      .first()
       .click();
     await page.getByRole("link", { name: "Open fragment revisions" }).click();
     await page.getByRole("link", { name: "Add first revision" }).click();
