@@ -19,7 +19,7 @@ insert into public.staff (user_id, display_name, role, active) values
 
 -- Seed already has fragment_characters / journal_terms; ensure a fragment_threads row
 insert into public.fragment_threads (fragment_id, thread_id)
-values ('aaaaaaaa-bbbb-4ccc-8ddd-000000000030', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020')
+values ('aaaaaaaa-bbbb-4ccc-8ddd-000000000030', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000016')
 on conflict do nothing;
 
 -- viewer delete leaves fragment_threads row
@@ -32,7 +32,7 @@ declare n int;
 begin
   delete from public.fragment_threads
    where fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'
-     and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020';
+     and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000016';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'viewer deleted % fragment_threads rows', n; end if;
 end $$;
@@ -44,7 +44,7 @@ select ok(
   exists (
     select 1 from public.fragment_threads
     where fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'
-      and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020'
+      and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000016'
   ),
   'fragment_threads row still present after viewer delete'
 );
@@ -59,7 +59,7 @@ declare n int;
 begin
   delete from public.fragment_threads
    where fragment_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000030'
-     and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000020';
+     and thread_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000016';
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'writer expected to delete 1 row, got %', n; end if;
 end $$;

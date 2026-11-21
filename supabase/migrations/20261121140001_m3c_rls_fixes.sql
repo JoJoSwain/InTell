@@ -70,3 +70,15 @@ create policy landcover_grids_sound_update on public.landcover_grids for update 
   with check (public.has_role(array['sound','editor','admin']::public.staff_role[]));
 create policy landcover_grids_sound_delete on public.landcover_grids for delete to authenticated
   using (public.has_role(array['sound','editor','admin']::public.staff_role[]));
+
+-- gatherings: same delete-hole pattern (caught by the for-all guard test)
+drop policy if exists gatherings_staff on public.gatherings;
+create policy gatherings_staff_select on public.gatherings for select to authenticated
+  using (public.has_role(array['viewer','moderator','writer','sound','editor','admin']::public.staff_role[]));
+create policy gatherings_editor_insert on public.gatherings for insert to authenticated
+  with check (public.has_role(array['editor','admin']::public.staff_role[]));
+create policy gatherings_editor_update on public.gatherings for update to authenticated
+  using (public.has_role(array['editor','admin']::public.staff_role[]))
+  with check (public.has_role(array['editor','admin']::public.staff_role[]));
+create policy gatherings_editor_delete on public.gatherings for delete to authenticated
+  using (public.has_role(array['editor','admin']::public.staff_role[]));

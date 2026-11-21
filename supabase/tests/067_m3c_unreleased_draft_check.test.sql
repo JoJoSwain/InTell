@@ -64,7 +64,7 @@ select ok(
   'fn_draft_check reports NO_TEASER'
 );
 
-insert into public.releases (id, title, status)
+insert into public.releases (id, name, status)
 values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff000000c7', 'm3c draft parity', 'draft');
 insert into public.release_items (release_id, entity, entity_id) values
   ('aaaaaaaa-bbbb-4ccc-8ddd-ffff000000c7', 'grove', 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
