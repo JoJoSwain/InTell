@@ -96,7 +96,7 @@ test.describe("M3d publish from scratch", () => {
     await page.getByLabel("Longitude").fill("-111.901");
     await page.getByRole("button", { name: "Add fragment" }).click();
     await expect(
-      page.getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) }),
+      page.getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) }).first(),
     ).toBeVisible({
       timeout: 20_000,
     });
@@ -104,6 +104,7 @@ test.describe("M3d publish from scratch", () => {
     // First revision on DayOnly — Story Contingency locked
     await page
       .getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) })
+      .first()
       .click();
     await page.getByRole("link", { name: "Open fragment revisions" }).click();
     await page.getByRole("link", { name: "Add first revision" }).click();
