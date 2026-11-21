@@ -27,7 +27,7 @@ $$;
 revoke all on function public.fn_check_issue(text, text, text, text, uuid) from public, anon, authenticated;
 grant execute on function public.fn_check_issue(text, text, text, text, uuid) to service_role;
 
-create or replace function public.fn_audio_loudness_target(p_kind public.audio_kind)
+create or replace function public.fn_audio_loudness_target(p_kind public.asset_kind)
 returns numeric
 language sql
 immutable
@@ -44,10 +44,10 @@ as $$
   end;
 $$;
 
-revoke all on function public.fn_audio_loudness_target(public.audio_kind) from public, anon, authenticated;
-grant execute on function public.fn_audio_loudness_target(public.audio_kind) to service_role;
+revoke all on function public.fn_audio_loudness_target(public.asset_kind) from public, anon, authenticated;
+grant execute on function public.fn_audio_loudness_target(public.asset_kind) to service_role;
 
-create or replace function public.fn_audio_bitrate_target(p_kind public.audio_kind)
+create or replace function public.fn_audio_bitrate_target(p_kind public.asset_kind)
 returns int
 language sql
 immutable
@@ -64,8 +64,8 @@ as $$
   end;
 $$;
 
-revoke all on function public.fn_audio_bitrate_target(public.audio_kind) from public, anon, authenticated;
-grant execute on function public.fn_audio_bitrate_target(public.audio_kind) to service_role;
+revoke all on function public.fn_audio_bitrate_target(public.asset_kind) from public, anon, authenticated;
+grant execute on function public.fn_audio_bitrate_target(public.asset_kind) to service_role;
 
 -- Returns LOUDNESS / AUDIO_FORMAT warning issues for one asset (0–2 items).
 create or replace function public.fn_check_audio_asset(p_asset public.audio_assets)

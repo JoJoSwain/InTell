@@ -85,7 +85,7 @@ reset role;
 
 -- editor can delete a disposable journal_terms row
 insert into public.journal_terms (version, body, effective_at)
-values (999, 'm3c delete test', now());
+values (999, '{"en":"m3c delete test"}'::jsonb, now());
 
 select set_config('request.jwt.claim.sub', 'bbbbbbbb-bbbb-4ccc-8ddd-300000000003', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
