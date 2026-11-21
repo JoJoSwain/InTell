@@ -44,3 +44,31 @@ export async function requireStaffEditor(req: Request): Promise<StaffAuth> {
   }
   return { ok: true, userClient, userId: userData.user.id };
 }
+
+/**
+ * Admin via caller JWT (invite-staff). Same verification pattern as requireStaffEditor.
+ */
+export async function requireStaffAdmin(req: Request): Promise<StaffAuth> {
+  const auth = req.headers.get("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) {
+    return { ok: false, response: errorResponse("missing bearer token", 401) };
+  }
+  const jwt = auth.slice("Bearer ".length);
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const userClient = createClient(url, anon, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data: userData, error: userErr } = await userClient.auth.getUser(jwt);
+  if (userErr || !userData.user) {
+    return { ok: false, response: errorResponse("invalid session", 401) };
+  }
+
+  const { data: allowed, error } = await userClient.rpc("fn_is_admin");
+  if (error || !allowed) {
+    return { ok: false, response: errorResponse("admin role required", 403) };
+  }
+  return { ok: true, userClient, userId: userData.user.id };
+}

@@ -33,6 +33,8 @@ Root checks: `pnpm lint && pnpm typecheck && pnpm test`
 
 Copy `.env.example` → `.env` / EAS secrets as needed. Supabase local: `npx supabase start` (after M2 migrations exist).
 
+Admin staging deploy (auth redirect URLs, first-admin bootstrap, Vercel `cle1`): see [`apps/admin/README.md`](apps/admin/README.md).
+
 ## Milestone posture
 
 Work **M0 → M12** in order (one branch / PR each). Do not extend the v0 browse demo as map-home.
