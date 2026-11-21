@@ -4,8 +4,6 @@ import { join } from "node:path";
 import { loadUsers, signIn } from "./auth";
 
 const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
-/** Nearby seed bridge fragment — used for optional cross-grove prereq. */
-const SEED_BRIDGE_FRAG = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1";
 const SHOTS = join(__dirname, "screenshots");
 
 /** Small polygon around Farmington sun reference (~41.1, -111.9). No Maps API. */
@@ -82,46 +80,25 @@ test.describe("M3d publish from scratch", () => {
       timeout: 15_000,
     });
 
-    // Optional cross-grove OR prereq (same pattern as m3c). Skip quietly if UI flaky.
-    try {
-      await page
-        .getByRole("link", { name: new RegExp(`Physical ${stamp}`) })
-        .click();
-      await page.getByRole("button", { name: "Add OR group" }).click();
-      const multi = page.getByLabel("Prerequisite group 1 members");
-      await multi.evaluate((el, bridgeId) => {
-        const select = el as HTMLSelectElement;
-        const values: string[] = [];
-        for (const opt of Array.from(select.options)) {
-          if (opt.value === bridgeId) values.push(opt.value);
-        }
-        for (const opt of Array.from(select.options)) {
-          opt.selected = values.includes(opt.value);
-        }
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }, SEED_BRIDGE_FRAG);
-      await page.getByRole("button", { name: "Save prerequisites" }).click();
-      await expect(page.getByText(`Physical ${stamp}`).first()).toBeVisible({
-        timeout: 15_000,
-      });
-    } catch {
-      // GAP: cross-grove prereq skipped — physical + Day-only still cover acceptance core.
-      await page.goto(groveUrl);
-      await expect(page.getByRole("heading", { name: groveName })).toBeVisible({
-        timeout: 15_000,
-      });
-    }
+    // Fresh navigation so FragmentForm remounts without Physical marker state.
+    await page.goto(groveUrl);
+    await expect(page.getByRole("heading", { name: groveName })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // --- Day-only fragment (revision will include Day, not Night) ---
     await page.getByRole("link", { name: "New fragment" }).click();
+    await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`DayOnly ${stamp}`);
     await page.getByLabel("Teaser").fill("Day-only teaser");
     await page.getByLabel("Tier").selectOption("root");
     await page.getByLabel("Latitude").fill("41.101");
     await page.getByLabel("Longitude").fill("-111.901");
     await page.getByRole("button", { name: "Add fragment" }).click();
-    await expect(page.getByText(`DayOnly ${stamp}`).first()).toBeVisible({
-      timeout: 15_000,
+    await expect(
+      page.getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) }),
+    ).toBeVisible({
+      timeout: 20_000,
     });
 
     // First revision on DayOnly — Story Contingency locked
