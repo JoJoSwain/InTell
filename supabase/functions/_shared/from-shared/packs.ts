@@ -211,6 +211,29 @@ export const GrovePack = z
 
 export type GrovePack = z.infer<typeof GrovePack>;
 
+/** Staff preview manifest (DATA_MODEL §12.5 / M3d D3). */
+export const PreviewManifest = z
+  .object({
+    schema: z.literal("preview/1"),
+    releaseId: Uuid,
+    generatedAt: z.string().min(1),
+    expiresAt: z.string().min(1),
+    groves: z.array(GrovePack),
+    assets: z.array(
+      z
+        .object({
+          sha: Sha256,
+          ext: z.string().min(1),
+          url: z.string().min(1),
+          expiresAt: z.string().min(1),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export type PreviewManifest = z.infer<typeof PreviewManifest>;
+
 export const RegionPack = z
   .object({
     schema: z.literal(2),

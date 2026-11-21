@@ -162,7 +162,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `run-jobs` | pg_cron via pg_net | The outbox worker: scheduled releases, rebuilds, reconciles |
 | `invite-staff` | Admin (admin role) | Invites a staff member by email and creates their `staff` row; deactivates staff |
 | `export-archive` | Admin (editor+) | A zip of revisions, transcripts, Story Notes and metadata for preservation outside InTell (M11) |
-| `preview` | Staff (signed in on the phone) | Returns a preview manifest for a draft release with short-lived signed URLs (DATA_MODEL §12.5) |
+| `preview` | Staff JWT (writer, sound, editor, admin) | Returns a preview manifest for a `draft` / `scheduled` / `failed` release; 1-hour signed URLs for staged assets; published shas use public URLs (DATA_MODEL §12.5) |
 | `register-device` | Mobile | Upsert a device (platform, version, language, age gate) |
 | `ingest-events` | Mobile | Batched events (≤ 200), idempotent, 600/h |
 | `journal-entry`, `my-entries` | Mobile | Submit a Journal entry (text, or reserve a voice upload); list your entries and their lineage (M9) |
@@ -180,7 +180,7 @@ Every mobile endpoint is zod-validated, rate limited per `device_id`, and return
 - No raw coordinates leave the device; Journal entries send anchor ids.
 - Journal voice files live in a private bucket on a retention schedule.
 - Staff: invite-only accounts, Supabase password protections on (minimum length, leaked-password rejection, session expiry), an audit log on every publish, unpublish and staff change. No two-factor (ADR 0004).
-- Preview manifests and signed URLs are issued only to active staff and expire quickly.
+- Preview manifests and signed URLs are issued only to writer/sound/editor/admin staff JWTs and expire in **1 hour** (DATA_MODEL §12.5).
 
 ---
 

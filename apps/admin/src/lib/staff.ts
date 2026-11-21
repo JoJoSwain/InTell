@@ -64,3 +64,23 @@ export function canWriteStoryNotes(role: StaffRole): boolean {
 export function canManageCharacters(role: StaffRole): boolean {
   return role === "writer" || role === "editor" || role === "admin";
 }
+
+/** Writers draft revisions; editors publish via releases. */
+export function canWriteRevisions(role: StaffRole): boolean {
+  return role === "writer" || role === "editor" || role === "admin";
+}
+
+/** Publish / unpublish / schedule — editor or admin only. */
+export function canPublishRelease(role: StaffRole): boolean {
+  return role === "editor" || role === "admin";
+}
+
+/** Preview edge: staff who can read staging buckets (DATA_MODEL §13). */
+export function canPreviewRelease(role: StaffRole): boolean {
+  return (
+    role === "writer" ||
+    role === "sound" ||
+    role === "editor" ||
+    role === "admin"
+  );
+}

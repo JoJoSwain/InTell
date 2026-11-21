@@ -351,7 +351,7 @@ isOneToOne: false
                   }
                   ComputedFields: never
                   Insert: {
-                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"created_at"?: string,"created_by"?: string | null,"fragment_id": string,"id"?: string,"release_id"?: string | null,"revision_no": number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
+                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"created_at"?: string,"created_by"?: string | null,"fragment_id": string,"id"?: string,"release_id"?: string | null,"revision_no"?: number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
                   }
                   Update: {
                     "change_kind"?: Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"created_at"?: string,"created_by"?: string | null,"fragment_id"?: string,"id"?: string,"release_id"?: string | null,"revision_no"?: number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
@@ -1011,6 +1011,9 @@ isOneToOne: false
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
                            },
 "fn_unpublish_commit":
+{ Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
+                           },
+"fn_unpublish_preview":
 { Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
                            },
 "fn_unreleased":

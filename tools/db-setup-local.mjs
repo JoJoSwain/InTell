@@ -88,3 +88,17 @@ if (!fs.existsSync(seedTonesDir)) {
 
 run("node tools/sync-edge-shared.mjs");
 run("node tools/seed-media-upload.mjs");
+
+const edgeEnvLocal = path.join(process.cwd(), "supabase", ".env.local");
+if (!fs.existsSync(edgeEnvLocal)) {
+  console.log("");
+  console.log(
+    "Note: supabase/.env.local is missing (gitignored). Local `supabase functions serve --env-file supabase/.env.local` needs it.",
+  );
+  console.log(
+    "Create supabase/.env.local with SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY from `pnpm exec supabase status -o env`.",
+  );
+  console.log(
+    "After db reset, if edge runtime is unhealthy, run `pnpm exec supabase stop` then `pnpm exec supabase start`. CI starts `functions serve` in parallel.",
+  );
+}

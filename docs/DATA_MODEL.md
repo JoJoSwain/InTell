@@ -448,7 +448,7 @@ create table jobs (                                -- outbox; triggers/functions
 ```
 Existing tables keep the id types they shipped with in M2; the sketches above don't ask for id-type changes.
 
-**Release status flow:** `draft` → (`scheduled`) → `publishing` (commit done, packs building) → `published` (every pack for the release is live; `published_at` set) or `failed` (the check failed at go-live, or a pack build exhausted its retries; `last_check` says why). A failed release can be retried. `cancelled` is for a scheduled release withdrawn before go-live.
+**Release status flow:** `draft` → (`scheduled`) → `publishing` (go-live in progress: check, copy, commit and pack builds — including the moment `fn_enqueue_due_releases` moves a due release here before the check runs) → `published` (every pack for the release is live; `published_at` set) or `failed` (the check failed at go-live, or a pack build exhausted its retries; `last_check` says why). A failed release can be retried. `cancelled` is for a scheduled release withdrawn before go-live. The admin badge for `publishing` reads "Publishing…".
 **Snapshot projection.** One SQL function, `fn_snapshot_projection(entity, entity_id) returns jsonb`, produces an entity's publishable projection from its working rows. Commit stores its output in `published_snapshots.data`; the admin's "Unreleased changes" marker is `projection(working) is distinct from snapshot.data`. A zod schema per entity in `packages/shared/src/schemas/snapshots.ts` validates the payloads, and `build-pack` parses them with it.
 
 **What a snapshot holds.** `grove`: name, premise, access notes, links, wildlife-speaker setting, boundary, growth cue. `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, intro, portrait. `image`: sha, ext, alt text. Sound entities (`ambience_profile` with its layers and assets, `ambience_zone`, `music_zone`, `music_cue` with its stems, `ui_cue`): their publishable fields, so M4's sound tools publish through releases too. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
@@ -520,6 +520,7 @@ Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired
 | `RADIUS_OVERLAP` | warning | Two standard fragments' circles overlap, unless one must precede the other (ADR 0003 §4) |
 | `LOUDNESS` | warning | An asset is more than ±2 LU from its target (AUDIO_SPEC §6), or its loudness wasn't measured |
 | `AUDIO_FORMAT` | warning | An asset's format, channels or bitrate differs from AUDIO_SPEC §6 |
+| `PACK_BUILD_FAILED` | error | A `rebuild_pack` job for this release exhausted its retries; set on `releases.last_check` by `run-jobs` (release-level, not a row checklist item) |
 
 Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO_CODE` (→ `PHYSICAL_NO_CODE`), `OUTCOME_REF`.
 
@@ -568,7 +569,20 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
 - Cache headers: assets `public, max-age=3600`; manifests `public, max-age=60`.
 
 ### 12.5 Staff preview
-The `preview` edge function (staff JWT) returns a **preview manifest** for one draft release: the live grove pack with the release's changes overlaid, and short-lived signed URLs to staged assets. It's never written to `public-media` and never listed in the index. The phone keeps preview content separate from installed packs and discards it when the staff member signs out.
+The `preview` edge function returns a **preview manifest** for one release in status `draft`, `scheduled` or `failed` (refuse `publishing` / `published` / `cancelled` with 409). Callers must be active staff who can read the staging buckets (**writer, sound, editor, admin**); viewers and moderators get 403. Auth uses a staff JWT (401 without one).
+
+One pack assembler builds both published and preview packs (D3). The **published** source is `published_snapshots` plus current published revisions. The **preview** source is that, with the release's items overlaid: entities in the release use `fn_snapshot_projection` of working rows, and revisions in the release become the current revision for their fragments. Preview runs for **every grove the release touches** (groves in the items, groves of fragments or revisions in the items, and groves whose `externalPrerequisites` change). No region pack is included. Marker codes never appear (hash only); Story Notes never appear.
+
+Signed URL TTL is **1 hour**. Staged asset shas get signed URLs; already-public shas use their normal public URLs. The phone downloads at fetch time and re-fetches the manifest to refresh. Preview content is never written to `public-media` and never listed in the index. The phone keeps it separate from installed packs and discards it on staff sign-out (M5).
+
+```ts
+PreviewManifest {
+  schema: "preview/1",
+  releaseId, generatedAt, expiresAt,
+  groves: GrovePack[],   // schema 2
+  assets: [{ sha, ext, url, expiresAt }]
+}
+```
 
 ---
 

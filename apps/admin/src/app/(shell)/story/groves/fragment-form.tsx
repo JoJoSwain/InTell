@@ -94,12 +94,22 @@ export function FragmentForm({
     }
   }
 
-  if (!canEdit && !canNotes) {
-    return <p className="text-sm text-textMuted">View only.</p>;
-  }
-
   return (
     <div className="space-y-8">
+      {!canEdit && !canNotes ? (
+        <p className="text-sm text-textMuted">View only.</p>
+      ) : null}
+      {initial?.id ? (
+        <p className="text-sm">
+          <Link
+            href={`/story/groves/${groveId}/fragments/${initial.id}/revisions`}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+            aria-label="Open fragment revisions"
+          >
+            Revisions
+          </Link>
+        </p>
+      ) : null}
       {canEdit ? (
         <form action={saveFragment} className="space-y-4">
           {initial?.id ? (

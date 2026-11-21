@@ -12,6 +12,7 @@ export {
 export {
   GrovePack,
   GrovePackFragment,
+  PreviewManifest,
   RegionPack,
   PackIndexEntry,
 } from "./schemas/packs";
