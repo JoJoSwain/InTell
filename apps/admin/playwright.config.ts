@@ -22,16 +22,31 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
-        env: {
-          ...process.env,
-          NEXT_PUBLIC_SUPABASE_URL:
-            process.env.NEXT_PUBLIC_SUPABASE_URL ??
-            process.env.SUPABASE_URL ??
-            "http://127.0.0.1:54321",
-          NEXT_PUBLIC_SUPABASE_ANON_KEY:
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-            process.env.SUPABASE_ANON_KEY ??
-            "",
-        },
+        env: (() => {
+          // A17: inherit the process env, but never override .env.local with
+          // empty NEXT_PUBLIC_SUPABASE_* values (Windows local runs).
+          // Playwright wants Record<string, string>; ProcessEnv allows undefined.
+          const env: Record<string, string> = {};
+          for (const [key, value] of Object.entries(process.env)) {
+            if (typeof value === "string") env[key] = value;
+          }
+          const url = (
+            process.env.NEXT_PUBLIC_SUPABASE_URL ||
+            process.env.SUPABASE_URL ||
+            process.env.API_URL ||
+            ""
+          ).trim();
+          const anon = (
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+            process.env.SUPABASE_ANON_KEY ||
+            process.env.ANON_KEY ||
+            ""
+          ).trim();
+          if (url) env.NEXT_PUBLIC_SUPABASE_URL = url;
+          else delete env.NEXT_PUBLIC_SUPABASE_URL;
+          if (anon) env.NEXT_PUBLIC_SUPABASE_ANON_KEY = anon;
+          else delete env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          return env;
+        })(),
       },
 });

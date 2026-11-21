@@ -405,7 +405,7 @@ begin
   -- Groves (working status draft until publish commit)
   ---------------------------------------------------------------------------
   insert into public.groves (
-    id, region_id, slug, name, premise, access_notes, boundary,
+    id, region_id, slug, name, premise, boundary,
     website_url, gatherings_url, allows_speaker_wildlife_sounds,
     growth_cue_id, status, pack_version
   ) values (
@@ -414,10 +414,6 @@ begin
     'demo',
     '{"en":"Farmington Bird Refuge Grove"}'::jsonb,
     '{"en":"Synthetic test grove for M3a seed and integration tests (Farmington fixture)."}'::jsonb,
-    jsonb_build_object(
-      'parking', jsonb_build_object('en', 'Test parking near the education center.'),
-      'terrain', jsonb_build_object('en', 'Flat wetland trail — synthetic audio only.')
-    ),
     v_grove_boundary,
     null,
     null,
@@ -428,13 +424,12 @@ begin
   );
 
   insert into public.groves (
-    id, region_id, slug, name, premise, access_notes, boundary,
+    id, region_id, slug, name, premise, boundary,
     allows_speaker_wildlife_sounds, status, pack_version
   ) values
     (c_grove_ogden_id, c_region_id, 'ogden-nature-center',
      '{"en":"Ogden Nature Center (draft placeholder)"}'::jsonb,
      '{"en":"Draft grove — placeholder geometry only."}'::jsonb,
-     '{}'::jsonb,
      extensions.ST_Buffer(
        extensions.ST_SetSRID(extensions.ST_MakePoint(-111.90, 41.01), 4326)::extensions.geography,
        200
@@ -443,7 +438,6 @@ begin
     (c_grove_pia_id, c_region_id, 'pia-okwai',
      '{"en":"Nature Center at Pia Okwai (draft placeholder)"}'::jsonb,
      '{"en":"Draft grove — placeholder geometry only."}'::jsonb,
-     '{}'::jsonb,
      extensions.ST_Buffer(
        extensions.ST_SetSRID(extensions.ST_MakePoint(-111.88, 41.00), 4326)::extensions.geography,
        200
@@ -451,7 +445,7 @@ begin
      false, 'draft', 0);
 
   insert into public.groves (
-    id, region_id, slug, name, premise, access_notes, boundary,
+    id, region_id, slug, name, premise, boundary,
     allows_speaker_wildlife_sounds, status, pack_version
   ) values (
     c_grove2_id,
@@ -459,12 +453,21 @@ begin
     'demo-nearby',
     '{"en":"Nearby test grove (bridge prereq)"}'::jsonb,
     '{"en":"Second small grove ~300 m east for cross-grove unlock tests."}'::jsonb,
-    '{"terrain":{"en":"Offset duplicate of the Farmington fixture boundary."}}'::jsonb,
     v_grove2_boundary,
     false,
     'draft',
     0
   );
+
+  -- Home grove set after groves exist (FK)
+  update public.characters
+     set home_grove_id = c_grove_id
+   where id in (c_char_a_id, c_char_b_id);
+
+  insert into public.grove_journeys (grove_id, mode, passage) values
+    (c_grove_id, 'walk', '{"en":"TEST walk journey — on foot to the opening root."}'::jsonb),
+    (c_grove_id, 'bike', '{"en":"TEST bike journey — by bike to the opening root."}'::jsonb),
+    (c_grove_id, 'transit', '{"en":"TEST transit journey — by transit to the opening root."}'::jsonb);
 
   ---------------------------------------------------------------------------
   -- Fragments — Farmington (fixture); radii 10.67 m; standard / physical
@@ -565,41 +568,46 @@ begin
   -- Revisions (draft) + versions (time_window required)
   ---------------------------------------------------------------------------
   insert into public.fragment_revisions (
-    id, fragment_id, revision_no, status, change_kind, change_note
+    id, fragment_id, revision_no, status, change_kind, change_note, change_teaser
   ) values
-    (c_rev_f1_id,     c_frag1_id,     1, 'draft', 'contingency', 'Frag1 r1'),
-    (c_rev_f2_id,     c_frag2_id,     1, 'draft', 'contingency', 'Frag2 r1'),
-    (c_rev_f3_id,     c_frag3_id,     1, 'draft', 'contingency', 'Frag3 r1'),
-    (c_rev_f4_id,     c_frag4_id,     1, 'draft', 'contingency', 'Frag4 r1'),
-    (c_rev_f4b_id,    c_frag4_id,     2, 'draft', 'correction',  'Frag4 r2 correction'),
-    (c_rev_f5_id,     c_frag5_id,     1, 'draft', 'contingency', 'Frag5 r1'),
-    (c_rev_f6_id,     c_frag6_id,     1, 'draft', 'contingency', 'Frag6 r1 Ending'),
-    (c_rev_f7_id,     c_frag7_id,     1, 'draft', 'contingency', 'Frag7 r1 Pond'),
-    (c_rev_f8_id,     c_frag8_id,     1, 'draft', 'contingency', 'Frag8 r1 standard Day-only'),
-    (c_rev_f9_id,     c_frag9_id,     1, 'draft', 'contingency', 'Frag9 r1 physical'),
-    (c_rev_f10_r1_id, c_frag10_id,    1, 'draft', 'contingency', 'Frag10 r1'),
-    (c_rev_f10_r2_id, c_frag10_id,    2, 'draft', 'contingency', 'Frag10 r2 contingency'),
-    (c_rev_g2_f1_id,  c_g2_frag1_id,  1, 'draft', 'contingency', 'Bridge r1'),
-    (c_rev_g2_f2_id,  c_g2_frag2_id,  1, 'draft', 'contingency', 'Nearby leaf r1');
+    (c_rev_f1_id,     c_frag1_id,     1, 'draft', 'contingency', 'Frag1 r1', '{}'::jsonb),
+    (c_rev_f2_id,     c_frag2_id,     1, 'draft', 'contingency', 'Frag2 r1', '{}'::jsonb),
+    (c_rev_f3_id,     c_frag3_id,     1, 'draft', 'contingency', 'Frag3 r1', '{}'::jsonb),
+    (c_rev_f4_id,     c_frag4_id,     1, 'draft', 'contingency', 'Frag4 r1', '{}'::jsonb),
+    (c_rev_f4b_id,    c_frag4_id,     2, 'draft', 'correction',  'Frag4 r2 correction', '{}'::jsonb),
+    (c_rev_f5_id,     c_frag5_id,     1, 'draft', 'contingency', 'Frag5 r1', '{}'::jsonb),
+    (c_rev_f6_id,     c_frag6_id,     1, 'draft', 'contingency', 'Frag6 r1 Ending', '{}'::jsonb),
+    (c_rev_f7_id,     c_frag7_id,     1, 'draft', 'contingency', 'Frag7 r1 Pond', '{}'::jsonb),
+    (c_rev_f8_id,     c_frag8_id,     1, 'draft', 'contingency', 'Frag8 r1 standard Day-only', '{}'::jsonb),
+    (c_rev_f9_id,     c_frag9_id,     1, 'draft', 'contingency', 'Frag9 r1 physical', '{}'::jsonb),
+    (c_rev_f10_r1_id, c_frag10_id,    1, 'draft', 'contingency', 'Frag10 r1', '{}'::jsonb),
+    (c_rev_f10_r2_id, c_frag10_id,    2, 'draft', 'contingency', 'Frag10 r2 contingency',
+     '{"en":"TEST change teaser — Two Ways contingency after revision 1."}'::jsonb),
+    (c_rev_g2_f1_id,  c_g2_frag1_id,  1, 'draft', 'contingency', 'Bridge r1', '{}'::jsonb),
+    (c_rev_g2_f2_id,  c_g2_frag2_id,  1, 'draft', 'contingency', 'Nearby leaf r1', '{}'::jsonb);
 
   insert into public.revision_versions (
-    revision_id, language, time_window, narration_asset_id, transcript
+    revision_id, language, time_window, narration_asset_id, transcript, other_time_hint
   ) values
-    (c_rev_f1_id,     'en', 'day',   c_asset_narr_f1_id,     'TEST transcript — frag1 Beginning day narration tone.'),
-    (c_rev_f1_id,     'en', 'night', c_asset_narr_f1_id,     'TEST transcript — frag1 Beginning night narration tone.'),
-    (c_rev_f2_id,     'en', 'day',   c_asset_narr_f2_id,     'TEST transcript — frag2 Buildings 1 narration tone.'),
-    (c_rev_f3_id,     'en', 'day',   c_asset_narr_f3_id,     'TEST transcript — frag3 Buildings 2 narration tone.'),
-    (c_rev_f4_id,     'en', 'day',   c_asset_narr_f4_id,     'TEST transcript — frag4 Parking Lot 1 narration tone.'),
-    (c_rev_f4b_id,    'en', 'day',   c_asset_narr_f4_id,     'TEST transcript — frag4 r2 correction narration tone.'),
-    (c_rev_f5_id,     'en', 'day',   c_asset_narr_f5_id,     'TEST transcript — frag5 Parking Lot 2 narration tone.'),
-    (c_rev_f6_id,     'en', 'day',   c_asset_narr_f6_id,     'TEST transcript — frag6 Ending narration tone.'),
-    (c_rev_f7_id,     'en', 'day',   c_asset_narr_f7_id,     'TEST transcript — frag7 Pond narration tone.'),
-    (c_rev_f8_id,     'en', 'day',   c_asset_narr_f8_id,     'TEST transcript — frag8 Heron Overlook Day-only narration tone.'),
-    (c_rev_f9_id,     'en', 'day',   c_asset_narr_f9_id,     'TEST transcript — frag9 Hidden Post physical narration tone.'),
-    (c_rev_f10_r1_id, 'en', 'day',   c_asset_narr_f10_id,    'TEST transcript — frag10 Two Ways rev1 narration tone.'),
-    (c_rev_f10_r2_id, 'en', 'day',   c_asset_narr_f10_r2_id, 'TEST transcript — frag10 Two Ways rev2 contingency narration tone.'),
-    (c_rev_g2_f1_id,  'en', 'day',   c_asset_narr_f1_id,     'TEST transcript — bridge start narration tone.'),
-    (c_rev_g2_f2_id,  'en', 'day',   c_asset_narr_f2_id,     'TEST transcript — nearby leaf narration tone.');
+    (c_rev_f1_id,     'en', 'day',   c_asset_narr_f1_id,
+     'TEST transcript — frag1 Beginning day narration tone.',
+     '{"en":"TEST other-time hint — after dusk, Beginning speaks differently."}'::jsonb),
+    (c_rev_f1_id,     'en', 'night', c_asset_narr_f1_id,
+     'TEST transcript — frag1 Beginning night narration tone.',
+     '{"en":"TEST other-time hint — by day, Beginning speaks differently."}'::jsonb),
+    (c_rev_f2_id,     'en', 'day',   c_asset_narr_f2_id,     'TEST transcript — frag2 Buildings 1 narration tone.', '{}'::jsonb),
+    (c_rev_f3_id,     'en', 'day',   c_asset_narr_f3_id,     'TEST transcript — frag3 Buildings 2 narration tone.', '{}'::jsonb),
+    (c_rev_f4_id,     'en', 'day',   c_asset_narr_f4_id,     'TEST transcript — frag4 Parking Lot 1 narration tone.', '{}'::jsonb),
+    (c_rev_f4b_id,    'en', 'day',   c_asset_narr_f4_id,     'TEST transcript — frag4 r2 correction narration tone.', '{}'::jsonb),
+    (c_rev_f5_id,     'en', 'day',   c_asset_narr_f5_id,     'TEST transcript — frag5 Parking Lot 2 narration tone.', '{}'::jsonb),
+    (c_rev_f6_id,     'en', 'day',   c_asset_narr_f6_id,     'TEST transcript — frag6 Ending narration tone.', '{}'::jsonb),
+    (c_rev_f7_id,     'en', 'day',   c_asset_narr_f7_id,     'TEST transcript — frag7 Pond narration tone.', '{}'::jsonb),
+    (c_rev_f8_id,     'en', 'day',   c_asset_narr_f8_id,     'TEST transcript — frag8 Heron Overlook Day-only narration tone.', '{}'::jsonb),
+    (c_rev_f9_id,     'en', 'day',   c_asset_narr_f9_id,     'TEST transcript — frag9 Hidden Post physical narration tone.', '{}'::jsonb),
+    (c_rev_f10_r1_id, 'en', 'day',   c_asset_narr_f10_id,    'TEST transcript — frag10 Two Ways rev1 narration tone.', '{}'::jsonb),
+    (c_rev_f10_r2_id, 'en', 'day',   c_asset_narr_f10_r2_id, 'TEST transcript — frag10 Two Ways rev2 contingency narration tone.', '{}'::jsonb),
+    (c_rev_g2_f1_id,  'en', 'day',   c_asset_narr_f1_id,     'TEST transcript — bridge start narration tone.', '{}'::jsonb),
+    (c_rev_g2_f2_id,  'en', 'day',   c_asset_narr_f2_id,     'TEST transcript — nearby leaf narration tone.', '{}'::jsonb);
 
   ---------------------------------------------------------------------------
   -- Ambience: Day + Night layers

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AccessNotes, L10n } from "./l10n.ts";
+import { L10n } from "./l10n.ts";
 import { MusicCondition, StemRulePack } from "./music.ts";
 
 const Uuid = z.string().uuid();
@@ -92,7 +92,7 @@ export const GrovePackFragment = z
 
 export const GrovePack = z
   .object({
-    schema: z.literal(2),
+    schema: z.literal(3),
     groveId: Uuid,
     regionId: Uuid,
     packVersion: z.number().int().nonnegative(),
@@ -102,12 +102,19 @@ export const GrovePack = z
         id: Uuid,
         name: L10n,
         premise: L10n,
-        accessNotes: AccessNotes,
         websiteUrl: z.string().nullable().optional(),
         gatheringsUrl: z.string().nullable().optional(),
         boundary: GeoJsonPolygon,
         allowsSpeakerWildlifeSounds: z.boolean(),
         growthCueAssetSha: Sha256.optional(),
+        openingFragmentId: Uuid,
+        journeys: z
+          .object({
+            walk: L10n.optional(),
+            bike: L10n.optional(),
+            transit: L10n.optional(),
+          })
+          .strict(),
       })
       .strict(),
     characters: z.array(
@@ -116,8 +123,9 @@ export const GrovePack = z
           id: Uuid,
           publicName: L10n,
           publicIntro: L10n,
-          portraitSha: Sha256.optional(),
-          portraitAlt: L10n.optional(),
+          portraitSha: Sha256,
+          portraitAlt: L10n,
+          homeGroveId: Uuid,
         })
         .strict(),
     ),
@@ -139,6 +147,7 @@ export const GrovePack = z
           revisionNo: z.number().int().positive(),
           changeKind: ChangeKind,
           contingencyRevisionNo: z.number().int().positive(),
+          changeTeaser: L10n.optional(),
           versions: z.array(
             z
               .object({
@@ -149,6 +158,7 @@ export const GrovePack = z
                 bytes: z.number().int().positive(),
                 transcript: z.string().min(1),
                 vtt: z.string().optional(),
+                otherTimeHint: L10n.optional(),
               })
               .strict(),
           ),
@@ -333,6 +343,13 @@ export const PackIndexEntry = z
     bytesTotal: z.number().int().nonnegative(),
     name: L10n,
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    opening: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

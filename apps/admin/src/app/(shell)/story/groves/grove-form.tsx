@@ -20,7 +20,6 @@ export function GroveForm({
     name_en: string;
     premise_en: string;
     slug: string;
-    access_notes: string;
     website_url: string;
     gatherings_url: string;
     allows_speaker_wildlife_sounds: boolean;
@@ -91,16 +90,6 @@ export function GroveForm({
           defaultValue={initial?.premise_en}
           aria-label="Premise"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="text-textMuted">Access notes (JSON)</span>
-        <textarea
-          name="access_notes"
-          rows={4}
-          defaultValue={initial?.access_notes ?? "{}"}
-          aria-label="Access notes JSON"
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
         />
       </label>
       <label className="block text-sm">

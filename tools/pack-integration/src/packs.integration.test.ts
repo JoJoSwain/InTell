@@ -248,10 +248,21 @@ describe.sequential("M3a pack integration", () => {
     await waitForPublishedSeed();
   }, 240_000);
 
-  it("demo grove pack validates (schema 2) and omits forbidden fields", async () => {
+  it("demo grove pack validates (schema 3) with opening/journeys/homeGroveId", async () => {
     const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    expect(parsed.schema).toBe(2);
+    expect(parsed.schema).toBe(3);
+    expect(parsed.grove.openingFragmentId).toBe(DEMO.frag1Id);
+    expect(parsed.grove.journeys.walk?.en).toMatch(/TEST walk/i);
+    expect(parsed.grove.journeys.bike?.en).toMatch(/TEST bike/i);
+    expect(parsed.grove.journeys.transit?.en).toMatch(/TEST transit/i);
+    expect((parsed.grove as { accessNotes?: unknown }).accessNotes).toBeUndefined();
+    expect(parsed.characters.length).toBeGreaterThan(0);
+    for (const c of parsed.characters) {
+      expect(c.homeGroveId).toBeTruthy();
+      expect(c.portraitSha).toMatch(/^[a-f0-9]{64}$/);
+      expect(c.portraitAlt.en).toBeTruthy();
+    }
     const frag9 = parsed.fragments.find((f) => f.id === DEMO.frag9Id);
     expect(frag9?.visibility).toBe("physical");
     expect(frag9?.lat).toBeDefined();
@@ -259,7 +270,8 @@ describe.sequential("M3a pack integration", () => {
     expect(frag9?.radiusM).toBeUndefined();
     expect(frag9?.markerHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(pack)).not.toMatch(/DEM00001|markerCode|marker_code/i);
-    expect(JSON.stringify(pack)).not.toMatch(/storyNotes|writer_notes/i);
+    expect(JSON.stringify(pack)).not.toMatch(/storyNotes|writer_notes|accessNotes/i);
+    expect(JSON.stringify(pack)).not.toMatch(/"drive"/);
   });
 
   it("asset URLs resolve for pack assets", async () => {
@@ -281,30 +293,47 @@ describe.sequential("M3a pack integration", () => {
     expect(parsed.landcover).toBeNull();
   });
 
-  it("get_pack_index lists only live groves", async () => {
+  it("get_pack_index lists only live groves with opening points", async () => {
     const { data, error } = await anon.rpc("get_pack_index");
     expect(error).toBeNull();
-    const rows = data as { scope: string; id: string; version: number }[];
+    const rows = data as {
+      scope: string;
+      id: string;
+      version: number;
+      opening?: { lat: number; lng: number };
+    }[];
     expect(rows.some((r) => r.scope === "grove" && r.id === DEMO.groveId)).toBe(true);
     expect(rows.some((r) => r.scope === "grove" && r.id === DEMO.secondGroveId)).toBe(
       true,
     );
     for (const groveId of [DEMO.groveId, DEMO.secondGroveId]) {
-      const idxVer = rows.find((r) => r.scope === "grove" && r.id === groveId)?.version;
+      const row = rows.find((r) => r.scope === "grove" && r.id === groveId);
       const live = await fetchLiveGrovePack(groveId);
-      expect(idxVer).toBe(live.version);
+      expect(row?.version).toBe(live.version);
+      expect(row?.opening?.lat).toBeTypeOf("number");
+      expect(row?.opening?.lng).toBeTypeOf("number");
+      const parsed = GrovePack.parse(live.pack);
+      const frag = parsed.fragments.find(
+        (f) => f.id === parsed.grove.openingFragmentId,
+      );
+      expect(row?.opening?.lat).toBe(frag?.lat);
+      expect(row?.opening?.lng).toBe(frag?.lng);
     }
   });
 
-  it("contingency bumps contingencyRevisionNo in pack; correction does not", async () => {
+  it("contingency bumps contingencyRevisionNo; changeTeaser and otherTimeHint present", async () => {
     const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
     const frag4Rev = parsed.revisions.find((r) => r.id === DEMO.frag4Rev2Id);
     const frag10Rev = parsed.revisions.find((r) => r.id === DEMO.frag10R2Id);
     expect(frag4Rev?.changeKind).toBe("correction");
     expect(frag4Rev?.contingencyRevisionNo).toBe(1);
+    expect(frag4Rev?.changeTeaser).toBeUndefined();
     expect(frag10Rev?.changeKind).toBe("contingency");
     expect(frag10Rev?.contingencyRevisionNo).toBe(2);
+    expect(frag10Rev?.changeTeaser?.en).toMatch(/TEST change teaser/i);
+    const frag1 = parsed.revisions.find((r) => r.fragmentId === DEMO.frag1Id);
+    expect(frag1?.versions.some((v) => !!v.otherTimeHint?.en)).toBe(true);
   });
 
   it("second grove lists cross-grove externalPrerequisites for Farmington frag1", async () => {
@@ -457,6 +486,34 @@ describe.sequential("M3a pack integration", () => {
     expect(snapAfter?.data).toEqual(snapBefore?.data);
   }, 60_000);
 
+  it("staged journey edit does not change live pack until grove is released", async () => {
+    const staged = `STAGED-JOURNEY-${Date.now()}`;
+    const before = await fetchLiveGrovePack();
+    const beforeParsed = GrovePack.parse(before.pack);
+    const beforeWalk = beforeParsed.grove.journeys.walk?.en;
+
+    await svc.from("grove_journeys").upsert({
+      grove_id: DEMO.groveId,
+      mode: "walk",
+      passage: { en: staged },
+    });
+
+    const after = await fetchLiveGrovePack();
+    const afterParsed = GrovePack.parse(after.pack);
+    expect(afterParsed.grove.journeys.walk?.en).toBe(beforeWalk);
+    expect(afterParsed.grove.journeys.walk?.en).not.toBe(staged);
+    expect(after.contentSha).toBe(before.contentSha);
+
+    // Restore so later releases that re-snapshot the grove keep seed copy.
+    await svc.from("grove_journeys").upsert({
+      grove_id: DEMO.groveId,
+      mode: "walk",
+      passage: {
+        en: "TEST walk journey — on foot to the opening root.",
+      },
+    });
+  }, 60_000);
+
   it("atomic go-live: index keeps prior live versions until publishing release completes", async () => {
     const releaseId = randomUUID();
     const vBefore1 = (await fetchLiveGrovePack(DEMO.groveId)).version;
@@ -557,6 +614,9 @@ describe.sequential("M3a pack integration", () => {
       status: "draft",
       change_kind: "contingency",
       change_note: "integration contingency r2",
+      change_teaser: {
+        en: "TEST change teaser — frag1 contingency after revision 1.",
+      },
     });
     if (revInsErr) throw new Error(`frag1 contingency rev insert: ${revInsErr.message}`);
 
@@ -566,6 +626,7 @@ describe.sequential("M3a pack integration", () => {
       time_window: v0.time_window,
       narration_asset_id: v0.narration_asset_id,
       transcript: "TEST transcript — frag1 contingency narration tone.",
+      other_time_hint: {},
     });
     if (verInsErr) throw new Error(`frag1 contingency version insert: ${verInsErr.message}`);
 
@@ -893,4 +954,55 @@ describe.sequential("M3a pack integration", () => {
     expect(parsed.schema).toBe("preview/1");
     expect(parsed.releaseId).toBe(DEMO.draftReleaseId);
   }, 60_000);
+
+  it("preview: incomplete character returns 422 with clear message (N1)", async () => {
+    await svc
+      .from("releases")
+      .update({ status: "draft", publish_at: null })
+      .eq("id", DEMO.draftReleaseId);
+
+    const { data: before } = await svc
+      .from("characters")
+      .select("home_grove_id, portrait_image_id")
+      .eq("id", DEMO.charRiverId)
+      .single();
+    expect(before?.home_grove_id).toBeTruthy();
+
+    await svc
+      .from("characters")
+      .update({ home_grove_id: null })
+      .eq("id", DEMO.charRiverId);
+
+    await svc.from("release_items").delete().eq("release_id", DEMO.draftReleaseId);
+    const { error: itemErr } = await svc.from("release_items").insert([
+      { release_id: DEMO.draftReleaseId, entity: "grove", entity_id: DEMO.groveId },
+      {
+        release_id: DEMO.draftReleaseId,
+        entity: "character",
+        entity_id: DEMO.charRiverId,
+      },
+    ]);
+    if (itemErr) throw new Error(itemErr.message);
+
+    try {
+      const { jwt } = await ensureEditor();
+      const res = await invoke(
+        "preview",
+        { releaseId: DEMO.draftReleaseId },
+        jwt,
+      );
+      expect(res.status, await res.clone().text()).toBe(422);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toMatch(/River needs a home grove before preview/i);
+    } finally {
+      await svc
+        .from("characters")
+        .update({
+          home_grove_id: before?.home_grove_id ?? DEMO.groveId,
+          portrait_image_id: before?.portrait_image_id ?? null,
+        })
+        .eq("id", DEMO.charRiverId);
+      await svc.from("release_items").delete().eq("release_id", DEMO.draftReleaseId);
+    }
+  }, 120_000);
 });

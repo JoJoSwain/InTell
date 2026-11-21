@@ -145,17 +145,23 @@ isOneToOne: false
                   ]
                 },"characters": {
                   Row: {
-                    "created_at": string,"id": string,"name": string,"notes": string | null,"portrait_image_id": string | null,"public_intro": NonNullable<Json>,"public_name": NonNullable<Json>,"status": Database["public"]['Enums']["publish_status"],"updated_at": string
+                    "created_at": string,"home_grove_id": string | null,"id": string,"name": string,"notes": string | null,"portrait_image_id": string | null,"public_intro": NonNullable<Json>,"public_name": NonNullable<Json>,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"fn_check_character_local": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "fn_check_character_local"
                   Insert: {
-                    "created_at"?: string,"id"?: string,"name": string,"notes"?: string | null,"portrait_image_id"?: string | null,"public_intro"?: NonNullable<Json>,"public_name"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
+                    "created_at"?: string,"home_grove_id"?: string | null,"id"?: string,"name": string,"notes"?: string | null,"portrait_image_id"?: string | null,"public_intro"?: NonNullable<Json>,"public_name"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"name"?: string,"notes"?: string | null,"portrait_image_id"?: string | null,"public_intro"?: NonNullable<Json>,"public_name"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
+                    "created_at"?: string,"home_grove_id"?: string | null,"id"?: string,"name"?: string,"notes"?: string | null,"portrait_image_id"?: string | null,"public_intro"?: NonNullable<Json>,"public_name"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "characters_home_grove_id_fkey"
+      columns: ["home_grove_id"]
+isOneToOne: false
+      referencedRelation: "groves"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "characters_portrait_image_id_fkey"
       columns: ["portrait_image_id"]
 isOneToOne: false
@@ -347,14 +353,14 @@ isOneToOne: false
                   ]
                 },"fragment_revisions": {
                   Row: {
-                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note": string | null,"created_at": string,"created_by": string | null,"fragment_id": string,"id": string,"release_id": string | null,"revision_no": number,"status": Database["public"]['Enums']["publish_status"],"updated_at": string
+                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note": string | null,"change_teaser": NonNullable<Json>,"created_at": string,"created_by": string | null,"fragment_id": string,"id": string,"release_id": string | null,"revision_no": number,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"fn_check_revision_local": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "fn_check_revision_local"
                   Insert: {
-                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"created_at"?: string,"created_by"?: string | null,"fragment_id": string,"id"?: string,"release_id"?: string | null,"revision_no"?: number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
+                    "change_kind": Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"change_teaser"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"fragment_id": string,"id"?: string,"release_id"?: string | null,"revision_no": number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
                   }
                   Update: {
-                    "change_kind"?: Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"created_at"?: string,"created_by"?: string | null,"fragment_id"?: string,"id"?: string,"release_id"?: string | null,"revision_no"?: number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
+                    "change_kind"?: Database["public"]['Enums']["change_kind"],"change_note"?: string | null,"change_teaser"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"fragment_id"?: string,"id"?: string,"release_id"?: string | null,"revision_no"?: number,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -449,16 +455,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"grove_journeys": {
+                  Row: {
+                    "created_at": string,"grove_id": string,"mode": Database["public"]['Enums']["journey_mode"],"passage": NonNullable<Json>,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"grove_id": string,"mode": Database["public"]['Enums']["journey_mode"],"passage"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"grove_id"?: string,"mode"?: Database["public"]['Enums']["journey_mode"],"passage"?: NonNullable<Json>,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "grove_journeys_grove_id_fkey"
+      columns: ["grove_id"]
+isOneToOne: false
+      referencedRelation: "groves"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"groves": {
                   Row: {
-                    "access_notes": NonNullable<Json>,"allows_speaker_wildlife_sounds": boolean,"boundary": unknown,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null,"boundary_geojson": Json | null
+                    "allows_speaker_wildlife_sounds": boolean,"boundary": unknown,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null,"boundary_geojson": Json | null
                   }
                   ComputedFields: "boundary_geojson"
                   Insert: {
-                    "access_notes"?: NonNullable<Json>,"allows_speaker_wildlife_sounds"?: boolean,"boundary": unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "allows_speaker_wildlife_sounds"?: boolean,"boundary": unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
                   Update: {
-                    "access_notes"?: NonNullable<Json>,"allows_speaker_wildlife_sounds"?: boolean,"boundary"?: unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "allows_speaker_wildlife_sounds"?: boolean,"boundary"?: unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
                   Relationships: [
                     {
@@ -687,14 +713,14 @@ isOneToOne: false
                   ]
                 },"pack_builds": {
                   Row: {
-                    "asset_hashes": (string)[],"built_at": string,"bytes_total": number,"content_sha256": string | null,"id": number,"live": boolean,"manifest_path": string,"manifest_sha256": string,"reason": string | null,"release_id": string | null,"scope": string,"scope_id": string,"version": number
+                    "asset_hashes": (string)[],"built_at": string,"bytes_total": number,"content_sha256": string | null,"id": number,"live": boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat": number | null,"opening_lng": number | null,"reason": string | null,"release_id": string | null,"scope": string,"scope_id": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "asset_hashes": (string)[],"built_at"?: string,"bytes_total": number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path": string,"manifest_sha256": string,"reason"?: string | null,"release_id"?: string | null,"scope": string,"scope_id": string,"version": number
+                    "asset_hashes": (string)[],"built_at"?: string,"bytes_total": number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope": string,"scope_id": string,"version": number
                   }
                   Update: {
-                    "asset_hashes"?: (string)[],"built_at"?: string,"bytes_total"?: number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path"?: string,"manifest_sha256"?: string,"reason"?: string | null,"release_id"?: string | null,"scope"?: string,"scope_id"?: string,"version"?: number
+                    "asset_hashes"?: (string)[],"built_at"?: string,"bytes_total"?: number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path"?: string,"manifest_sha256"?: string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope"?: string,"scope_id"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -807,14 +833,14 @@ isOneToOne: false
                   ]
                 },"revision_versions": {
                   Row: {
-                    "created_at": string,"id": string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"revision_id": string,"time_window": Database["public"]['Enums']["time_window"],"transcript": string,"updated_at": string,"vtt": string | null
+                    "created_at": string,"id": string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint": NonNullable<Json>,"revision_id": string,"time_window": Database["public"]['Enums']["time_window"],"transcript": string,"updated_at": string,"vtt": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"revision_id": string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript": string,"updated_at"?: string,"vtt"?: string | null
+                    "created_at"?: string,"id"?: string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint"?: NonNullable<Json>,"revision_id": string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript": string,"updated_at"?: string,"vtt"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"language"?: Database["public"]['Enums']["lang"],"narration_asset_id"?: string,"revision_id"?: string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript"?: string,"updated_at"?: string,"vtt"?: string | null
+                    "created_at"?: string,"id"?: string,"language"?: Database["public"]['Enums']["lang"],"narration_asset_id"?: string,"other_time_hint"?: NonNullable<Json>,"revision_id"?: string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript"?: string,"updated_at"?: string,"vtt"?: string | null
                   }
                   Relationships: [
                     {
@@ -929,11 +955,17 @@ isOneToOne: false
 "fn_check_audio_asset":
 { Args: { "p_asset": Omit<Database["public"]['Tables']["audio_assets"]['Row'], Database["public"]['Tables']["audio_assets"]['ComputedFields']> }; Returns: Json
                            },
+"fn_check_character_local":
+{ Args: { "p_char": Omit<Database["public"]['Tables']["characters"]['Row'], Database["public"]['Tables']["characters"]['ComputedFields']> }; Returns: Json
+                           },
 "fn_check_fragment_local":
 { Args: { "p_frag": Omit<Database["public"]['Tables']["fragments"]['Row'], Database["public"]['Tables']["fragments"]['ComputedFields']> }; Returns: Json
                            },
 "fn_check_issue":
-{ Args: { "p_code": string,"p_entity": string,"p_entity_id": string,"p_message": string,"p_severity": string }; Returns: Json
+{ Args: { "p_code": string,"p_context"?: Json,"p_entity": string,"p_entity_id": string,"p_message": string,"p_severity": string }; Returns: Json
+                           },
+"fn_check_revision_local":
+{ Args: { "p_rev": Omit<Database["public"]['Tables']["fragment_revisions"]['Row'], Database["public"]['Tables']["fragment_revisions"]['ComputedFields']> }; Returns: Json
                            },
 "fn_contingency_revision_no":
 { Args: { "p_fragment_id": string }; Returns: number
@@ -965,11 +997,20 @@ isOneToOne: false
 "fn_entity_in_release_or_published":
 { Args: { "p_entity": string,"p_entity_id": string,"p_release_id": string,"p_statuses"?: (string)[] }; Returns: boolean
                            },
+"fn_grove_has_opening_root_draft":
+{ Args: { "p_grove_id": string }; Returns: boolean
+                           },
+"fn_grove_has_opening_root_publish":
+{ Args: { "p_grove_id": string,"p_release_id": string }; Returns: boolean
+                           },
 "fn_is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "fn_is_editor_or_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"fn_l10n_blank":
+{ Args: { "p": Json }; Returns: boolean
                            },
 "fn_layer_is_playable":
 { Args: { "p_layer_id": string }; Returns: boolean
@@ -1010,6 +1051,9 @@ isOneToOne: false
 "fn_snapshot_projection_guarded":
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
                            },
+"fn_stranded_prereqs":
+{ Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
+                           },
 "fn_unpublish_commit":
 { Args: { "p_entity": string,"p_ids": (string)[] }; Returns: Json
                            },
@@ -1032,7 +1076,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "asset_kind": "narration"|"sfx_oneshot"|"sfx_bed"|"music_stem"|"voice_cue"|"growth_cue","change_kind": "contingency"|"correction","character_prominence": "major"|"minor","entry_kind": "next"|"character"|"noticed"|"answer"|"memory","entry_status": "submitted"|"read"|"sprouting"|"grown"|"resting"|"hidden","fragment_visibility": "standard"|"physical","lang": "en"|"es","publish_status": "draft"|"in_review"|"approved"|"published"|"retired"|"unpublished","release_status": "draft"|"scheduled"|"publishing"|"published"|"failed"|"cancelled","staff_role": "admin"|"editor"|"writer"|"sound"|"moderator"|"viewer","tier": "root"|"branch"|"leaf","time_window": "day"|"night"
+            "asset_kind": "narration"|"sfx_oneshot"|"sfx_bed"|"music_stem"|"voice_cue"|"growth_cue","change_kind": "contingency"|"correction","character_prominence": "major"|"minor","entry_kind": "next"|"character"|"noticed"|"answer"|"memory","entry_status": "submitted"|"read"|"sprouting"|"grown"|"resting"|"hidden","fragment_visibility": "standard"|"physical","journey_mode": "walk"|"bike"|"transit","lang": "en"|"es","publish_status": "draft"|"in_review"|"approved"|"published"|"retired"|"unpublished","release_status": "draft"|"scheduled"|"publishing"|"published"|"failed"|"cancelled","staff_role": "admin"|"editor"|"writer"|"sound"|"moderator"|"viewer","tier": "root"|"branch"|"leaf","time_window": "day"|"night"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1152,7 +1196,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "asset_kind": ["narration", "sfx_oneshot", "sfx_bed", "music_stem", "voice_cue", "growth_cue"],"change_kind": ["contingency", "correction"],"character_prominence": ["major", "minor"],"entry_kind": ["next", "character", "noticed", "answer", "memory"],"entry_status": ["submitted", "read", "sprouting", "grown", "resting", "hidden"],"fragment_visibility": ["standard", "physical"],"lang": ["en", "es"],"publish_status": ["draft", "in_review", "approved", "published", "retired", "unpublished"],"release_status": ["draft", "scheduled", "publishing", "published", "failed", "cancelled"],"staff_role": ["admin", "editor", "writer", "sound", "moderator", "viewer"],"tier": ["root", "branch", "leaf"],"time_window": ["day", "night"]
+            "asset_kind": ["narration", "sfx_oneshot", "sfx_bed", "music_stem", "voice_cue", "growth_cue"],"change_kind": ["contingency", "correction"],"character_prominence": ["major", "minor"],"entry_kind": ["next", "character", "noticed", "answer", "memory"],"entry_status": ["submitted", "read", "sprouting", "grown", "resting", "hidden"],"fragment_visibility": ["standard", "physical"],"journey_mode": ["walk", "bike", "transit"],"lang": ["en", "es"],"publish_status": ["draft", "in_review", "approved", "published", "retired", "unpublished"],"release_status": ["draft", "scheduled", "publishing", "published", "failed", "cancelled"],"staff_role": ["admin", "editor", "writer", "sound", "moderator", "viewer"],"tier": ["root", "branch", "leaf"],"time_window": ["day", "night"]
           }
         }
 } as const

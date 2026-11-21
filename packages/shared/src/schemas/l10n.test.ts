@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { AccessNotes, L10n, pickL10n } from "./l10n";
+import { isL10nBlank, L10n, pickL10n } from "./l10n";
 
 describe("L10n", () => {
-  it("accepts language maps", () => {
+  it("parses and picks preferred then en", () => {
     const parsed = L10n.parse({ en: "Salt Marsh", es: "Marisma" });
     expect(pickL10n(parsed, "es")).toBe("Marisma");
     expect(pickL10n(parsed, "fr")).toBe("Salt Marsh");
   });
 });
 
-describe("AccessNotes", () => {
-  it("accepts a partial record of optional L10n keys", () => {
-    const parsed = AccessNotes.parse({
-      parking: { en: "Lot A" },
-      hours: { en: "Dawn to dusk" },
-    });
-    expect(parsed.parking?.en).toBe("Lot A");
-    expect(parsed.transit).toBeUndefined();
+describe("isL10nBlank (G2)", () => {
+  it("treats empty object, missing en, and blank en as blank", () => {
+    expect(isL10nBlank({})).toBe(true);
+    expect(isL10nBlank({ es: "hola" })).toBe(true);
+    expect(isL10nBlank({ en: "" })).toBe(true);
+    expect(isL10nBlank({ en: "  " })).toBe(true);
+    expect(isL10nBlank(null)).toBe(true);
   });
 
-  it("rejects unknown keys", () => {
-    expect(() => AccessNotes.parse({ wifi: { en: "free" } })).toThrow();
+  it("treats non-blank en as present", () => {
+    expect(isL10nBlank({ en: "hello" })).toBe(false);
+    expect(isL10nBlank({ en: " hello ", es: "hola" })).toBe(false);
   });
 });

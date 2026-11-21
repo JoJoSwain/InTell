@@ -17,19 +17,27 @@ const boundary = {
 const sha =
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+const homeGroveId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
+const fragId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
+
 const baseGrove = {
-  schema: 2 as const,
-  groveId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
+  schema: 3 as const,
+  groveId: homeGroveId,
   regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
   packVersion: 1,
   builtAt: "2026-06-15T17:00:00.000Z",
   grove: {
-    id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
+    id: homeGroveId,
     name: { en: "Demo" },
     premise: { en: "Premise" },
-    accessNotes: { parking: { en: "Lot A" } },
     boundary,
     allowsSpeakerWildlifeSounds: false,
+    openingFragmentId: fragId,
+    journeys: {
+      walk: { en: "TEST walk journey" },
+      bike: { en: "TEST bike journey" },
+      transit: { en: "TEST transit journey" },
+    },
   },
   characters: [
     {
@@ -38,11 +46,12 @@ const baseGrove = {
       publicIntro: { en: "A guide." },
       portraitSha: sha,
       portraitAlt: { en: "Portrait of Mara" },
+      homeGroveId,
     },
   ],
   fragments: [
     {
-      id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000030",
+      id: fragId,
       tier: "root" as const,
       isEnding: false,
       requires: [] as string[][],
@@ -73,7 +82,7 @@ const baseGrove = {
   revisions: [
     {
       id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000040",
-      fragmentId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000030",
+      fragmentId: fragId,
       revisionNo: 1,
       changeKind: "contingency" as const,
       contingencyRevisionNo: 1,
@@ -109,15 +118,80 @@ const baseGrove = {
   ],
 };
 
-describe("GrovePack schema 2", () => {
+describe("GrovePack schema 3", () => {
   it("accepts a minimal valid pack", () => {
     const parsed = GrovePack.parse(baseGrove);
-    expect(parsed.schema).toBe(2);
+    expect(parsed.schema).toBe(3);
     expect(parsed.regionId).toBe(baseGrove.regionId);
+    expect(parsed.grove.openingFragmentId).toBe(fragId);
+    expect(parsed.grove.journeys.walk).toEqual({ en: "TEST walk journey" });
+    expect(parsed.characters[0]?.homeGroveId).toBe(homeGroveId);
     expect(parsed.fragments[0]?.teaser).toEqual({
       en: "By the reeds. A beginning.",
     });
-    expect(parsed.grove.allowsSpeakerWildlifeSounds).toBe(false);
+  });
+
+  it("rejects accessNotes and drive journey keys", () => {
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        grove: {
+          ...baseGrove.grove,
+          accessNotes: { parking: { en: "Lot A" } },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      GrovePack.parse({
+        ...baseGrove,
+        grove: {
+          ...baseGrove.grove,
+          journeys: {
+            ...baseGrove.grove.journeys,
+            drive: { en: "no cars" },
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("carries contingency changeTeaser after a correction", () => {
+    const teaser = { en: "The story at this place has shifted." };
+    const parsed = GrovePack.parse({
+      ...baseGrove,
+      revisions: [
+        {
+          id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000041",
+          fragmentId: fragId,
+          revisionNo: 3,
+          changeKind: "correction" as const,
+          contingencyRevisionNo: 2,
+          changeTeaser: teaser,
+          versions: [
+            {
+              lang: "en",
+              timeWindow: "day" as const,
+              assetSha: sha,
+              durationMs: 1000,
+              bytes: 100,
+              transcript: "Hello again.",
+              otherTimeHint: { en: "At night, another telling waits." },
+            },
+            {
+              lang: "en",
+              timeWindow: "night" as const,
+              assetSha: sha,
+              durationMs: 1000,
+              bytes: 100,
+              transcript: "Hello night.",
+              otherTimeHint: { en: "By day, another telling waits." },
+            },
+          ],
+        },
+      ],
+    });
+    expect(parsed.revisions[0]?.changeTeaser).toEqual(teaser);
+    expect(parsed.revisions[0]?.versions[0]?.otherTimeHint).toBeDefined();
   });
 
   it("accepts physical fragments with lat/lng and no radiusM", () => {
@@ -216,18 +290,6 @@ describe("GrovePack schema 2", () => {
         rings: [],
       }),
     ).toThrow();
-    expect(() =>
-      GrovePack.parse({
-        ...baseGrove,
-        crossroads: [],
-      }),
-    ).toThrow();
-    expect(() =>
-      GrovePack.parse({
-        ...baseGrove,
-        ledger: [],
-      }),
-    ).toThrow();
   });
 
   it("accepts externalPrerequisites and image assets", () => {
@@ -310,8 +372,6 @@ describe("RegionPack schema 2", () => {
     const parsed = RegionPack.parse(pack);
     expect(parsed.schema).toBe(2);
     expect(parsed.timezone).toBe("America/Denver");
-    expect(parsed.ambienceProfiles[0]?.name).toBe("Marsh");
-    expect(parsed.ambienceProfiles[0]?.layers[0]?.timeWindow).toBe("day");
   });
 
   it("allows null landcover", () => {

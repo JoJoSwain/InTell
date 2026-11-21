@@ -22,6 +22,7 @@ export const DEMO = {
   frag10R2Id: "aaaaaaaa-bbbb-4ccc-8ddd-00000000004a",
   publishedReleaseId: "aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0",
   draftReleaseId: "aaaaaaaa-bbbb-4ccc-8ddd-0000000000e1",
+  charRiverId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000020",
   portraitASha:
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   portraitBSha:

@@ -1,7 +1,21 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { createRevision, updateRevision } from "./actions";
+
+function RevisionSubmitButton({
+  label,
+}: {
+  label: "Save revision" | "Create revision";
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} aria-label={label}>
+      {pending ? "Saving…" : label}
+    </Button>
+  );
+}
 
 export type AudioOption = { id: string; title: string; kind: string };
 
@@ -10,6 +24,7 @@ export type VersionInitial = {
   narration_asset_id: string;
   transcript: string;
   vtt: string;
+  other_time_hint?: string;
 };
 
 export type RevisionFormInitial = {
@@ -17,6 +32,7 @@ export type RevisionFormInitial = {
   revision_no?: number;
   change_kind?: "contingency" | "correction" | "";
   change_note?: string;
+  change_teaser?: string;
   status?: string;
   day?: VersionInitial | null;
   night?: VersionInitial | null;
@@ -91,6 +107,21 @@ function VersionFields({
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
         />
       </label>
+      <label className="block text-sm">
+        <span className="text-textMuted">Other-time hint (en)</span>
+        <textarea
+          name={`${window}_other_time_hint`}
+          rows={2}
+          defaultValue={initial?.other_time_hint ?? ""}
+          disabled={readOnly}
+          aria-label={`${label} other-time hint`}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+        />
+        <span className="mt-1 block text-xs text-textMuted">
+          Required when this revision has both Day and Night. Example: &quot;After
+          dusk, River speaks of something else.&quot;
+        </span>
+      </label>
     </fieldset>
   );
 }
@@ -116,9 +147,13 @@ export function RevisionForm({
   const changeKind = isFirst
     ? "contingency"
     : (initial?.change_kind ?? "");
+  // Remount when server-provided field values change after save (R1).
+  const remountKey = initial?.id
+    ? `rev:${initial.id}:${initial.change_teaser ?? ""}:${initial.day?.other_time_hint ?? ""}:${initial.night?.other_time_hint ?? ""}`
+    : `rev:new:${fragmentId}`;
 
   return (
-    <form action={action} className="space-y-6">
+    <form key={remountKey} action={action} className="space-y-6">
       <input type="hidden" name="grove_id" value={groveId} />
       <input type="hidden" name="fragment_id" value={fragmentId} />
       {initial?.id ? (
@@ -183,6 +218,24 @@ export function RevisionForm({
         />
       </label>
 
+      {!isFirst ? (
+        <label className="block text-sm">
+          <span className="text-textMuted">Change teaser (en)</span>
+          <textarea
+            name="change_teaser_en"
+            rows={2}
+            defaultValue={initial?.change_teaser ?? ""}
+            disabled={readOnly}
+            aria-label="Change teaser"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-textMuted">
+            Shown to listeners when they tap a fragment whose story has changed.
+            Required for Story Contingency after revision 1.
+          </span>
+        </label>
+      ) : null}
+
       <p className="text-xs text-textMuted">
         Language is always English (en). No AI generation.
       </p>
@@ -201,9 +254,9 @@ export function RevisionForm({
       />
 
       {!readOnly ? (
-        <Button type="submit" aria-label={initial?.id ? "Save revision" : "Create revision"}>
-          {initial?.id ? "Save revision" : "Create revision"}
-        </Button>
+        <RevisionSubmitButton
+          label={initial?.id ? "Save revision" : "Create revision"}
+        />
       ) : (
         <p className="text-sm text-textMuted">
           {initial?.status === "draft"

@@ -83,6 +83,10 @@ Open the staging admin, sign in as the bootstrap admin, invite a second staff us
 ```bash
 # with local Supabase + functions serve running
 pnpm --filter @intell/admin e2e:prepare   # creates gitignored test users
+# On Windows, export NEXT_PUBLIC_SUPABASE_* from `pnpm exec supabase status -o env`
+# (map ANON_KEY → NEXT_PUBLIC_SUPABASE_ANON_KEY) before test:e2e. Playwright's
+# webServer.env only passes through variables that are actually set, so it will
+# not override apps/admin/.env.local with empty anon/url values (M3e A17).
 pnpm --filter @intell/admin test:e2e
 ```
 

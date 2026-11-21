@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { entityAdminHref } from "@/lib/releases/links";
+import {
+  entityAdminHref,
+  hrefContextFromFailure,
+} from "@/lib/releases/links";
 
 export type ChecklistFailure = {
   code: string;
@@ -8,6 +11,9 @@ export type ChecklistFailure = {
   message: string;
   entity?: string;
   entity_id?: string;
+  grove_id?: string;
+  fragment_id?: string;
+  character_id?: string;
 };
 
 function parseFailures(raw: unknown): ChecklistFailure[] {
@@ -98,7 +104,11 @@ export function GroupedChecklist({
             </h4>
             <ul className="mt-2 space-y-1">
               {items.map((f, i) => {
-                const href = entityAdminHref(f.entity ?? "", f.entity_id);
+                const href = entityAdminHref(
+                  f.entity ?? "",
+                  f.entity_id,
+                  hrefContextFromFailure(f),
+                );
                 return (
                   <li
                     key={`${code}-${f.entity_id ?? ""}-${i}`}

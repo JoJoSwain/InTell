@@ -36,7 +36,7 @@ export default async function RevisionDetailPage({ params }: Props) {
 
   const { data: revision } = await supabase
     .from("fragment_revisions")
-    .select("id, revision_no, change_kind, status, change_note")
+    .select("id, revision_no, change_kind, status, change_note, change_teaser")
     .eq("id", revisionId)
     .eq("fragment_id", fragmentId)
     .maybeSingle();
@@ -44,7 +44,9 @@ export default async function RevisionDetailPage({ params }: Props) {
 
   const { data: versions } = await supabase
     .from("revision_versions")
-    .select("id, time_window, narration_asset_id, transcript, vtt")
+    .select(
+      "id, time_window, narration_asset_id, transcript, vtt, other_time_hint",
+    )
     .eq("revision_id", revisionId);
 
   const { data: assets } = await supabase
@@ -94,6 +96,7 @@ export default async function RevisionDetailPage({ params }: Props) {
           revision_no: Number(revision.revision_no),
           change_kind: revision.change_kind as "contingency" | "correction",
           change_note: (revision.change_note as string) ?? "",
+          change_teaser: l10nEn(revision.change_teaser),
           status: String(revision.status),
           day: day
             ? {
@@ -101,6 +104,7 @@ export default async function RevisionDetailPage({ params }: Props) {
                 narration_asset_id: day.narration_asset_id as string,
                 transcript: String(day.transcript ?? ""),
                 vtt: String(day.vtt ?? ""),
+                other_time_hint: l10nEn(day.other_time_hint),
               }
             : null,
           night: night
@@ -109,6 +113,7 @@ export default async function RevisionDetailPage({ params }: Props) {
                 narration_asset_id: night.narration_asset_id as string,
                 transcript: String(night.transcript ?? ""),
                 vtt: String(night.vtt ?? ""),
+                other_time_hint: l10nEn(night.other_time_hint),
               }
             : null,
         }}

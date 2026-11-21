@@ -37,6 +37,7 @@ function parseVersion(
   narration_asset_id: string;
   transcript: string;
   vtt: string | null;
+  other_time_hint: string;
   version_id: string | null;
 } {
   const include = formData.get(`include_${window}`) === "on";
@@ -47,8 +48,15 @@ function parseVersion(
     ).trim(),
     transcript: String(formData.get(`${window}_transcript`) ?? ""),
     vtt: String(formData.get(`${window}_vtt`) ?? "").trim() || null,
+    other_time_hint: String(
+      formData.get(`${window}_other_time_hint`) ?? "",
+    ).trim(),
     version_id: String(formData.get(`${window}_version_id`) ?? "").trim() || null,
   };
+}
+
+function asL10nOrEmpty(text: string): Record<string, string> {
+  return text ? { en: text } : {};
 }
 
 async function syncVersions(
@@ -85,6 +93,7 @@ async function syncVersions(
           narration_asset_id: data.narration_asset_id,
           transcript: data.transcript,
           vtt: data.vtt,
+          other_time_hint: asL10nOrEmpty(data.other_time_hint),
           language: "en",
           time_window: window,
         })
@@ -98,6 +107,7 @@ async function syncVersions(
         narration_asset_id: data.narration_asset_id,
         transcript: data.transcript,
         vtt: data.vtt,
+        other_time_hint: asL10nOrEmpty(data.other_time_hint),
       });
       if (error) throw new Error(error.message);
     }
@@ -112,6 +122,7 @@ export async function createRevision(formData: FormData) {
   const changeKindRaw = String(formData.get("change_kind") ?? "").trim();
   const changeNote =
     String(formData.get("change_note") ?? "").trim() || null;
+  const changeTeaserEn = String(formData.get("change_teaser_en") ?? "").trim();
 
   if (!groveId || !fragmentId) throw new Error("grove and fragment required");
 
@@ -138,6 +149,7 @@ export async function createRevision(formData: FormData) {
       fragment_id: fragmentId,
       change_kind: changeKind,
       change_note: changeNote,
+      change_teaser: asL10nOrEmpty(changeTeaserEn),
       status: "draft",
       created_by: userId,
     })
@@ -163,6 +175,7 @@ export async function updateRevision(formData: FormData) {
   const changeKindRaw = String(formData.get("change_kind") ?? "").trim();
   const changeNote =
     String(formData.get("change_note") ?? "").trim() || null;
+  const changeTeaserEn = String(formData.get("change_teaser_en") ?? "").trim();
 
   if (!groveId || !fragmentId || !revisionId) {
     throw new Error("grove, fragment and revision required");
@@ -200,6 +213,7 @@ export async function updateRevision(formData: FormData) {
     .update({
       change_kind: changeKind,
       change_note: changeNote,
+      change_teaser: asL10nOrEmpty(changeTeaserEn),
     })
     .eq("id", revisionId);
   if (error) throw new Error(error.message);

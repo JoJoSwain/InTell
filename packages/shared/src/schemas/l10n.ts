@@ -1,26 +1,28 @@
 import { z } from "zod";
 
-/** Localized string map, e.g. `{ en: "…", es: "…" }`. */
+/** Language-keyed strings (DATA_MODEL §2). */
 export const L10n = z.record(z.string().min(1), z.string());
 export type L10n = z.infer<typeof L10n>;
 
-/** Grove access notes (DATA_MODEL §4 / A35): each key optional, each value L10n. */
-export const AccessNotes = z
-  .object({
-    parking: L10n.optional(),
-    transit: L10n.optional(),
-    restrooms: L10n.optional(),
-    terrain: L10n.optional(),
-    hours: L10n.optional(),
-    accessibility: L10n.optional(),
-  })
-  .strict();
-export type AccessNotes = z.infer<typeof AccessNotes>;
+/**
+ * True when L10n is blank for checklist / pack omission (G2 / DATA_MODEL §11):
+ * `{}`, missing `en`, or `en` blank after trim. Mirrors `fn_l10n_blank`.
+ */
+export function isL10nBlank(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value !== "object" || Array.isArray(value)) return true;
+  const rec = value as Record<string, unknown>;
+  const keys = Object.keys(rec);
+  if (keys.length === 0) return true;
+  const en = rec.en;
+  if (typeof en !== "string") return true;
+  return en.trim() === "";
+}
 
 export function pickL10n(
   value: L10n,
-  lang: string,
-  fallback = "en"
+  preferred: string,
+  fallback = "en",
 ): string | undefined {
-  return value[lang] ?? value[fallback] ?? Object.values(value)[0];
+  return value[preferred] ?? value[fallback] ?? Object.values(value)[0];
 }
