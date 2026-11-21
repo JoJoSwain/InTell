@@ -43,3 +43,24 @@ export function canViewAudit(role: StaffRole): boolean {
 export function canEditRegions(role: StaffRole): boolean {
   return role === "admin" || role === "editor";
 }
+
+export function canEditStory(role: StaffRole): boolean {
+  return role === "admin" || role === "editor";
+}
+
+export function canWriteMedia(role: StaffRole): boolean {
+  return (
+    role === "writer" ||
+    role === "sound" ||
+    role === "editor" ||
+    role === "admin"
+  );
+}
+
+export function canWriteStoryNotes(role: StaffRole): boolean {
+  return role === "writer" || role === "editor" || role === "admin";
+}
+
+export function canManageCharacters(role: StaffRole): boolean {
+  return role === "writer" || role === "editor" || role === "admin";
+}

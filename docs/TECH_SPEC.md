@@ -151,6 +151,8 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 ---
 
 ## 5. Edge functions
+**M5 note (physical markers):** when the phone opens `/f/{code}`, upper-case the scanned path segment before hashing (UTF-8 bytes of the upper-case Crockford base32 code) so it matches the pack `markerHash` produced from the stored upper-case `marker_code`.
+
 | Function | Caller | Purpose |
 |---|---|---|
 | `publish` | Admin (editor+) or `run-jobs` for scheduled releases | Publish a release: check → copy → commit (DATA_MODEL §10) |

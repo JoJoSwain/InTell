@@ -124,7 +124,7 @@ select ok(
 );
 
 alter table public.fragments disable trigger user;
-update public.fragments set marker_code = 'DEMO-001'
+update public.fragments set marker_code = 'DEM00001'
  where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000038';
 alter table public.fragments enable trigger user;
 alter table public.fragments

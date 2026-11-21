@@ -166,7 +166,7 @@ describe("GrovePack schema 2", () => {
       fragments: [
         {
           ...baseGrove.fragments[0],
-          markerCode: "DEMO-001",
+          markerCode: "DEM00001",
         },
       ],
     };

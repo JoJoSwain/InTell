@@ -28,7 +28,7 @@ select throws_ok(
 select ok(
   (
     select data->>'markerHash' = encode(
-      extensions.digest('DEMO-001', 'sha256'),
+      extensions.digest('DEM00001', 'sha256'),
       'hex'
     )
     from public.published_snapshots

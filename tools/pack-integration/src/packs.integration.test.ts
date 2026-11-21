@@ -258,7 +258,7 @@ describe.sequential("M3a pack integration", () => {
     expect(frag9?.lng).toBeDefined();
     expect(frag9?.radiusM).toBeUndefined();
     expect(frag9?.markerHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(JSON.stringify(pack)).not.toMatch(/DEMO-001|markerCode|marker_code/i);
+    expect(JSON.stringify(pack)).not.toMatch(/DEM00001|markerCode|marker_code/i);
     expect(JSON.stringify(pack)).not.toMatch(/storyNotes|writer_notes/i);
   });
 

@@ -1,6 +1,8 @@
 # InTell Admin
 
-Next.js App Router staff tools for Replaceplace. M3b: auth, shell, regions, staff, audit. Grove / Maps authoring arrives in M3c.
+Next.js App Router staff tools for Replaceplace. M3b: auth, shell, regions, staff, audit. M3c: Story (groves, characters, Story Notes) and Media (audio, images) authoring, physical marker print, Maps + Terra Draw when configured.
+
+**Browser support for loudness analysis:** current Chrome and Edge. Other browsers may fail soft on decode (upload still works with a LOUDNESS warning).
 
 ## Local development
 
@@ -26,9 +28,9 @@ See `apps/admin/.env.example` and the root `.env.example`. Required for the admi
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Staging or local API URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key (RLS). Never the service role |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Optional until M3c; empty-safe. Restricted to `https://intell-admin.replaceplace.com/*` and `http://localhost:3000/*`, so maps won't load on preview URLs |
-| `NEXT_PUBLIC_GOOGLE_MAP_ID` | Optional until M3c; empty-safe |
-| `NEXT_PUBLIC_LINK_DOMAIN` | Marker QR host (M3c) |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Optional; empty-safe. Map mounts only when both key and Map ID are set. Restricted to `https://intell-admin.replaceplace.com/*` and `http://localhost:3000/*`, so maps won't load on preview URLs |
+| `NEXT_PUBLIC_GOOGLE_MAP_ID` | Required with the API key for the grove map; empty-safe falls back to GeoJSON / lat-lng |
+| `NEXT_PUBLIC_LINK_DOMAIN` | Marker QR host (listener domain, default `intell.replaceplace.com`) |
 | `SENTRY_DSN` | Optional; empty-safe |
 
 ## Deploy (staging)

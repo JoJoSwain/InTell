@@ -129,3 +129,19 @@ export {
   OneShotWindowScheduler,
   type OneShotPlan,
 } from "./audio/oneshotSchedule";
+
+export {
+  audioFormatOffTarget,
+  BITRATE_TARGETS,
+  LOUDNESS_TARGETS,
+  loudnessOffTarget,
+  measureLoudness,
+  type AudioFormatParams,
+  type LoudnessAssetKind,
+  type LoudnessResult,
+} from "./audio/loudness";
+
+export {
+  parseM4aAudioParams,
+  type M4aAudioParams,
+} from "./audio/container";
