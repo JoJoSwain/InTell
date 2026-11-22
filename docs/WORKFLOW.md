@@ -23,6 +23,11 @@
 
 **Rule of thumb:** if a task would make both lanes edit the same file, it's split into a Lane A piece (merged first) and a Lane B piece.
 
+**Shared root files:**
+- The root `package.json` (scripts, `pnpm.overrides`), `pnpm-workspace.yaml` and the root tool configs belong to **Lane A**.
+- Each lane may add dependencies to **its own** package's `package.json`.
+- `pnpm-lock.yaml` is never edited by hand. On a conflict, merge `origin/master`, run `pnpm install`, and commit the regenerated lockfile.
+
 ---
 
 ## 2. Folders and branches
@@ -81,6 +86,7 @@
 Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering the shared logic and server pieces Lane B will need, and works on admin and analytics in between.
 
 **Lane A (Platform)**
+0. **A1, the M5a enablers (S0B review D3–D4):** the `register-device` edge function, a pure sync-diff helper in `packages/shared`, and scoping the root React override so mobile gets the version its Expo SDK expects.
 1. **M4a:** the shared time, unlock, trigger, ambience, music and Hush logic in `packages/shared`, with AUDIO_SPEC §9 tests. M5 uses `unlock.ts` and `timeWindow.ts`, so this goes first.
 2. **M4b:** admin sound design and the Listening Simulator. It carries M3c N3 (the loudness Web Worker), M3e F2 (a typed pack-build error) and M3f K1–K3 (the key cleanups).
 3. **Server pieces for M5:** the `embark` relay (Routes API key, `embark_usage` cap, origin never stored or logged), plus any pack or device endpoints M5 needs.
