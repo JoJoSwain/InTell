@@ -2,7 +2,7 @@
 
 **Branch:** `m3h-form-save-twice`  
 **PR:** https://github.com/JoJoSwain/InTell/pull/17  
-**Tip:** `3c183e8` (R2 ServerActionForm; prior R1 tip `b03e98f`)  
+**Tip:** `333c41b` (R2 ServerActionForm; prior R1 tip `b03e98f`)  
 **Brief:** `docs/briefs/M3h-form-save-twice.md`  
 **Review:** `docs/briefs/M3h-review.md` (Verification + R2)  
 **Stop for verification.** No hosted DB push. No M3e F2, M3f K1–K3, M4, M5.
@@ -175,4 +175,4 @@ See §2 above.
 
 ### PR #17 CI / Vercel (R2 tip)
 
-Tip `3c183e8` pushed; waiting on CI/Vercel green (stop for verification).
+**Green** on tip `333c41b` (6/6: GitHub Actions `check` + `db` ×2 workflows, Vercel deploy + Preview Comments). **Stop for verification.**
