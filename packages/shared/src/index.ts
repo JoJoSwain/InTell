@@ -24,6 +24,12 @@ export {
   PackIndexEntry,
 } from "./schemas/packs";
 export {
+  assetsToDelete,
+  assetsToFetch,
+  manifestShas,
+  type PackManifest,
+} from "./packs/syncDiff";
+export {
   AmbienceLayerSnapshot,
   AmbienceProfileSnapshot,
   AmbienceZoneSnapshot,
