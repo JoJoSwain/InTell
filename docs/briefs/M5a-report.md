@@ -223,3 +223,46 @@ fdd56b9 docs: plan the M5a mobile data layer
 cdc288f docs: M5a brief (Lane B: mobile data layer, plan first); TECH_SPEC backup split (D6)
 ```
 
+## R3–R5
+
+### R3
+
+Registration starts after the data layer has finished booting, through `startRegistration`, which does not await `registerIfNeeded`. `httpRegistrar` aborts the request after 10 seconds. A timeout returns `{ registered: false }` and does not write `last_registered_app_version`.
+
+Tests, passed:
+
+- a hung fetch resolves registered false after the timeout
+- boot finishes without waiting for registration
+
+### R4
+
+A stored manifest that fails to parse is kept, and sync treats its version as 0 so the next index version reinstalls it. Asset shas are read from the raw `assets` array and left on disk. `regionIds` reads `regionId` from the raw grove JSON and does not check `schema === 3`.
+
+Test, passed: an installed grove whose stored manifest fails to parse is reinstalled. Its asset file stays, and the region named in that raw JSON is installed too.
+
+### R5
+
+`127.0.0.1:54321` was already listening. Lane B did not start, stop, or reset it. One POST to `register-device` used the Publishable key from `supabase status` as `apikey`. Status **200**. Body keys: `ok`, `firstSeenAt`.
+
+### Checks
+
+`pnpm --filter @intell/mobile test`: 12 suites, 30 tests, all passed. Typecheck passed. Lint passed. `expo export --platform android --clear` finished with exit 0 (1415 modules).
+
+CI for this commit is recorded after the push.
+
+`git log --oneline origin/master..HEAD` before this R3–R5 commit:
+
+```
+2e30899 docs: M5a verification (R1, R2, step 10 verified; R3-R5 before merge)
+ca3ef46 docs: record CI on the M5a review-fix head
+d764652 Update installed packs only, and register the device after A1.
+066d8ab Merge origin/master into b/m5a-mobile-data.
+65d4ab3 docs: M5a implementation review (R1 sync installed-only, R2 fetch missing assets only; step 10)
+fdcda15 docs: record the M5a mobile data layer
+9ac1bfa Keep listener progress in a backed-up database and downloaded packs out of backup.
+f4c5dcb docs: M5a plan review (approved, notes N1-N4); DATA_MODEL §14 backup split
+fdd56b9 docs: plan the M5a mobile data layer
+cdc288f docs: M5a brief (Lane B: mobile data layer, plan first); TECH_SPEC backup split (D6)
+```
+
+

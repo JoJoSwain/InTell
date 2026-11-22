@@ -20,7 +20,7 @@ import { reconcile } from "../files/reconcile";
 import { expoDigester } from "../files/sha";
 import type { FileStore } from "../files/store";
 import { getOrCreateDeviceId, logDevice, type SecretStore } from "../identity/deviceId";
-import { httpRegistrar, noopRegistrar, registerIfNeeded } from "../identity/register";
+import { httpRegistrar, noopRegistrar, startRegistration } from "../identity/register";
 import { ensureStorageLayout } from "../storage/layout";
 
 type Extra = { supabaseUrl?: string; supabasePublishableKey?: string };
@@ -77,26 +77,6 @@ async function boot(): Promise<Layer> {
     console.info(line);
   });
   const config = supabaseConfig();
-  const version = (Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "0.0.0").slice(0, 32);
-  const language = Intl.DateTimeFormat().resolvedOptions().locale?.toLowerCase().startsWith("es") ? "es" : "en";
-  await registerIfNeeded({
-    db,
-    registrar: config
-      ? httpRegistrar({
-          supabaseUrl: config.url,
-          publishableKey: config.key,
-          log: (line) => {
-            console.info(line);
-          },
-        })
-      : noopRegistrar,
-    input: {
-      deviceId,
-      platform: Platform.OS === "ios" ? "ios" : "android",
-      appVersion: version,
-      uiLanguage: language,
-    },
-  });
   const client = config
     ? createClient(config.url, config.key, {
         auth: {
@@ -130,6 +110,26 @@ async function boot(): Promise<Layer> {
     },
   };
   startListeners(layer);
+  const version = (Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "0.0.0").slice(0, 32);
+  const language = Intl.DateTimeFormat().resolvedOptions().locale?.toLowerCase().startsWith("es") ? "es" : "en";
+  startRegistration({
+    db,
+    registrar: config
+      ? httpRegistrar({
+          supabaseUrl: config.url,
+          publishableKey: config.key,
+          log: (line) => {
+            console.info(line);
+          },
+        })
+      : noopRegistrar,
+    input: {
+      deviceId,
+      platform: Platform.OS === "ios" ? "ios" : "android",
+      appVersion: version,
+      uiLanguage: language,
+    },
+  });
   return layer;
 }
 

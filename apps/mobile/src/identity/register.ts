@@ -21,17 +21,23 @@ export const noopRegistrar: DeviceRegistrar = {
   },
 };
 
+export const REGISTER_TIMEOUT_MS = 10_000;
+
 export function httpRegistrar(args: {
   supabaseUrl: string;
   publishableKey: string;
   fetchImpl?: typeof fetch;
   log?: (line: string) => void;
+  timeoutMs?: number;
 }): DeviceRegistrar {
   const fetchImpl = args.fetchImpl ?? fetch;
+  const timeoutMs = args.timeoutMs ?? REGISTER_TIMEOUT_MS;
   return {
     async register(input) {
       const body = RegisterDeviceRequest.parse(input);
       const url = `${args.supabaseUrl.replace(/\/+$/, "")}/functions/v1/register-device`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(url, {
           method: "POST",
@@ -40,6 +46,7 @@ export function httpRegistrar(args: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
         if (response.status === 429 || !response.ok) {
           if (args.log) logDevice(body.deviceId, args.log);
@@ -52,6 +59,8 @@ export function httpRegistrar(args: {
       } catch {
         if (args.log) logDevice(body.deviceId, args.log);
         return { registered: false };
+      } finally {
+        clearTimeout(timer);
       }
     },
   };
@@ -66,4 +75,13 @@ export async function registerIfNeeded(args: {
   if (previous === args.input.appVersion) return;
   const result = await args.registrar.register(args.input);
   if (result.registered) await setKv(args.db, "last_registered_app_version", args.input.appVersion);
+}
+
+/** Runs after boot. A slow or failed registration never blocks the data layer. */
+export function startRegistration(args: {
+  db: SqlDriver;
+  registrar: DeviceRegistrar;
+  input: RegisterInput;
+}): void {
+  void registerIfNeeded(args).catch(() => {});
 }

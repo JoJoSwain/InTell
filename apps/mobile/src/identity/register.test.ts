@@ -1,7 +1,7 @@
 import { migrate } from "../db/migrate";
 import { openNodeSqlite } from "../db/nodeSqlite";
 import { getKv } from "../db/repos";
-import { httpRegistrar, registerIfNeeded } from "./register";
+import { httpRegistrar, registerIfNeeded, startRegistration } from "./register";
 
 const DEVICE = "12345678-1234-4123-8123-123456789abc";
 const input = {
@@ -77,5 +77,56 @@ test("handles 429 without logging the full device id", async () => {
   expect(await getKv(db, "last_registered_app_version")).toBeNull();
   expect(lines).toEqual(["device 12345678"]);
   expect(lines.join(" ")).not.toContain(DEVICE);
+  await db.close();
+});
+
+test("a hung fetch resolves registered false after the timeout", async () => {
+  jest.useFakeTimers();
+  const db = openNodeSqlite();
+  await migrate(db);
+  try {
+    const fetchImpl = ((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new Error("aborted"));
+        });
+      })) as typeof fetch;
+    const registrar = httpRegistrar({
+      supabaseUrl: "http://127.0.0.1:54321",
+      publishableKey: "publishable",
+      fetchImpl,
+    });
+    const pending = registrar.register(input);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await expect(pending).resolves.toEqual({ registered: false });
+    const again = registerIfNeeded({ db, registrar, input });
+    await jest.advanceTimersByTimeAsync(10_000);
+    await again;
+    expect(await getKv(db, "last_registered_app_version")).toBeNull();
+  } finally {
+    jest.useRealTimers();
+    await db.close();
+  }
+});
+
+test("boot finishes without waiting for registration", async () => {
+  const db = openNodeSqlite();
+  await migrate(db);
+  let resolveRegister: (value: { registered: boolean }) => void = () => undefined;
+  const gate = new Promise<{ registered: boolean }>((resolve) => {
+    resolveRegister = resolve;
+  });
+  startRegistration({
+    db,
+    registrar: {
+      register: () => gate,
+    },
+    input,
+  });
+  expect(await getKv(db, "last_registered_app_version")).toBeNull();
+  resolveRegister({ registered: true });
+  await gate;
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(await getKv(db, "last_registered_app_version")).toBe("1.0.0");
   await db.close();
 });

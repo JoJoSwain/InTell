@@ -236,3 +236,34 @@ test("the region pack follows an installed grove", async () => {
   expect(install).toHaveBeenCalledWith(newerRegion);
   await db.close();
 });
+
+test("an installed grove whose stored manifest fails to parse is reinstalled", async () => {
+  const db = openNodeSqlite();
+  await migrate(db);
+  const files = memoryFileStore();
+  await files.write(`/assets/${KEEP}.wav`, new Uint8Array([1]));
+  await upsertPack(db, {
+    scope: "grove",
+    id: GROVE,
+    version: 4,
+    manifest_json: JSON.stringify({ schema: 99, regionId: REGION, assets: [{ sha: KEEP }] }),
+    installed_at: "2026-01-01T00:00:00Z",
+  });
+  await upsertAsset(db, { sha: KEEP, ext: "wav", bytes: 1, local_uri: `/assets/${KEEP}.wav`, last_used_at: null });
+  const install = jest.fn(async () => undefined);
+  const grove = indexEntry({ version: 1 });
+  const region = indexEntry({ scope: "region", id: REGION, version: 1, manifestPath: "packs/region/x/1.json" });
+  await syncContent({
+    transport: "wifi",
+    confirmCellular: async () => true,
+    fetchIndex: async () => [grove, region],
+    install,
+    db,
+    files,
+  });
+  expect(install).toHaveBeenCalledWith(grove);
+  expect(install).toHaveBeenCalledWith(region);
+  expect((await listAssets(db)).map((asset) => asset.sha)).toEqual([KEEP]);
+  expect(await files.exists(`/assets/${KEEP}.wav`)).toBe(true);
+  await db.close();
+});

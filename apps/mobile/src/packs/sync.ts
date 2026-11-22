@@ -24,7 +24,7 @@ export async function syncContent(args: {
       const installed = (await listPacks(args.db)).find(
         (pack) => pack.scope === entry.scope && pack.id === entry.id,
       );
-      if (installed && installed.version < entry.version) await args.install(entry);
+      if (installed && installedVersion(installed) < entry.version) await args.install(entry);
     }
     const packs = await listPacks(args.db);
     const regions = regionIds(packs.filter((pack) => indexed.has(`${pack.scope}:${pack.id}`)));
@@ -32,7 +32,7 @@ export async function syncContent(args: {
       if (entry.scope !== "region") continue;
       const installed = packs.find((pack) => pack.scope === entry.scope && pack.id === entry.id);
       const needed = regions.has(entry.id);
-      if (installed && installed.version < entry.version) await args.install(entry);
+      if (installed && installedVersion(installed) < entry.version) await args.install(entry);
       else if (!installed && needed) await args.install(entry);
     }
   }
@@ -41,12 +41,18 @@ export async function syncContent(args: {
     if (!indexed.has(`${pack.scope}:${pack.id}`)) await deletePack(args.db, pack.scope, pack.id);
   }
 
-  const kept = (await listPacks(args.db)).map((pack) => storedManifest(pack));
+  const kept: PackManifest[] = [];
+  const rawKeep = new Set<string>();
+  for (const pack of await listPacks(args.db)) {
+    const parsed = parsedManifest(pack);
+    if (parsed) kept.push(parsed);
+    else for (const sha of rawAssetShas(pack)) rawKeep.add(sha);
+  }
   const local = await listAssets(args.db);
   const drop = assetsToDelete(
     local.map((asset) => asset.sha),
     kept,
-  );
+  ).filter((sha) => !rawKeep.has(sha));
   for (const sha of drop) {
     const row = await getAsset(args.db, sha);
     if (row) await args.files.delete(row.local_uri);
@@ -54,17 +60,46 @@ export async function syncContent(args: {
   }
 }
 
-function storedManifest(pack: PackRow): PackManifest {
-  const parsed: unknown = JSON.parse(pack.manifest_json);
-  return pack.scope === "region" ? RegionPack.parse(parsed) : GrovePack.parse(parsed);
+function rawObject(pack: PackRow): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(pack.manifest_json);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function parsedManifest(pack: PackRow): PackManifest | null {
+  const raw = rawObject(pack);
+  if (!raw) return null;
+  const result = pack.scope === "region" ? RegionPack.safeParse(raw) : GrovePack.safeParse(raw);
+  return result.success ? result.data : null;
+}
+
+/** A manifest that no longer parses is reinstalled on the next sync. */
+function installedVersion(pack: PackRow): number {
+  return parsedManifest(pack) ? pack.version : 0;
+}
+
+function rawAssetShas(pack: PackRow): string[] {
+  const assets = rawObject(pack)?.assets;
+  if (!Array.isArray(assets)) return [];
+  const shas: string[] = [];
+  for (const asset of assets) {
+    if (!asset || typeof asset !== "object" || !("sha" in asset)) continue;
+    const sha = asset.sha;
+    if (typeof sha === "string") shas.push(sha);
+  }
+  return shas;
 }
 
 function regionIds(packs: readonly PackRow[]): Set<string> {
   const ids = new Set<string>();
   for (const pack of packs) {
     if (pack.scope !== "grove") continue;
-    const manifest = storedManifest(pack);
-    if (manifest.schema === 3) ids.add(manifest.regionId);
+    const regionId = rawObject(pack)?.regionId;
+    if (typeof regionId === "string" && regionId.length > 0) ids.add(regionId);
   }
   return ids;
 }
