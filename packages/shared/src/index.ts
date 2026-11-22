@@ -10,6 +10,13 @@ export {
   StemRulePack,
 } from "./schemas/music";
 export {
+  AgeGate,
+  DevicePlatform,
+  RegisterDeviceRequest,
+  RegisterDeviceResponse,
+  UiLanguage,
+} from "./schemas/device";
+export {
   GrovePack,
   GrovePackFragment,
   PreviewManifest,

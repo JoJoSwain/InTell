@@ -432,9 +432,13 @@ enabled = true
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
 
-# verify_jwt = false only for service-called functions that validate a secret
-# key in-function (requireServiceCaller / publish service path), with tests
-# proving every other caller is refused. Staff-JWT-only functions stay true.
+# verify_jwt = false only when the function checks a key itself and tests
+# prove every other caller is refused:
+# - service-called functions (requireServiceCaller / publish service path)
+# - register-device: the app sends the publishable key and no user JWT.
+#   That key is not a JWT, so platform verification would reject the caller.
+#   requirePublishableCaller accepts only the publishable key.
+# Staff-JWT-only functions stay true.
 [functions.build-pack]
 verify_jwt = false
 
@@ -455,4 +459,7 @@ verify_jwt = true
 
 [functions.preview]
 verify_jwt = true
+
+[functions.register-device]
+verify_jwt = false
 

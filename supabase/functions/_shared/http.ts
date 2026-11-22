@@ -46,6 +46,23 @@ export function matchesSecretKey(credential: string): boolean {
 }
 
 /**
+ * Mobile callers that send the publishable key and no user JWT.
+ * `apikey` wins over Bearer, matching requireServiceCaller.
+ * A staff JWT, a secret key, or any other credential is refused.
+ */
+export function requirePublishableCaller(req: Request): Response | null {
+  const credential = serviceCredentialFrom(req);
+  if (!credential) {
+    return json({ error: "missing api key" }, 401);
+  }
+  const pub = publishableKey();
+  if (!pub || !timingSafeEqual(credential, pub)) {
+    return json({ error: "publishable key required" }, 403);
+  }
+  return null;
+}
+
+/**
  * Service callers only (run-jobs / build-pack / purge-assets).
  * Accepts secret key in `apikey` or `Authorization: Bearer` (transition).
  * Publishable/anon keys and user JWTs are always refused.
