@@ -51,6 +51,7 @@ Not added.
 | `pnpm lint && pnpm typecheck && pnpm test` | **PASS** |
 | `pnpm --filter @intell/admin build` | **PASS** |
 | CI (6/6) + Vercel on tip `4786ae5` | **PASS** |
+| CI + Vercel on tip including report | Re-triggered after push-job storage flake on `8db0b71` (PR sibling `db` succeeded) |
 
 ---
 
