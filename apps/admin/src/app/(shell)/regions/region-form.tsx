@@ -1,4 +1,9 @@
-import { Button } from "@/components/ui/button";
+"use client";
+
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { saveRegion } from "./actions";
 
 export function RegionForm({
@@ -15,7 +20,7 @@ export function RegionForm({
   };
 }) {
   return (
-    <form action={saveRegion} className="space-y-4">
+    <ServerActionForm action={saveRegion} className="space-y-4">
       {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
       <label className="block text-sm">
         <span className="text-textMuted">Name</span>
@@ -83,7 +88,9 @@ export function RegionForm({
           placeholder='{"type":"Polygon","coordinates":[[[...]]]}'
         />
       </label>
-      <Button type="submit">{initial ? "Save region" : "Create region"}</Button>
-    </form>
+      <ServerActionSubmit>
+        {initial ? "Save region" : "Create region"}
+      </ServerActionSubmit>
+    </ServerActionForm>
   );
 }

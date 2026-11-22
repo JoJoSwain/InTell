@@ -9,6 +9,7 @@ import {
   loadStaff,
   type StaffRole,
 } from "@/lib/staff";
+import { saveHref } from "@/lib/server-action-result";
 
 const ROLES: StaffRole[] = [
   "admin",
@@ -124,4 +125,5 @@ export async function updateStaffRow(formData: FormData) {
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
   revalidatePath("/staff");
+  return { ok: true as const, href: saveHref("/staff") };
 }

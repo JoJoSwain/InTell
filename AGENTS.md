@@ -84,6 +84,7 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
   - Audio only through the `AudioEngine` interface; UI code never calls the audio library directly
   - Google Maps through `react-native-maps` (ADR 0002). Keep markers cheap: memoized marker views with `tracksViewChanges` off once rendered, clustering only if 300 markers don't pan smoothly
 - **Admin:** Next.js App Router, server actions, shadcn/ui, the Google Maps JavaScript API with Terra Draw for drawing polygons (Google's own drawing library is discontinued), and a Web Audio `AudioEngine` for the Listening Simulator. RLS enforces roles; hiding UI is not security.
+  - Admin forms that edit text use `ServerActionForm` (`onSubmit` + `startTransition`, hard-nav to the action's `{ ok, href }`). Do not use `<form action={…}>` with text fields that redirects back to the same page (React 19 form reset can race the soft re-render and concatenate typed + prior values).
 - Database changes only through `supabase/migrations/*.sql`; regenerate types after each one.
 - Design tokens only (`apps/mobile/src/ui/tokens.ts`, mirrored in admin Tailwind); no raw hex values in components.
 - Telemetry never includes coordinates, free text, credit names or audio.

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteStoryNotes, isActiveStaff, loadStaff } from "@/lib/staff";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { saveThread } from "./actions";
 
 type ThreadRow = {
@@ -67,7 +70,7 @@ export default async function StoryNotesPage({
 
         <div className="max-w-xl space-y-8">
           {selected && editable ? (
-            <form action={saveThread} className="space-y-4">
+            <ServerActionForm action={saveThread} className="space-y-4">
               <input type="hidden" name="id" value={selected.id} />
               <h2 className="font-serif text-xl font-semibold">Edit thread</h2>
               <label className="block text-sm">
@@ -90,8 +93,10 @@ export default async function StoryNotesPage({
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
                 />
               </label>
-              <Button type="submit">Save thread</Button>
-            </form>
+              <ServerActionSubmit aria-label="Save thread">
+                Save thread
+              </ServerActionSubmit>
+            </ServerActionForm>
           ) : selected ? (
             <div>
               <h2 className="font-serif text-xl font-semibold">
@@ -104,7 +109,10 @@ export default async function StoryNotesPage({
           ) : null}
 
           {editable ? (
-            <form action={saveThread} className="space-y-4 border-t border-border pt-8">
+            <ServerActionForm
+              action={saveThread}
+              className="space-y-4 border-t border-border pt-8"
+            >
               <h2 className="font-serif text-xl font-semibold">New thread</h2>
               <label className="block text-sm">
                 <span className="text-textMuted">Title</span>
@@ -124,8 +132,8 @@ export default async function StoryNotesPage({
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
                 />
               </label>
-              <Button type="submit">Create thread</Button>
-            </form>
+              <ServerActionSubmit>Create thread</ServerActionSubmit>
+            </ServerActionForm>
           ) : null}
         </div>
       </div>

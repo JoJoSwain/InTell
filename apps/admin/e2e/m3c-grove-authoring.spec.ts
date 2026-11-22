@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadUsers, passwordGrant, signIn } from "./auth";
+import { loadUsers, passwordGrant, signIn, waitForClientReady } from "./auth";
 
 /** Seed Farmington nearby / second grove + bridge fragment (see seed.sql). */
 const SEED_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
@@ -87,6 +87,7 @@ test.describe("M3c grove authoring", () => {
       timeout: 15_000,
     });
     await expect(page.getByRole("link", { name: "Print marker" })).toBeVisible();
+    await waitForClientReady(page);
 
     // OR prereq on C: A OR bridge from other seed grove
     await page.getByRole("button", { name: "Add OR group" }).click();
@@ -172,6 +173,8 @@ test.describe("M3c grove authoring", () => {
     await teaser.fill(stamp);
     await expect(teaser).toHaveValue(stamp);
     await page.getByRole("button", { name: "Save fragment" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
+    await waitForClientReady(page);
     await expect(page.getByLabel("Teaser")).toHaveValue(stamp, {
       timeout: 15_000,
     });
@@ -208,9 +211,11 @@ test.describe("M3c grove authoring", () => {
     const nameStamp = `Farmington C1 ${Date.now()}`;
     await groveName.fill(nameStamp);
     await page.getByRole("button", { name: "Save grove" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
     await expect(page.getByRole("heading", { name: nameStamp })).toBeVisible({
       timeout: 15_000,
     });
+    await waitForClientReady(page);
     const boundaryAfter = await page.getByLabel("Boundary GeoJSON").inputValue();
     expect(JSON.parse(boundaryAfter)).toEqual(JSON.parse(boundaryBefore));
 

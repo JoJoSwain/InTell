@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { loadUsers, signIn } from "./auth";
+import { loadUsers, signIn, waitForClientReady } from "./auth";
 
 const SHOTS = join(__dirname, "screenshots");
 const GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
@@ -109,7 +109,9 @@ test.describe("M3e story fields", () => {
     const pick = options.find((o) => /Farmington/i.test(o));
     if (pick) await home.selectOption({ label: pick });
     await page.getByRole("button", { name: "Save character" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
     await expect(page.getByLabel("Home grove")).toBeVisible({ timeout: 15_000 });
+    await waitForClientReady(page);
     await page.screenshot({
       path: join(SHOTS, "m3e-character-home-grove.png"),
       fullPage: true,
@@ -119,6 +121,7 @@ test.describe("M3e story fields", () => {
     await page.goto(
       `/story/groves/${GROVE}/fragments/${FRAG10}/revisions/new`,
     );
+    await waitForClientReady(page);
     await expect(page.getByLabel("Change teaser")).toBeVisible({
       timeout: 20_000,
     });
@@ -135,9 +138,10 @@ test.describe("M3e story fields", () => {
     await page.getByLabel("Day other-time hint").fill(dayHint);
     await page.getByLabel("Night other-time hint").fill(nightHint);
     await page.getByRole("button", { name: "Create revision" }).click();
-    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}\/?$/, {
+    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}(?:\?.*)?$/, {
       timeout: 20_000,
     });
+    await waitForClientReady(page);
     await expect(page.getByLabel("Change teaser")).toHaveValue(teaser, {
       timeout: 20_000,
     });
@@ -146,7 +150,7 @@ test.describe("M3e story fields", () => {
       nightHint,
     );
     await page.reload();
-    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}\/?$/);
+    await expect(page).toHaveURL(/\/revisions\/[0-9a-f-]{36}(?:\?.*)?$/);
     await expect(page.getByLabel("Change teaser")).toHaveValue(teaser, {
       timeout: 20_000,
     });
@@ -174,9 +178,11 @@ test.describe("M3e story fields", () => {
     await page.getByLabel("Portrait image").selectOption({ value: "" });
     await page.getByLabel("Home grove").selectOption({ value: "" });
     await page.getByRole("button", { name: "Save character" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
     await expect(page.getByLabel("Portrait image")).toHaveValue("", {
       timeout: 15_000,
     });
+    await waitForClientReady(page);
 
     await page.getByRole("link", { name: "Releases" }).click();
     await page.getByRole("link", { name: "New release" }).click();

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { loadUsers, signIn } from "./auth";
+import { loadUsers, signIn, waitForClientReady } from "./auth";
 
 const REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
 const GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
@@ -93,9 +93,10 @@ async function expectExact(page: Page, label: string, value: string) {
   await expect(field(page, label)).toHaveValue(value, { timeout: 20_000 });
 }
 
-/** After a full page load, wait until React has hydrated form handlers. */
+/** After a full page load, wait until shell JS + form handlers are ready. */
 async function waitForHydratedForm(page: Page) {
   await page.waitForLoadState("domcontentloaded");
+  await waitForClientReady(page);
   await page.waitForFunction(() => {
     const form = document.querySelector("form");
     if (!form) return false;

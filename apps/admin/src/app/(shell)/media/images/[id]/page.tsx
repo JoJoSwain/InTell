@@ -2,7 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteMedia, isActiveStaff, loadStaff } from "@/lib/staff";
 import { l10nEn } from "@/lib/geo";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { updateImageAsset } from "../actions";
 
 type Props = { params: Promise<{ id: string }> };
@@ -43,7 +46,10 @@ export default async function ImageDetailPage({ params }: Props) {
         </p>
       ) : null}
       {editable ? (
-        <form action={updateImageAsset} className="mt-8 max-w-xl space-y-4">
+        <ServerActionForm
+          action={updateImageAsset}
+          className="mt-8 max-w-xl space-y-4"
+        >
           <input type="hidden" name="id" value={data.id} />
           <label className="block text-sm">
             <span className="text-textMuted">Title</span>
@@ -65,8 +71,8 @@ export default async function ImageDetailPage({ params }: Props) {
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
-          <Button type="submit">Save</Button>
-        </form>
+          <ServerActionSubmit>Save</ServerActionSubmit>
+        </ServerActionForm>
       ) : (
         <p className="mt-6 text-sm text-textMuted">
           Alt: {l10nEn(data.alt_text) || "(none)"}

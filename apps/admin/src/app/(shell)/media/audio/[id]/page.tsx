@@ -7,7 +7,10 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { canWriteMedia, isActiveStaff, loadStaff } from "@/lib/staff";
 import { AudioWarningBadges } from "@/components/checklist-badges";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { updateAudioAsset } from "../actions";
 import { AudioWaveform } from "../waveform";
 
@@ -75,7 +78,10 @@ export default async function AudioDetailPage({ params }: Props) {
         <AudioWaveform stagingPath={row.staging_path} />
       </div>
       {editable ? (
-        <form action={updateAudioAsset} className="mt-8 max-w-xl space-y-4">
+        <ServerActionForm
+          action={updateAudioAsset}
+          className="mt-8 max-w-xl space-y-4"
+        >
           <input type="hidden" name="id" value={row.id} />
           <label className="block text-sm">
             <span className="text-textMuted">Title</span>
@@ -96,8 +102,8 @@ export default async function AudioDetailPage({ params }: Props) {
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
-          <Button type="submit">Save</Button>
-        </form>
+          <ServerActionSubmit>Save</ServerActionSubmit>
+        </ServerActionForm>
       ) : (
         <p className="mt-6 text-sm text-textMuted">View only for your role.</p>
       )}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteMedia, isActiveStaff, loadStaff } from "@/lib/staff";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireMediaWriter() {
   const supabase = await createClient();
@@ -32,7 +33,7 @@ export async function updateImageAsset(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/media/images");
   revalidatePath(`/media/images/${id}`);
-  redirect(`/media/images/${id}`);
+  return { ok: true as const, href: saveHref(`/media/images/${id}`) };
 }
 
 export type InsertImagePayload = {

@@ -7,7 +7,10 @@ import {
   releaseBadgeKind,
   UnreleasedBadge,
 } from "@/components/unreleased-badge";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { saveCharacter } from "./actions";
 
 type CharRow = {
@@ -90,7 +93,7 @@ export default async function CharactersPage() {
       {editable ? (
         <section className="mt-10 max-w-xl">
           <h2 className="font-serif text-xl font-semibold">New character</h2>
-          <form action={saveCharacter} className="mt-4 space-y-4">
+          <ServerActionForm action={saveCharacter} className="mt-4 space-y-4">
             <label className="block text-sm">
               <span className="text-textMuted">Internal name</span>
               <input
@@ -108,8 +111,8 @@ export default async function CharactersPage() {
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
               />
             </label>
-            <Button type="submit">Create</Button>
-          </form>
+            <ServerActionSubmit>Create</ServerActionSubmit>
+          </ServerActionForm>
         </section>
       ) : null}
     </main>

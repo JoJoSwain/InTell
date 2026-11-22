@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { GroveBoundaryMap } from "@/components/maps/grove-boundary-map";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { mapsEnabled } from "@/lib/maps/config";
 import { saveGrove } from "./actions";
 
@@ -37,7 +40,7 @@ export function GroveForm({
   }
 
   return (
-    <form action={saveGrove} className="space-y-4">
+    <ServerActionForm action={saveGrove} className="space-y-4">
       {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
       {initial ? (
         <input
@@ -148,7 +151,9 @@ export function GroveForm({
         </p>
       )}
 
-      <Button type="submit">{initial ? "Save grove" : "Create grove"}</Button>
-    </form>
+      <ServerActionSubmit>
+        {initial ? "Save grove" : "Create grove"}
+      </ServerActionSubmit>
+    </ServerActionForm>
   );
 }

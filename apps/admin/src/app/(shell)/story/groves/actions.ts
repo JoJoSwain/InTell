@@ -17,6 +17,7 @@ import {
 } from "@/lib/staff";
 import { generateMarkerCode } from "@/lib/markers/code";
 import { asL10n, geoJsonEqual } from "@/lib/geo";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireEditor() {
   const supabase = await createClient();
@@ -115,7 +116,7 @@ export async function saveGrove(formData: FormData) {
 
     revalidatePath("/story/groves");
     revalidatePath(`/story/groves/${id}`);
-    redirect(`/story/groves/${id}`);
+    return { ok: true as const, href: saveHref(`/story/groves/${id}`) };
   }
 
   // Placeholder EWKT so NOT NULL boundary is satisfied; real shape via invoker RPC.
@@ -145,7 +146,7 @@ export async function saveGrove(formData: FormData) {
   if (bErr) throw new Error(bErr.message);
 
   revalidatePath("/story/groves");
-  redirect(`/story/groves/${newId}`);
+  return { ok: true as const, href: saveHref(`/story/groves/${newId}`) };
 }
 
 export async function saveFragment(formData: FormData) {
@@ -245,7 +246,10 @@ export async function saveFragment(formData: FormData) {
     }
 
     revalidatePath(`/story/groves/${groveId}`);
-    redirect(`/story/groves/${groveId}?fragment=${id}`);
+    return {
+      ok: true as const,
+      href: saveHref(`/story/groves/${groveId}?fragment=${id}`),
+    };
   }
 
   const { data, error } = await supabase
@@ -278,7 +282,10 @@ export async function saveFragment(formData: FormData) {
   if (locErr) throw new Error(locErr.message);
 
   revalidatePath(`/story/groves/${groveId}`);
-  redirect(`/story/groves/${groveId}?fragment=${newId}`);
+  return {
+    ok: true as const,
+    href: saveHref(`/story/groves/${groveId}?fragment=${newId}`),
+  };
 }
 
 /** Writer path: Indigeny fields only (RLS + F1 guard). */
@@ -299,7 +306,10 @@ export async function saveFragmentIndigeny(formData: FormData) {
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath(`/story/groves/${groveId}`);
-  redirect(`/story/groves/${groveId}?fragment=${id}`);
+  return {
+    ok: true as const,
+    href: saveHref(`/story/groves/${groveId}?fragment=${id}`),
+  };
 }
 
 export async function rotateMarkerCode(formData: FormData) {
@@ -451,7 +461,8 @@ export async function saveGroveJourneys(formData: FormData) {
   }
 
   revalidatePath(`/story/groves/${groveId}`);
-  // Caller performs a hard navigation after save (R1). Soft redirect can
-  // restore prior form field values and concatenate them into the next submit.
-  return { ok: true as const, groveId };
+  return {
+    ok: true as const,
+    href: saveHref(`/story/groves/${groveId}?journeys=${Date.now()}`),
+  };
 }

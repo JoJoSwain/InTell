@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteStoryNotes, isActiveStaff, loadStaff } from "@/lib/staff";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireNotesWriter() {
   const supabase = await createClient();
@@ -36,5 +37,5 @@ export async function saveThread(formData: FormData) {
     if (error) throw new Error(error.message);
   }
   revalidatePath("/story/notes");
-  redirect("/story/notes");
+  return { ok: true as const, href: saveHref("/story/notes") };
 }

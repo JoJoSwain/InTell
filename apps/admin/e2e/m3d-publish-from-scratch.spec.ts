@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { GrovePack } from "@intell/shared";
-import { loadUsers, signIn } from "./auth";
+import { loadUsers, signIn, waitForClientReady } from "./auth";
 
 const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
 /** Published seed Beginning — cross-grove prerequisite target. */
@@ -116,7 +116,7 @@ test.describe("M3d publish from scratch", () => {
       timeout: 20_000,
     });
     const groveUrl = page.url();
-    const groveId = groveUrl.split("/").pop()!;
+    const groveId = new URL(groveUrl).pathname.split("/").pop()!;
 
     // --- Physical marker fragment ---
     await page.getByRole("link", { name: "New fragment" }).click();
@@ -152,6 +152,7 @@ test.describe("M3d publish from scratch", () => {
       .getByRole("link", { name: new RegExp(`DayOnly ${stamp}`) })
       .first()
       .click();
+    await waitForClientReady(page);
     await page.getByRole("button", { name: "Add OR group" }).click();
     const multi = page.getByLabel("Prerequisite group 1 members");
     await multi.evaluate((el, beginningId) => {
@@ -186,10 +187,10 @@ test.describe("M3d publish from scratch", () => {
       page,
       "Staff-typed day transcript for M3d DayOnly.",
     );
-    // .../fragments/{fragmentId}/revisions/{revisionId}
-    const dayParts = page.url().split("/");
-    const dayRevisionId = dayParts[dayParts.length - 1]!;
-    const dayFragmentId = dayParts[dayParts.length - 3]!;
+    // .../fragments/{fragmentId}/revisions/{revisionId}(?_=…)
+    const dayPath = new URL(page.url()).pathname.split("/");
+    const dayRevisionId = dayPath[dayPath.length - 1]!;
+    const dayFragmentId = dayPath[dayPath.length - 3]!;
 
     // First revision on Physical
     await page.goto(groveUrl);
@@ -203,9 +204,9 @@ test.describe("M3d publish from scratch", () => {
       page,
       "Staff-typed day transcript for M3d Physical.",
     );
-    const physParts = page.url().split("/");
-    const physicalRevisionId = physParts[physParts.length - 1]!;
-    const physicalFragmentId = physParts[physParts.length - 3]!;
+    const physPath = new URL(page.url()).pathname.split("/");
+    const physicalRevisionId = physPath[physPath.length - 1]!;
+    const physicalFragmentId = physPath[physPath.length - 3]!;
 
     // --- Release ---
     await page.getByRole("link", { name: "Releases" }).click();
@@ -215,9 +216,11 @@ test.describe("M3d publish from scratch", () => {
     await expect(
       page.getByRole("heading", { name: `M3d Release ${stamp}` }),
     ).toBeVisible({ timeout: 15_000 });
-    const releaseId = page.url().split("/").pop()!;
+    await waitForClientReady(page);
+    const releaseId = page.url().split("/").pop()!.split("?")[0]!;
 
     async function addItem(entity: string, entityId: string) {
+      await waitForClientReady(page);
       await page.getByLabel("Release item entity type").selectOption(entity);
       const label =
         entity === "grove"

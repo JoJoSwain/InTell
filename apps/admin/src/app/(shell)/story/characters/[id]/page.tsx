@@ -7,7 +7,10 @@ import {
   loadStaff,
 } from "@/lib/staff";
 import { l10nEn } from "@/lib/geo";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { UnpublishButton } from "@/components/unpublish-button";
 import { saveCharacter } from "../actions";
 
@@ -63,7 +66,10 @@ export default async function CharacterDetailPage({ params }: Props) {
       ) : null}
 
       {editable ? (
-        <form action={saveCharacter} className="mt-8 max-w-xl space-y-4">
+        <ServerActionForm
+          action={saveCharacter}
+          className="mt-8 max-w-xl space-y-4"
+        >
           <input type="hidden" name="id" value={character.id} />
           <label className="block text-sm">
             <span className="text-textMuted">Internal name</span>
@@ -149,8 +155,10 @@ export default async function CharacterDetailPage({ params }: Props) {
           <p className="text-xs text-textMuted">
             Status is not editable here (F1 guard).
           </p>
-          <Button type="submit">Save character</Button>
-        </form>
+          <ServerActionSubmit aria-label="Save character">
+            Save character
+          </ServerActionSubmit>
+        </ServerActionForm>
       ) : (
         <p className="mt-6 whitespace-pre-wrap text-sm">
           {character.notes || "(no notes)"}

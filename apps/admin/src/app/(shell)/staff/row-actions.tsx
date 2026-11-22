@@ -1,3 +1,7 @@
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { Button } from "@/components/ui/button";
 import {
   deactivateStaff,
@@ -20,7 +24,10 @@ export function StaffRowActions({
 }) {
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <form action={updateStaffRow} className="flex flex-wrap items-end gap-2">
+      <ServerActionForm
+        action={updateStaffRow}
+        className="flex flex-wrap items-end gap-2"
+      >
         <input type="hidden" name="userId" value={userId} />
         <label className="block text-xs">
           <span className="text-textMuted">Name</span>
@@ -45,10 +52,10 @@ export function StaffRowActions({
             <option value="viewer">viewer</option>
           </select>
         </label>
-        <Button type="submit" variant="outline" size="sm">
+        <ServerActionSubmit variant="outline" size="sm">
           Save
-        </Button>
-      </form>
+        </ServerActionSubmit>
+      </ServerActionForm>
       {!isSelf && active ? (
         <form action={deactivateStaff}>
           <input type="hidden" name="userId" value={userId} />
