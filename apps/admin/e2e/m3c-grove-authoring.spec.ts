@@ -164,7 +164,8 @@ test.describe("M3c grove authoring", () => {
     const latBefore = await latInput.inputValue();
     const lngBefore = await lngInput.inputValue();
 
-    const teaser = page.getByLabel("Teaser");
+    // Role+name avoids checklist chips whose aria-labels also contain "teaser".
+    const teaser = page.getByRole("textbox", { name: "Teaser", exact: true });
     const stamp = `C1-teaser-${Date.now()}`;
     await teaser.click({ clickCount: 3 });
     await teaser.press("Backspace");

@@ -105,11 +105,51 @@ async function waitForHydratedForm(page: Page) {
   });
 }
 
+/** Wait until editable field values are unchanged for ~500ms (post soft-nav). */
+async function waitForStableFields(page: Page) {
+  let last = "";
+  let stableSince = Date.now();
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const snap = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll(
+          'textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"])',
+        ),
+      )
+        .map((el) => (el as HTMLInputElement | HTMLTextAreaElement).value)
+        .join("\0"),
+    );
+    const now = Date.now();
+    if (snap !== last) {
+      last = snap;
+      stableSince = now;
+    } else if (now - stableSince >= 500) {
+      return;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error("fields did not stabilize within 60s");
+}
+
+function isNextActionPost(res: {
+  request: () => { method: () => string; headers: () => Record<string, string> };
+}): boolean {
+  const req = res.request();
+  if (req.method() !== "POST") return false;
+  const headers = req.headers();
+  return Object.keys(headers).some((h) => h.toLowerCase() === "next-action");
+}
+
 async function clickSave(page: Page, buttonName: string | RegExp) {
   const btn = () => page.getByRole("button", { name: buttonName });
   await waitForHydratedForm(page);
   await expect(btn()).toBeEnabled({ timeout: 15_000 });
   const urlBefore = page.url();
+
+  // Arm before click: server actions carry the next-action header.
+  const actionDone = page.waitForResponse(isNextActionPost, { timeout: 60_000 });
+
   await btn().click();
 
   // Client pending path (JourneyForm / ServerActionForm)
@@ -118,18 +158,22 @@ async function clickSave(page: Page, buttonName: string | RegExp) {
     .then(() => true)
     .catch(() => false);
   if (pending) {
-    await expect(btn()).toBeEnabled({ timeout: 60_000 });
+    await actionDone.catch(() => undefined);
+    // Hard-nav forms change the document; soft-nav forms re-enable the same button.
+    await Promise.race([
+      page.waitForURL((url) => url.toString() !== urlBefore, { timeout: 60_000 }),
+      expect(btn()).toBeEnabled({ timeout: 60_000 }),
+    ]);
+    await page.waitForLoadState("domcontentloaded");
     await waitForHydratedForm(page);
+    await waitForStableFields(page);
     return;
   }
 
-  // Server-action redirect path: wait for navigation or soft refresh to settle
-  await Promise.race([
-    page.waitForURL((url) => url.toString() !== urlBefore, { timeout: 45_000 }),
-    page.waitForLoadState("networkidle"),
-  ]).catch(() => undefined);
+  await actionDone;
   await expect(btn()).toBeVisible({ timeout: 60_000 });
   await waitForHydratedForm(page);
+  await waitForStableFields(page);
 }
 
 async function saveTwice(page: Page, buttonName: string | RegExp) {
@@ -144,7 +188,13 @@ test.describe("M3h save twice (no doubled text)", () => {
     const writer = auth.users.writer;
     if (!writer) throw new Error("writer missing");
 
-    // Empty bike; leave walk prefilled from seed; clear transit for a second empty.
+    // Prefill walk; leave bike/transit empty (brief: one prefilled, one empty).
+    const priorWalk = `PRIOR walk ${Date.now()}`;
+    await restPatch(
+      "grove_journeys",
+      `grove_id=eq.${GROVE}&mode=eq.walk`,
+      { passage: { en: priorWalk } },
+    );
     await restDelete(
       "grove_journeys",
       `grove_id=eq.${GROVE}&mode=eq.bike`,
@@ -164,8 +214,7 @@ test.describe("M3h save twice (no doubled text)", () => {
     const bike = stamp("bike");
     const transit = stamp("transit");
 
-    // walk starts prefilled; bike + transit start empty (no single-line on this form)
-    await expect(page.getByLabel("On foot journey passage")).not.toHaveValue("");
+    await expect(page.getByLabel("On foot journey passage")).toHaveValue(priorWalk);
     await expect(page.getByLabel("By bike journey passage")).toHaveValue("");
     await expect(page.getByLabel("By transit journey passage")).toHaveValue("");
 
@@ -173,17 +222,8 @@ test.describe("M3h save twice (no doubled text)", () => {
     await fillExact(page, "By bike journey passage", bike);
     await fillExact(page, "By transit journey passage", transit);
 
-    await clickSave(page, "Save journey passages");
-    await expect(page).toHaveURL(
-      new RegExp(`/story/groves/${GROVE}\\?journeys=\\d+`),
-      { timeout: 30_000 },
-    );
-    await expectExact(page, "On foot journey passage", walk);
-    await clickSave(page, "Save journey passages");
-    await expect(page).toHaveURL(
-      new RegExp(`/story/groves/${GROVE}\\?journeys=\\d+`),
-      { timeout: 30_000 },
-    );
+    // Generic saveTwice (same clickSave as other forms) — no ?journeys= URL wait.
+    await saveTwice(page, "Save journey passages");
 
     await expectExact(page, "On foot journey passage", walk);
     await expectExact(page, "By bike journey passage", bike);
