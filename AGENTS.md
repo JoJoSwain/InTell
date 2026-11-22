@@ -68,7 +68,11 @@ _ Archive/       legacy prototypes and old notes; read-only history; never impor
 - **Packs gate playback.** Play only assets and revisions present in the currently installed pack manifests. Sync must delete every local asset whose sha isn't in a current manifest. Only published releases reach phones; drafts reach only a signed-in staff device in preview mode.
 - **Wildlife safety.** Layers flagged `wildlife_call` never play through the phone speaker and are muted in nesting months.
 - **Anonymous clients** may call only `get_pack_index`, public storage and the device edge functions. Never ship the Supabase service role key, secret API key, or any secret to mobile or browser code. `device_id` is a bearer secret: never display or fully log it, and endpoints return only that device's data.
-- **`verify_jwt = false` only for service-called edge functions** that validate a secret key in-function (`requireServiceCaller` / publish service path), with tests proving every other caller is refused. Staff-JWT-only functions keep platform JWT verification on.
+- **`verify_jwt = false` only where the function checks the caller itself:**
+  - service-called functions that validate a secret key in-function (`requireServiceCaller` / the publish service path)
+  - mobile device endpoints that validate the publishable key in-function (`requirePublishableCaller`) and rate-limit per `device_id` (`fn_device_rate_allow`)
+
+  Either way, tests must prove every other caller is refused. Staff-JWT-only functions keep platform JWT verification on.
 - **Explicit API-role grants.** Supabase no longer auto-grants new `public` objects to API roles. Every migration grants what each role needs explicitly. `service_role` is covered by the default privileges from M3g. Local config sets `auto_expose_new_tables = false` to match hosted.
 - **Journal safety.** Enforce the age gate (no Journal entries under 13). Strip PII server-side. Entries are private to Replaceplace staff.
 - **Accessibility and i18n.** Every narration version has a transcript. Every control and map marker has an accessibility label. Every image has alt text. All user-facing strings go through i18n. Respect reduced motion. Distances are shown in feet and miles.

@@ -195,6 +195,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"device_rate_limits": {
+                  Row: {
+                    "device_id": string,"endpoint": string,"hits": number,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "device_id": string,"endpoint": string,"hits": number,"window_start": string
+                  }
+                  Update: {
+                    "device_id"?: string,"endpoint"?: string,"hits"?: number,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"devices": {
                   Row: {
                     "age_gate": string | null,"app_version": string | null,"first_seen_at": string,"id": string,"platform": string | null,"ui_language": Database["public"]['Enums']["lang"] | null
@@ -979,6 +993,9 @@ isOneToOne: false
 "fn_daily_expiry_and_retention":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"fn_device_rate_allow":
+{ Args: { "p_device_id": string,"p_endpoint": string,"p_limit": number,"p_window_seconds": number }; Returns: boolean
+                           },
 "fn_draft_check":
 { Args: { "p_grove_id": string }; Returns: Json
                            },
@@ -1029,6 +1046,9 @@ isOneToOne: false
                            },
 "fn_region_today":
 { Args: { "p_timezone": string }; Returns: string
+                           },
+"fn_register_device":
+{ Args: { "p_age_gate": string,"p_app_version": string,"p_id": string,"p_platform": string,"p_set_age_gate": boolean,"p_ui_language": Database["public"]['Enums']["lang"] }; Returns: string
                            },
 "fn_release_go_live":
 { Args: { "p_release_id": string }; Returns: Json
