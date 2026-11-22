@@ -2,13 +2,14 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
 
-# Push + pull_request both fire for PR branches; cancel the older run so two
-# supabase stacks never race on the same runner's fixed host ports (54324…).
+# One group per PR (pull_request.number) and per branch for master pushes.
+# A newer push cancels the in-progress run so two supabase stacks never race
+# on the same runner's fixed host ports (54324…).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
