@@ -11,6 +11,7 @@ const destRoot = path.join(root, "supabase/functions/_shared/from-shared");
 
 const files = [
   ["src/canonicalJson.ts", "canonicalJson.ts"],
+  ["src/schemas/device.ts", "device.ts"],
   ["src/schemas/l10n.ts", "l10n.ts"],
   ["src/schemas/music.ts", "music.ts"],
   ["src/schemas/packs.ts", "packs.ts"],

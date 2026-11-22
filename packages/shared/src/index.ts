@@ -10,12 +10,25 @@ export {
   StemRulePack,
 } from "./schemas/music";
 export {
+  AgeGate,
+  DevicePlatform,
+  RegisterDeviceRequest,
+  RegisterDeviceResponse,
+  UiLanguage,
+} from "./schemas/device";
+export {
   GrovePack,
   GrovePackFragment,
   PreviewManifest,
   RegionPack,
   PackIndexEntry,
 } from "./schemas/packs";
+export {
+  assetsToDelete,
+  assetsToFetch,
+  manifestShas,
+  type PackManifest,
+} from "./packs/syncDiff";
 export {
   AmbienceLayerSnapshot,
   AmbienceProfileSnapshot,
