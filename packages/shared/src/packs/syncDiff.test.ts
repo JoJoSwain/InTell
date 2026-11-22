@@ -181,12 +181,12 @@ const NON_ASSET_KEYS = new Set(["markerHash"]);
 function unwrap(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
   for (;;) {
-    if (
-      current instanceof z.ZodOptional ||
-      current instanceof z.ZodNullable ||
-      current instanceof z.ZodDefault
-    ) {
+    if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) {
       current = current.unwrap();
+      continue;
+    }
+    if (current instanceof z.ZodDefault) {
+      current = current.removeDefault();
       continue;
     }
     if (current instanceof z.ZodEffects) {
