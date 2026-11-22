@@ -46,3 +46,44 @@ So the second click most likely lands while the first server action is still in 
 - PR #17 CI and Vercel status on the new head.
 
 **Then stop for verification.**
+
+
+---
+
+## Verification (Nov 22, tip `2067270`)
+
+**R1 is done. The result calls for one more change, R2, before merge.**
+
+**Checked:**
+- `clickSave` now arms `waitForResponse` for the `next-action` POST before the click.
+- It then waits for the field values to stay stable for about 500 ms, instead of relying on `networkidle`.
+- The journey case uses the same generic helper.
+- The M3c Teaser locator fix (role plus exact name) is fine.
+- CI and Vercel are green on `b03e98f` and `2067270`. The one cancelled run was a duplicate `pull_request` run superseded by concurrency.
+
+**What the mutation check showed.** It **did not fail reliably.** With the pre-fix `JourneyForm` restored, clean re-runs passed. But one diagnostic run reproduced the bug, on screen **and in the stored row**:
+
+`AFTER_FIRST_SAVE_WALK = "MUT…-walk" + "M3h walk …"` (the typed value followed by the **previous** value), `STORED` = the same concatenation.
+
+That is the same signature as M3e's screenshot, where the typed value came first and the prior stored value followed. So the failure is real but **intermittent**. The forms that share the pre-fix pattern (`<form action={serverAction}>` + uncontrolled fields + redirect back to the same URL) can't be proven safe by a sweep that only fails sometimes. The common factor is React 19's automatic form reset after an `action` submit, racing the same-URL re-render that updates `defaultValue`.
+
+## R2. Take the risky pattern out of every text-editing form
+
+Writers will type real story text into these forms, and a silent concatenation is the worst kind of data loss. So remove the pattern rather than wait for it to show up:
+
+1. **One shared client component**, e.g. `apps/admin/src/components/server-action-form.tsx` (`ServerActionForm`):
+   - It submits through `onSubmit` with `preventDefault`, `FormData` and `startTransition`. There is no `action` prop, so React's automatic form reset never runs.
+   - It shows action errors (`role="alert"`) and disables its submit button while pending.
+   - On success it does a **full page load** (`window.location.assign`) to the `href` the action returns.
+   - Move `JourneyForm` onto it.
+2. **Change the server actions behind these forms to return `{ ok: true, href }`** instead of calling `redirect()` after a successful save. Keep the `/sign-in` and `/no-access` redirects. That covers create and update in one path, for example `saveRegion`, `saveGrove` and `saveCharacter`.
+3. **Convert every form that edits text and comes back to the same page.** At minimum that's region, character, grove, fragment, fragment Indigeny, story notes (edit), release details (`updateReleaseMeta`) and revision edit (`updateRevision`). Grep for the rest and list every converted form in the report.
+   - Button-only forms with no text fields, like remove item, retry or rotate marker code, can stay as they are.
+   - So can create-only forms that go to a **new** URL, like release create and revision create. Convert them too if they share an action with an update path.
+4. **Guard against the pattern coming back:**
+   - Add a rule to AGENTS.md: *admin forms that edit text use `ServerActionForm`; no `<form action={…}>` with text fields that redirects back to the same page*.
+   - Add a small static check in the admin tests **if it's cheap**: it fails when a `<form action={…}>` contains a `textarea` or a text `input`, with an explicit allowlist for create-only forms.
+5. **Keep the M3h sweep green.** It now exercises the helper on every converted form.
+6. **Root-cause paragraph:** add the "typed value followed by prior value" signature, seen twice, and what the helper removes.
+
+**Report back with:** the helper's API; the converted-form list with any exceptions and why; the guard; the suite results; and PR #17 CI and Vercel status. **Then stop for verification.**
