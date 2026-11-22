@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["IntellStorageModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.intellstorage.IntellStorageModule"]
+  }
+}
