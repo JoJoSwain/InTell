@@ -87,3 +87,17 @@ Writers will type real story text into these forms, and a silent concatenation i
 6. **Root-cause paragraph:** add the "typed value followed by prior value" signature, seen twice, and what the helper removes.
 
 **Report back with:** the helper's API; the converted-form list with any exceptions and why; the guard; the suite results; and PR #17 CI and Vercel status. **Then stop for verification.**
+---
+
+## Verification of R2 (Nov 22, tip `333c41b`; merged as `dbc9412`)
+
+**Verified. M3h is complete.** CI and Vercel were green on `333c41b`.
+
+- **`ServerActionForm` and `ServerActionSubmit`** submit through `onSubmit` plus `startTransition`, with no `action` prop, so React's automatic form reset never runs. The submit button is disabled until the form mounts and while it saves. Errors show in the form. On success, `window.location.assign` goes to the action's `{ ok: true, href }`, and `saveHref` adds a cache-busting query.
+- **Converted:** region, character (both forms), grove, fragment, fragment Indigeny, story notes (create and edit), release details, revision edit and journey passages. Also audio details, image details and the staff row actions. The only exception is release create, which is create-only and goes to a new URL, and it's on the allowlist.
+- **Guard:** `server-action-form-guard.test.ts` fails on any `<form action={…}>` that contains a text field outside the allowlist. AGENTS.md carries the rule.
+- **The M3h sweep** stays green on the helper path.
+
+**Follow-ups, carried into Lane A's first M4 batch:**
+- **V1. Only same-site redirects.** `ServerActionForm` should accept only a same-origin relative `href`: it starts with `/` and not `//`. Reuse `sanitizeNext`.
+- **V2. Readable errors.** Next.js hides thrown server-action messages in production. Expected failures, such as validation or a duplicate slug, should come back as `{ ok: false, error }` and be shown as-is, so writers see something useful instead of a generic message.
