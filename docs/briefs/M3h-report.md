@@ -2,9 +2,10 @@
 
 **Branch:** `m3h-form-save-twice`  
 **PR:** https://github.com/JoJoSwain/InTell/pull/17  
+**Tip:** `5f44d40` (Review fixes + `clickSave`; review `fc3a186`)  
 **Brief:** `docs/briefs/M3h-form-save-twice.md`  
 **Review:** `docs/briefs/M3h-review.md` (`fc3a186`)  
-**Stop for verification** after Review fixes. No hosted DB push. No M3e F2, M3f K1–K3, M4, M5.
+**Stop for verification.** No hosted DB push. No M3e F2, M3f K1–K3, M4, M5.
 
 ---
 
@@ -52,13 +53,14 @@ Not added.
 | Playwright (`apps/admin`) | **PASS** — **27** tests (11 M3h) |
 | `pnpm lint && pnpm typecheck && pnpm test` | **PASS** |
 | `pnpm --filter @intell/admin build` | **PASS** |
-| CI + Vercel | See Review fixes (tip after this push) |
+| CI + Vercel on tip `5f44d40` | **PASS** (6/6 checks green) |
 
 ---
 
 ## 5. Git log
 
 ```
+5f44d40 test(admin): R1 clickSave waits for next-action; M3h review fixes
 fc3a186 docs: M3h review (R1: prove the sweep can catch the bug)
 24588c1 docs: note M3h CI storage flake and re-trigger
 9fd2178 ci: re-trigger after push-job storage flake on tip 8db0b71
@@ -112,4 +114,4 @@ See §2 above.
 
 ### PR #17 CI / Vercel
 
-Filled in after this tip’s checks go green (see tip SHA in the commit that adds this section).
+**Green** on tip `5f44d40` — all 6 CI checks completed without failures (GitHub Actions `check` + `db`, Vercel Preview Comments / deploy).
