@@ -1,4 +1,9 @@
-import { Button } from "@/components/ui/button";
+"use client";
+
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { saveRegion } from "./actions";
 
 export function RegionForm({
@@ -15,7 +20,7 @@ export function RegionForm({
   };
 }) {
   return (
-    <form action={saveRegion} className="space-y-4">
+    <ServerActionForm action={saveRegion} className="space-y-4">
       {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
       <label className="block text-sm">
         <span className="text-textMuted">Name</span>
@@ -23,6 +28,7 @@ export function RegionForm({
           name="name"
           required
           defaultValue={initial?.name}
+          aria-label="Region name"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -33,6 +39,7 @@ export function RegionForm({
           required
           pattern="[a-z0-9-]+"
           defaultValue={initial?.slug}
+          aria-label="Region slug"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -42,6 +49,7 @@ export function RegionForm({
           name="timezone"
           required
           defaultValue={initial?.timezone ?? "America/Denver"}
+          aria-label="Timezone"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -75,11 +83,14 @@ export function RegionForm({
           name="bounds"
           rows={6}
           defaultValue={initial?.boundsJson ?? ""}
+          aria-label="Bounds GeoJSON"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
           placeholder='{"type":"Polygon","coordinates":[[[...]]]}'
         />
       </label>
-      <Button type="submit">{initial ? "Save region" : "Create region"}</Button>
-    </form>
+      <ServerActionSubmit>
+        {initial ? "Save region" : "Create region"}
+      </ServerActionSubmit>
+    </ServerActionForm>
   );
 }

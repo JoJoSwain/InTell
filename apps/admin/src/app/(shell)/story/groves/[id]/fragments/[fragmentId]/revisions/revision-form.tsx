@@ -1,21 +1,10 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
-import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { createRevision, updateRevision } from "./actions";
-
-function RevisionSubmitButton({
-  label,
-}: {
-  label: "Save revision" | "Create revision";
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} aria-label={label}>
-      {pending ? "Saving…" : label}
-    </Button>
-  );
-}
 
 export type AudioOption = { id: string; title: string; kind: string };
 
@@ -153,7 +142,11 @@ export function RevisionForm({
     : `rev:new:${fragmentId}`;
 
   return (
-    <form key={remountKey} action={action} className="space-y-6">
+    <ServerActionForm
+      formKey={remountKey}
+      action={action}
+      className="space-y-6"
+    >
       <input type="hidden" name="grove_id" value={groveId} />
       <input type="hidden" name="fragment_id" value={fragmentId} />
       {initial?.id ? (
@@ -254,9 +247,11 @@ export function RevisionForm({
       />
 
       {!readOnly ? (
-        <RevisionSubmitButton
-          label={initial?.id ? "Save revision" : "Create revision"}
-        />
+        <ServerActionSubmit
+          aria-label={initial?.id ? "Save revision" : "Create revision"}
+        >
+          {initial?.id ? "Save revision" : "Create revision"}
+        </ServerActionSubmit>
       ) : (
         <p className="text-sm text-textMuted">
           {initial?.status === "draft"
@@ -264,6 +259,6 @@ export function RevisionForm({
             : "Published revisions are immutable. Create a new revision to change content."}
         </p>
       )}
-    </form>
+    </ServerActionForm>
   );
 }

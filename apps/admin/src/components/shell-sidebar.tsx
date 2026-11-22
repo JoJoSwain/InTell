@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,12 @@ export function ShellSidebar({
   displayName: string;
 }) {
   const pathname = usePathname();
+  useEffect(() => {
+    document.documentElement.dataset.jsReady = "1";
+    return () => {
+      delete document.documentElement.dataset.jsReady;
+    };
+  }, []);
   const story: NavItem[] = [
     { href: "/story/groves", label: "Groves", show: true },
     { href: "/story/characters", label: "Characters", show: true },

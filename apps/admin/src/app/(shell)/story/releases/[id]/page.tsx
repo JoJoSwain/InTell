@@ -15,6 +15,10 @@ import {
 } from "@/components/checklist-badges";
 import { Button } from "@/components/ui/button";
 import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
+import {
   entityAdminHref,
   RELEASE_ITEM_ENTITIES,
   type ReleaseItemEntity,
@@ -275,7 +279,10 @@ export default async function ReleaseDetailPage({ params }: Props) {
       {r.status === "publishing" ? <PublishingPoll /> : null}
 
       {canEdit && editableStatus ? (
-        <form action={updateReleaseMeta} className="mt-8 max-w-xl space-y-4">
+        <ServerActionForm
+          action={updateReleaseMeta}
+          className="mt-8 max-w-xl space-y-4"
+        >
           <input type="hidden" name="id" value={r.id} />
           <label className="block text-sm">
             <span className="text-textMuted">Name</span>
@@ -297,10 +304,13 @@ export default async function ReleaseDetailPage({ params }: Props) {
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
-          <Button type="submit" variant="outline" aria-label="Save release metadata">
+          <ServerActionSubmit
+            variant="outline"
+            aria-label="Save release metadata"
+          >
             Save
-          </Button>
-        </form>
+          </ServerActionSubmit>
+        </ServerActionForm>
       ) : r.notes ? (
         <p className="mt-6 max-w-xl whitespace-pre-wrap text-sm text-textMuted">
           {r.notes}

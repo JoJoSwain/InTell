@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canEditRegions, isActiveStaff, loadStaff } from "@/lib/staff";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireEditor() {
   const supabase = await createClient();
@@ -64,7 +65,7 @@ export async function saveRegion(formData: FormData) {
     if (error) throw new Error(error.message);
     revalidatePath("/regions");
     revalidatePath(`/regions/${id}`);
-    redirect(`/regions/${id}`);
+    return { ok: true as const, href: saveHref(`/regions/${id}`) };
   }
 
   const { data, error } = await supabase.rpc("fn_admin_upsert_region", {
@@ -78,5 +79,5 @@ export async function saveRegion(formData: FormData) {
   if (error) throw new Error(error.message);
   const newId = data as string;
   revalidatePath("/regions");
-  redirect(`/regions/${newId}`);
+  return { ok: true as const, href: saveHref(`/regions/${newId}`) };
 }

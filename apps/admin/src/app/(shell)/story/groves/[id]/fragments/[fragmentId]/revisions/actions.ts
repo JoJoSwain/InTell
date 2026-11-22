@@ -8,6 +8,7 @@ import {
   isActiveStaff,
   loadStaff,
 } from "@/lib/staff";
+import { saveHref } from "@/lib/server-action-result";
 
 type TimeWindow = "day" | "night";
 type ChangeKind = "contingency" | "correction";
@@ -163,7 +164,7 @@ export async function createRevision(formData: FormData) {
   const base = revisionsBase(groveId, fragmentId);
   revalidatePath(base);
   revalidatePath(`/story/groves/${groveId}`);
-  redirect(`${base}/${revisionId}`);
+  return { ok: true as const, href: saveHref(`${base}/${revisionId}`) };
 }
 
 export async function updateRevision(formData: FormData) {
@@ -224,7 +225,7 @@ export async function updateRevision(formData: FormData) {
   revalidatePath(base);
   revalidatePath(`${base}/${revisionId}`);
   revalidatePath(`/story/groves/${groveId}`);
-  redirect(`${base}/${revisionId}`);
+  return { ok: true as const, href: saveHref(`${base}/${revisionId}`) };
 }
 
 export async function deleteDraftRevision(formData: FormData) {

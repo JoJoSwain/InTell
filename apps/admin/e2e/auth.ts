@@ -56,4 +56,12 @@ export async function signIn(page: Page, email: string, password: string) {
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible({
     timeout: 15_000,
   });
+  await waitForClientReady(page);
+}
+
+/** Wait until shell client JS has mounted (after hard-nav / full load). */
+export async function waitForClientReady(page: Page) {
+  await expect(page.locator("html[data-js-ready='1']")).toBeAttached({
+    timeout: 15_000,
+  });
 }

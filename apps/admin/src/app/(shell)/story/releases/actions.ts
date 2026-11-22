@@ -19,6 +19,7 @@ import {
   failuresFromLastCheck,
   type ChecklistFailure,
 } from "@/components/checklist-badges";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireStaff() {
   const supabase = await createClient();
@@ -92,7 +93,7 @@ export async function updateReleaseMeta(formData: FormData) {
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidateRelease(id);
-  redirect(`/story/releases/${id}`);
+  return { ok: true as const, href: saveHref(`/story/releases/${id}`) };
 }
 
 export async function addReleaseItem(formData: FormData) {

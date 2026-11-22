@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canManageCharacters, isActiveStaff, loadStaff } from "@/lib/staff";
 import { asL10n } from "@/lib/geo";
+import { saveHref } from "@/lib/server-action-result";
 
 async function requireCharacterWriter() {
   const supabase = await createClient();
@@ -50,7 +51,7 @@ export async function saveCharacter(formData: FormData) {
     if (error) throw new Error(error.message);
     revalidatePath("/story/characters");
     revalidatePath(`/story/characters/${id}`);
-    redirect(`/story/characters/${id}`);
+    return { ok: true as const, href: saveHref(`/story/characters/${id}`) };
   }
 
   const { data, error } = await supabase
@@ -60,5 +61,8 @@ export async function saveCharacter(formData: FormData) {
     .single();
   if (error) throw new Error(error.message);
   revalidatePath("/story/characters");
-  redirect(`/story/characters/${data.id as string}`);
+  return {
+    ok: true as const,
+    href: saveHref(`/story/characters/${data.id as string}`),
+  };
 }

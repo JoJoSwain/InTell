@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadUsers, passwordGrant, signIn } from "./auth";
+import { loadUsers, passwordGrant, signIn, waitForClientReady } from "./auth";
 
 /** Seed Farmington nearby / second grove + bridge fragment (see seed.sql). */
 const SEED_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
@@ -44,6 +44,8 @@ test.describe("M3c grove authoring", () => {
     // Region select already defaults to first (seed region)
     await page.getByLabel("Region").selectOption(SEED_REGION);
     await page.getByRole("button", { name: "Create grove" }).click();
+    await page.waitForURL(/\/story\/groves\/[0-9a-f-]{36}/, { timeout: 20_000 });
+    await waitForClientReady(page);
 
     await expect(page.getByRole("heading", { name })).toBeVisible({
       timeout: 20_000,
@@ -87,6 +89,7 @@ test.describe("M3c grove authoring", () => {
       timeout: 15_000,
     });
     await expect(page.getByRole("link", { name: "Print marker" })).toBeVisible();
+    await waitForClientReady(page);
 
     // OR prereq on C: A OR bridge from other seed grove
     await page.getByRole("button", { name: "Add OR group" }).click();
@@ -164,13 +167,16 @@ test.describe("M3c grove authoring", () => {
     const latBefore = await latInput.inputValue();
     const lngBefore = await lngInput.inputValue();
 
-    const teaser = page.getByLabel("Teaser");
+    // Role+name avoids checklist chips whose aria-labels also contain "teaser".
+    const teaser = page.getByRole("textbox", { name: "Teaser", exact: true });
     const stamp = `C1-teaser-${Date.now()}`;
     await teaser.click({ clickCount: 3 });
     await teaser.press("Backspace");
     await teaser.fill(stamp);
     await expect(teaser).toHaveValue(stamp);
     await page.getByRole("button", { name: "Save fragment" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
+    await waitForClientReady(page);
     await expect(page.getByLabel("Teaser")).toHaveValue(stamp, {
       timeout: 15_000,
     });
@@ -207,9 +213,11 @@ test.describe("M3c grove authoring", () => {
     const nameStamp = `Farmington C1 ${Date.now()}`;
     await groveName.fill(nameStamp);
     await page.getByRole("button", { name: "Save grove" }).click();
+    await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
     await expect(page.getByRole("heading", { name: nameStamp })).toBeVisible({
       timeout: 15_000,
     });
+    await waitForClientReady(page);
     const boundaryAfter = await page.getByLabel("Boundary GeoJSON").inputValue();
     expect(JSON.parse(boundaryAfter)).toEqual(JSON.parse(boundaryBefore));
 

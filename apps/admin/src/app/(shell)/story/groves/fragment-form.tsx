@@ -9,6 +9,10 @@ import {
   metersToFeet,
 } from "@intell/shared";
 import { Button } from "@/components/ui/button";
+import {
+  ServerActionForm,
+  ServerActionSubmit,
+} from "@/components/server-action-form";
 import { generateMarkerCode } from "@/lib/markers/code";
 import {
   rotateMarkerCode,
@@ -111,7 +115,7 @@ export function FragmentForm({
         </p>
       ) : null}
       {canEdit ? (
-        <form action={saveFragment} className="space-y-4">
+        <ServerActionForm action={saveFragment} className="space-y-4">
           {initial?.id ? (
             <input type="hidden" name="id" value={initial.id} />
           ) : null}
@@ -279,12 +283,12 @@ export function FragmentForm({
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
-          <Button type="submit">
+          <ServerActionSubmit>
             {initial?.id ? "Save fragment" : "Add fragment"}
-          </Button>
-        </form>
+          </ServerActionSubmit>
+        </ServerActionForm>
       ) : canNotes && initial?.id ? (
-        <form action={saveFragmentIndigeny} className="space-y-4">
+        <ServerActionForm action={saveFragmentIndigeny} className="space-y-4">
           <input type="hidden" name="id" value={initial.id} />
           <input type="hidden" name="grove_id" value={groveId} />
           <label className="block text-sm">
@@ -317,8 +321,10 @@ export function FragmentForm({
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
             />
           </label>
-          <Button type="submit">Save Story Notes</Button>
-        </form>
+          <ServerActionSubmit aria-label="Save Story Notes">
+            Save Story Notes
+          </ServerActionSubmit>
+        </ServerActionForm>
       ) : null}
 
       {canEdit && initial?.id && visibility === "physical" ? (
