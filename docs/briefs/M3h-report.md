@@ -2,9 +2,9 @@
 
 **Branch:** `m3h-form-save-twice`  
 **PR:** https://github.com/JoJoSwain/InTell/pull/17  
-**Tip:** `b03e98f` (CI re-trigger after sibling `db` race; functional Review fixes on `5f44d40`)  
+**Tip:** `0d7ad96` (R2 ServerActionForm; prior R1 tip `b03e98f`)  
 **Brief:** `docs/briefs/M3h-form-save-twice.md`  
-**Review:** `docs/briefs/M3h-review.md` (`fc3a186`)  
+**Review:** `docs/briefs/M3h-review.md` (Verification + R2)  
 **Stop for verification.** No hosted DB push. No M3e F2, M3f K1–K3, M4, M5.
 
 ---
@@ -13,33 +13,35 @@
 
 | Form | Doubled? | Fixed how |
 |---|---|---|
-| Region (`region-form.tsx` / `saveRegion`) | **No** | Unchanged (aria-labels only for e2e) |
-| Character (`characters/[id]` / `saveCharacter`) | **No** | Unchanged |
-| Grove (`grove-form.tsx` / `saveGrove`) | **No** | Unchanged |
-| Fragment (`fragment-form.tsx` / `saveFragment`) | **No** | Unchanged |
-| Fragment Indigeny (`saveFragmentIndigeny`, writer) | **No** | Unchanged |
-| Story notes edit (`saveThread`) | **No** | Unchanged |
-| Story notes create (`saveThread`) | **No** | Unchanged (one save + exact REST checks) |
-| Release details (`updateReleaseMeta`) | **No** | Unchanged |
-| Release create (`createRelease`) | **No** | Unchanged (one save + exact checks) |
-| Revision edit (`updateRevision`: teaser, hints, transcripts) | **No** | Unchanged |
-| Journey passages (`journey-form.tsx`) | **No** (already fixed in M3e) | Unchanged; included in sweep (second save without edits) |
+| Region (`region-form.tsx` / `saveRegion`) | **No** | R2: `ServerActionForm` (aria-labels from earlier) |
+| Character (`characters/[id]` / `saveCharacter`) | **No** | R2: `ServerActionForm` |
+| Grove (`grove-form.tsx` / `saveGrove`) | **No** | R2: `ServerActionForm` |
+| Fragment (`fragment-form.tsx` / `saveFragment`) | **No** | R2: `ServerActionForm` |
+| Fragment Indigeny (`saveFragmentIndigeny`, writer) | **No** | R2: `ServerActionForm` |
+| Story notes edit (`saveThread`) | **No** | R2: `ServerActionForm` |
+| Story notes create (`saveThread`) | **No** | R2: `ServerActionForm` |
+| Release details (`updateReleaseMeta`) | **No** | R2: `ServerActionForm` |
+| Release create (`createRelease`) | **No** | Unchanged (create-only → new URL; allowlisted) |
+| Revision edit (`updateRevision`: teaser, hints, transcripts) | **No** | R2: `ServerActionForm` |
+| Journey passages (`journey-form.tsx`) | **No** | R2: moved onto shared `ServerActionForm` |
 
-**Shared helper:** none. No form failed the double-save check (including after the R1 `clickSave` fix), so per the brief no `ServerActionForm` / `useHardNavSubmit` was extracted.
+**Shared helper:** `ServerActionForm` (R2). Sweep stayed green after migration.
 
 ---
 
-## 2. Root cause (revised after R1)
+## 2. Root cause (revised after R1 + R2)
 
-M3e’s journey doubling was real: after `<form action={saveGroveJourneys}>` plus soft `redirect` to the same grove URL, the On foot field showed the passage twice (`E2E on foot….E2E on foot….` in `m3e-grove-journeys.png`), and a later save wrote that concatenation into `grove_journeys`. The durable fix remains hard navigation (`window.location.assign(?journeys=…)`) with a remount key and a non-redirecting action.  
+M3e’s journey doubling was real: after `<form action={saveGroveJourneys}>` plus soft `redirect` to the same grove URL, the On foot field showed the passage twice (`E2E on foot….E2E on foot….` in `m3e-grove-journeys.png`), and a later save wrote that concatenation into `grove_journeys`.
 
-Under this review’s mutation check on **Next 15.5.29 / React 19.2.4**, restoring that pre-fix `action=` + `redirect` pair (not committed) and driving it with the fixed generic `clickSave` did **not** leave doubled text on screen or in REST after save → save-again — even with a known prior walk value, empty bike/transit, `next dev` and `next start`, and with or without the page `key={journeyRemountKey}`. One mid-session diagnostic (after a malformed `supabaseUrl` in `.env.local` had just been fixed) did print a stuck concat once (`MUT…-walk` + prior `M3h walk …` on screen and in STORED); clean re-runs never repeated it. So the original failure mode is soft-nav restoration of an uncontrolled `defaultValue` against a still-typed DOM value, but it is no longer reliably sticky on this stack when the save is allowed to finish before the second click. The earlier report’s “empty fields plus soft restore” hypothesis is withdrawn: grove Premise, character notes and fragment Teaser all started empty in the sweep and never doubled.
+The signature seen twice (M3e screenshot and the R1 diagnostic) is **typed value followed by the prior stored value** — e.g. `MUT…-walk` + `M3h walk …` on screen and in STORED. That matches React 19’s automatic form reset after an `action` submit racing a same-URL soft re-render that restores `defaultValue`.
+
+R1’s mutation check on **Next 15.5.29 / React 19.2.4** did not fail reliably with the pre-fix `action=` + `redirect` pair, so a sweep alone cannot prove the pattern safe. R2 removes the pattern: `ServerActionForm` submits via `onSubmit` + `startTransition` (no `action` prop → no automatic reset), then hard-navigates with `window.location.assign` to a busted `{ ok, href }` from the server action.
 
 ---
 
 ## 3. Helper API
 
-Not added.
+See **R2** below (`ServerActionForm` / `ServerActionSubmit` / `saveHref`).
 
 ---
 
@@ -117,4 +119,60 @@ See §2 above.
 
 ### PR #17 CI / Vercel
 
-**Green** on functional tip `5f44d40` and current tip `b03e98f` (6/6 each: GitHub Actions `check` + `db`, Vercel deploy). Docs tip `b7d2288` hit the known dual-workflow race (one `db` left the seed release `publishing`); empty commit `b03e98f` re-triggered clean.
+**Green** on functional tip `5f44d40` and tip `b03e98f` (6/6 each: GitHub Actions `check` + `db`, Vercel deploy). Docs tip `b7d2288` hit the known dual-workflow race (one `db` left the seed release `publishing`); empty commit `b03e98f` re-triggered clean. Verification tip `2f216a9` also green (6/6).
+
+---
+
+## R2. Shared `ServerActionForm` (Verification)
+
+### Helper API
+
+`apps/admin/src/components/server-action-form.tsx`:
+
+- **`ServerActionForm`** — client form with `onSubmit` + `preventDefault` + `FormData` + `startTransition`. No React `action` prop. Shows errors (`role="alert"`). Submit disabled until mount and while pending. On success: `window.location.assign(result.href)`.
+- **`ServerActionSubmit`** — submit button that reads pending/mounted from context (`variant` / `size` optional).
+- **`saveHref(path)`** (`server-action-result.ts`) — appends `?_=` / `&_=` so every successful save changes the URL (real load + remount).
+- Actions return `{ ok: true, href }` instead of `redirect()` after save; `/sign-in` and `/no-access` redirects kept.
+
+### Converted forms
+
+| Form | Notes |
+|---|---|
+| Journey (`journey-form.tsx`) | Moved onto shared helper |
+| Region (`region-form.tsx`) | create + update |
+| Grove (`grove-form.tsx`) | create + update |
+| Fragment (`fragment-form.tsx`) | `saveFragment` + Indigeny |
+| Character list + detail | create + update |
+| Story notes | edit + create |
+| Release details | `updateReleaseMeta` |
+| Revision create + edit | shared form/action |
+| Image / audio asset edit | text fields, same-page return |
+| Staff row edit | display name |
+
+**Left as `<form action={…}>` (exceptions):**
+
+- Button-only: rotate marker, remove/add release item, retry/cancel/copy, deactivate/reactivate staff, delete draft revision, schedule (datetime-local only).
+- Create-only to a **new** URL: `createRelease` (`releases/new`) — allowlisted in the static guard.
+- Staff invite already uses client `onSubmit` (not `action=`).
+
+### Guard
+
+- **AGENTS.md** §6 Admin: text-editing forms use `ServerActionForm`; no `<form action={…}>` with text fields that redirects back to the same page.
+- **Static test** `apps/admin/src/lib/server-action-form-guard.test.ts`: fails when a `<form action={…}>` contains a `textarea` or text `input`, with allowlist for `releases/new/page.tsx`.
+- Shell sets `html[data-js-ready=1]` on mount; e2e waits via `waitForClientReady` after hard-nav.
+
+### Suite results (R2)
+
+| Check | Result |
+|---|---|
+| `pnpm db:setup-local` | **PASS** |
+| `pnpm exec supabase test db` | **PASS** — Files=**36**, Tests=**198** |
+| `pnpm test:integration` | **PASS** — **30** tests |
+| Playwright (`apps/admin`) | **PASS** — **27** / 27 (11 M3h) |
+| `pnpm lint && pnpm typecheck && pnpm test` | **PASS** |
+| `pnpm --filter @intell/admin build` | **PASS** |
+| M3h sweep | **PASS** — none doubled |
+
+### PR #17 CI / Vercel (R2 tip)
+
+Pushing tip `0d7ad96`; CI/Vercel status recorded when green (stop for verification).

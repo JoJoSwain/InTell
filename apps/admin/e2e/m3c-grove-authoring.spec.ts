@@ -44,6 +44,8 @@ test.describe("M3c grove authoring", () => {
     // Region select already defaults to first (seed region)
     await page.getByLabel("Region").selectOption(SEED_REGION);
     await page.getByRole("button", { name: "Create grove" }).click();
+    await page.waitForURL(/\/story\/groves\/[0-9a-f-]{36}/, { timeout: 20_000 });
+    await waitForClientReady(page);
 
     await expect(page.getByRole("heading", { name })).toBeVisible({
       timeout: 20_000,

@@ -106,21 +106,31 @@ async function waitForHydratedForm(page: Page) {
   });
 }
 
-/** Wait until editable field values are unchanged for ~500ms (post soft-nav). */
+/** Wait until editable field values are unchanged for ~500ms (post hard-nav). */
 async function waitForStableFields(page: Page) {
   let last = "";
   let stableSince = Date.now();
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const snap = await page.evaluate(() =>
-      Array.from(
-        document.querySelectorAll(
-          'textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"])',
-        ),
-      )
-        .map((el) => (el as HTMLInputElement | HTMLTextAreaElement).value)
-        .join("\0"),
-    );
+    let snap: string;
+    try {
+      snap = await page.evaluate(() =>
+        Array.from(
+          document.querySelectorAll(
+            'textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"])',
+          ),
+        )
+          .map((el) => (el as HTMLInputElement | HTMLTextAreaElement).value)
+          .join("\0"),
+      );
+    } catch {
+      // Navigation tore down the context — wait for the next document.
+      await page.waitForLoadState("domcontentloaded");
+      await waitForHydratedForm(page);
+      last = "";
+      stableSince = Date.now();
+      continue;
+    }
     const now = Date.now();
     if (snap !== last) {
       last = snap;
@@ -153,26 +163,13 @@ async function clickSave(page: Page, buttonName: string | RegExp) {
 
   await btn().click();
 
-  // Client pending path (JourneyForm / ServerActionForm)
-  const pending = await expect(btn())
-    .toBeDisabled({ timeout: 2_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (pending) {
-    await actionDone.catch(() => undefined);
-    // Hard-nav forms change the document; soft-nav forms re-enable the same button.
-    await Promise.race([
-      page.waitForURL((url) => url.toString() !== urlBefore, { timeout: 60_000 }),
-      expect(btn()).toBeEnabled({ timeout: 60_000 }),
-    ]);
-    await page.waitForLoadState("domcontentloaded");
-    await waitForHydratedForm(page);
-    await waitForStableFields(page);
-    return;
-  }
-
-  await actionDone;
-  await expect(btn()).toBeVisible({ timeout: 60_000 });
+  // ServerActionForm always hard-navs with a busted href — wait for the new
+  // document before probing fields (response alone races location.assign).
+  await page.waitForURL((url) => url.toString() !== urlBefore, {
+    timeout: 60_000,
+  });
+  await actionDone.catch(() => undefined);
+  await page.waitForLoadState("domcontentloaded");
   await waitForHydratedForm(page);
   await waitForStableFields(page);
 }

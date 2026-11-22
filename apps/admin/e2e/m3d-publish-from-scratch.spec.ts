@@ -112,6 +112,8 @@ test.describe("M3d publish from scratch", () => {
     await page.getByLabel("Boundary GeoJSON").fill(BOUNDARY);
     await page.getByLabel("Region").selectOption(SEED_REGION);
     await page.getByRole("button", { name: "Create grove" }).click();
+    await page.waitForURL(/\/story\/groves\/[0-9a-f-]{36}/, { timeout: 20_000 });
+    await waitForClientReady(page);
     await expect(page.getByRole("heading", { name: groveName })).toBeVisible({
       timeout: 20_000,
     });
