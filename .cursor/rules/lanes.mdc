@@ -1,0 +1,30 @@
+---
+description: Two-lane workflow rules (Lane A Platform, Lane B Mobile). Read docs/WORKFLOW.md.
+alwaysApply: true
+---
+
+# Lanes: read `docs/WORKFLOW.md` before any task
+
+InTell is built by two Cursor agents working in parallel. Each works in its own folder and branch. Claude (the architect) writes every brief and reviews every PR. Jordan relays prompts and merges.
+
+**Which lane you are:** your folder tells you. `C:\dev\intell-lanes\a` is **Lane A (Platform)**, and `C:\dev\intell-lanes\b` is **Lane B (Mobile)**. Your prompts start with your lane label, e.g. `Lane A · M4a`. Start every report with the same label.
+
+**Stay inside your lane:**
+- **Lane A owns** `supabase/**`, `apps/admin/**`, `packages/shared/**`, `tools/**` and `.github/**`. Lane A is the **only** lane that changes the database.
+- **Lane B owns** `apps/mobile/**`. Lane B never edits `packages/shared` or `supabase/`. If it needs a change there, it stops and says so in its report.
+- **Neither lane edits** `docs/**` (except its own `docs/briefs/<ID>-report.md`), `AGENTS.md` or `.cursor/rules/**`. Those are Claude's.
+
+**Local resources:**
+- The local Supabase stack runs from **Lane A's folder only**.
+- Lane B never runs `supabase start`/`stop`, `db reset`, `pnpm db:setup-local` or the admin Playwright suite. It relies on CI for database-backed tests.
+- Lane A says in its report whenever it reset the local database.
+
+**Git:**
+- Work only on the branch you were given; never re-cut it from `origin/master`.
+- Your first push is `git push -u origin <your-branch>`.
+- Open the PR against `master`. Never merge, and never push to `master`.
+- When the brief says to sync, merge `origin/master` into your branch, re-run your checks and push.
+
+**Stop points:** after a plan, when asked for one; after implementation, with the PR open and CI green; and after each round of fixes. Then wait. Claude commits briefs and reviews into your folder while you're stopped. Pull nothing until the next prompt.
+
+AGENTS.md and `.cursor/rules/intell.mdc` still apply in full.
