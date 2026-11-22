@@ -68,3 +68,31 @@ Add a "Review fixes and step 10" section to `docs/briefs/M5a-report.md` covering
 - `git log --oneline origin/master..HEAD`
 
 **Then stop for verification.**
+
+
+---
+
+## Verification (review fixes, `d764652` / `ca3ef46`)
+
+**R1: verified.** Sync only updates installed groves. A region pack installs only when an installed grove names its region, and the first install of a grove is the explicit Install grove action. The tests cover each case.
+**R2: verified.** `installPack` fetches only the shas `assetsToFetch` returns. Shared files stay where they are.
+**Step 10: verified.** The merge regenerated the lockfile (not edited by hand), React resolves to 19.3.0, and syncDiff is re-exported from `@intell/shared`. The one expo-doctor finding left, the duplicate `intell-storage` from the `file:` link, is benign and accepted.
+
+Three items before merge:
+
+### R3. Don't block boot on registration
+`boot()` awaits `registerIfNeeded`, which awaits `fetch`, before the Supabase client exists. React Native's `fetch` has no timeout, so on a slow network the data layer can wait a long time on first launch and after every update. Instead:
+- Start registration after boot, without awaiting it (`void registerIfNeeded(...).catch(() => {})`).
+- Give `httpRegistrar` a 10 s timeout through `AbortController`. A timeout counts as a failure: return `{ registered: false }` and write no kv.
+- Tests: a hung fetch resolves `{ registered: false }` after the timeout (with fake timers), and boot finishes without waiting for registration.
+
+### R4. Survive a stored manifest that no longer parses
+M4b will extend the region pack and the grove-pack cue zones, which means a pack schema bump. Lane A can't change `apps/mobile`, so the phone has to be ready first. Today `storedManifest()` throws on an old manifest, which would break every sync. `regionIds()` also only accepts the literal `schema === 3`. Instead:
+- Wrap the parse. When it fails, keep the pack row but treat its version as 0, so the next sync reinstalls it. Keep its assets, reading `assets[].sha` from the raw JSON for the keep set, so nothing is deleted and downloaded again. Never throw.
+- `regionIds()` reads `regionId` from the raw JSON of grove rows, with no check on the schema literal.
+- Tests: an installed grove whose stored manifest fails to parse is reinstalled by sync (index version ≥ 1), and its assets are not deleted along the way.
+
+### R5. Redo the register-device hand check with the publishable key
+The 403 with an empty body came from using the **anon** key. `requirePublishableCaller` wants the **Publishable** key from `supabase status`, and the function's own 403 has a JSON body, so the empty body suggests the gateway rejected the request before it reached the function. Run it again against `127.0.0.1:54321` with the Publishable key in `apikey`. Expect 200 and a body that parses as `RegisterDeviceResponse`. Record the status and the body's keys, but **not** the device id or the key. If it isn't 200, record the status and body and stop. Don't start, stop or reset the stack.
+
+Report: add a short "R3–R5" section to the M5a report, then commit, push, wait for CI, and stop. **After that, PR #20 is ready to merge.**
