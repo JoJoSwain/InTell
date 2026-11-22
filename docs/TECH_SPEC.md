@@ -109,7 +109,11 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 - Accuracy: `Balanced`, 10 m interval, while > 150 m from every candidate; `High`, 5 m interval, within 150 m.
 - Without a session: foreground watch only, for the puck and Grove entry.
 - **Embark (M5, ADR 0005 §5):** nearest grove = straight-line distance from the current fix to each grove's `opening` point in the pack index (no network needed). On a mode choice, the phone sends `{groveId, mode, origin}` to the `embark` relay and draws the returned polyline on the home map with Maps SDK; a slim bar shows mode, distance and time; Refresh re-requests. No spoken guidance. Arrival within the opening root's radius clears the route. The origin is never written to SQLite, telemetry or logs.
-- **Backup (ADR 0005 §1):** the SQLite database and downloaded packs live in locations the OS backup includes (iOS Application Support, not marked excluded; Android Auto Backup with the database included in `fullBackupContent`/`dataExtractionRules`), so restoring a phone restores progress. Tested in M12.
+- **Backup (ADR 0005 §1; M5a decision D6):**
+  - **The SQLite database (progress) is backed up.** It lives where the OS backup includes it: iOS Application Support, not marked excluded; Android Auto Backup, with the database included in `dataExtractionRules`/`fullBackupContent`.
+  - **Downloaded packs and assets are excluded from backup.** They can be downloaded again. Apple's storage guidance keeps re-downloadable data out of backups, and Android's 25 MB Auto Backup limit would otherwise stop all backup, the database included.
+  - **After a restore,** the app reconciles the `packs`/`assets` rows with the files on disk and downloads whatever is missing.
+  - Tested in M12.
 
 ### 3.4 Packs, download and sync (DATA_MODEL §12)
 1. `get_pack_index()` → show Groves and sizes.
