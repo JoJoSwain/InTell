@@ -248,7 +248,7 @@ Test, passed: an installed grove whose stored manifest fails to parse is reinsta
 
 `pnpm --filter @intell/mobile test`: 12 suites, 30 tests, all passed. Typecheck passed. Lint passed. `expo export --platform android --clear` finished with exit 0 (1415 modules).
 
-CI for this commit is recorded after the push.
+On `d1a94b3`, GitHub `check` and `db` completed success, and `Vercel Preview Comments` completed success.
 
 `git log --oneline origin/master..HEAD` before this R3–R5 commit:
 
