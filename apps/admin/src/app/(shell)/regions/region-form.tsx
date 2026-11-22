@@ -23,6 +23,7 @@ export function RegionForm({
           name="name"
           required
           defaultValue={initial?.name}
+          aria-label="Region name"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -33,6 +34,7 @@ export function RegionForm({
           required
           pattern="[a-z0-9-]+"
           defaultValue={initial?.slug}
+          aria-label="Region slug"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -42,6 +44,7 @@ export function RegionForm({
           name="timezone"
           required
           defaultValue={initial?.timezone ?? "America/Denver"}
+          aria-label="Timezone"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
         />
       </label>
@@ -75,6 +78,7 @@ export function RegionForm({
           name="bounds"
           rows={6}
           defaultValue={initial?.boundsJson ?? ""}
+          aria-label="Bounds GeoJSON"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
           placeholder='{"type":"Polygon","coordinates":[[[...]]]}'
         />
