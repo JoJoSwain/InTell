@@ -2,6 +2,7 @@ import { PackIndexEntry } from "@intell/shared";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 import { AppState, Platform } from "react-native";
+import * as Application from "expo-application";
 import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
 import { randomUUID } from "expo-crypto";
@@ -19,7 +20,7 @@ import { reconcile } from "../files/reconcile";
 import { expoDigester } from "../files/sha";
 import type { FileStore } from "../files/store";
 import { getOrCreateDeviceId, logDevice, type SecretStore } from "../identity/deviceId";
-import { noopRegistrar, registerIfNeeded } from "../identity/register";
+import { httpRegistrar, noopRegistrar, registerIfNeeded } from "../identity/register";
 import { ensureStorageLayout } from "../storage/layout";
 
 type Extra = { supabaseUrl?: string; supabasePublishableKey?: string };
@@ -75,17 +76,27 @@ async function boot(): Promise<Layer> {
   logDevice(deviceId, (line) => {
     console.info(line);
   });
+  const config = supabaseConfig();
+  const version = (Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "0.0.0").slice(0, 32);
+  const language = Intl.DateTimeFormat().resolvedOptions().locale?.toLowerCase().startsWith("es") ? "es" : "en";
   await registerIfNeeded({
     db,
-    registrar: noopRegistrar,
+    registrar: config
+      ? httpRegistrar({
+          supabaseUrl: config.url,
+          publishableKey: config.key,
+          log: (line) => {
+            console.info(line);
+          },
+        })
+      : noopRegistrar,
     input: {
       deviceId,
-      platform: Platform.OS,
-      appVersion: Constants.expoConfig?.version ?? "0.0.0",
-      language: Intl.DateTimeFormat().resolvedOptions().locale?.slice(0, 2) || "en",
+      platform: Platform.OS === "ios" ? "ios" : "android",
+      appVersion: version,
+      uiLanguage: language,
     },
   });
-  const config = supabaseConfig();
   const client = config
     ? createClient(config.url, config.key, {
         auth: {
@@ -155,6 +166,28 @@ export async function counts(): Promise<DataCounts> {
     assets: (await listAssets(layer.db)).length,
     preview: (await listPreview(layer.db)).length,
   };
+}
+
+export async function installGrove(groveId: string): Promise<void> {
+  const layer = await dataLayer();
+  const config = supabaseConfig();
+  if (!layer.client || !config) throw new Error("Supabase URL and publishable key are not set");
+  const { data, error } = await layer.client.rpc("get_pack_index");
+  if (error) throw new Error("pack index failed");
+  const index = PackIndexEntry.array().parse(data);
+  const grove = index.find((entry) => entry.scope === "grove" && entry.id === groveId);
+  if (!grove) throw new Error("grove is not in the pack index");
+  await installPack({
+    entry: grove,
+    supabaseUrl: config.url,
+    http: httpGet,
+    files: layer.files,
+    db: layer.db,
+    digest: expoDigester,
+    assetDirectory: layer.assetDirectory,
+    stagingDirectory: layer.stagingDirectory,
+  });
+  await runSync(layer, "wifi", async () => false);
 }
 
 export async function syncNow(transport: Transport, confirmCellular: () => Promise<boolean>): Promise<void> {

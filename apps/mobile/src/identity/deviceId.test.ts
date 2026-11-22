@@ -28,7 +28,7 @@ test("the noop registrar does not record a version", async () => {
   await registerIfNeeded({
     db,
     registrar: noopRegistrar,
-    input: { deviceId: "12345678-1234-4123-8123-123456789abc", platform: "android", appVersion: "0.0.0", language: "en" },
+    input: { deviceId: "12345678-1234-4123-8123-123456789abc", platform: "android", appVersion: "0.0.0", uiLanguage: "en" },
   });
   expect(await getKv(db, "last_registered_app_version")).toBeNull();
   await db.close();

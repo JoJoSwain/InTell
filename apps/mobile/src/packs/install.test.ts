@@ -17,12 +17,12 @@ function sha256(bytes: Uint8Array): string {
 
 const digest = async (bytes: Uint8Array) => sha256(bytes);
 
-function groveManifest(assetSha: string, assetBytes: number): Uint8Array {
+function groveManifest(assetSha: string, assetBytes: number, version = 1, extra: { sha: string; bytes: number }[] = []): Uint8Array {
   const pack = GrovePack.parse({
     schema: 3,
     groveId: GROVE,
     regionId: REGION,
-    packVersion: 1,
+    packVersion: version,
     builtAt: "2026-01-01T00:00:00Z",
     grove: {
       id: GROVE,
@@ -58,17 +58,20 @@ function groveManifest(assetSha: string, assetBytes: number): Uint8Array {
     music: { cues: [] },
     ambienceZones: [],
     gatherings: [],
-    assets: [{ sha: assetSha, ext: "wav", bytes: assetBytes, kind: "narration" }],
+    assets: [
+      { sha: assetSha, ext: "wav", bytes: assetBytes, kind: "narration" },
+      ...extra.map((asset) => ({ sha: asset.sha, ext: "wav", bytes: asset.bytes, kind: "narration" as const })),
+    ],
   });
   return new TextEncoder().encode(JSON.stringify(pack));
 }
 
-function entry(manifest: Uint8Array): PackIndexEntry {
+function entry(manifest: Uint8Array, version = 1): PackIndexEntry {
   return {
     scope: "grove",
     id: GROVE,
-    version: 1,
-    manifestPath: `packs/grove/${GROVE}/1.json`,
+    version,
+    manifestPath: `packs/grove/${GROVE}/${version}.json`,
     manifestSha256: sha256(manifest),
     bytesTotal: manifest.byteLength,
     name: { en: "Demo" },
@@ -168,5 +171,47 @@ test("storage 400 and 404 are missing", async () => {
     ).rejects.toBeInstanceOf(MissingObjectError);
   }
   expect(await listPacks(db)).toHaveLength(0);
+  await db.close();
+});
+
+test("an update downloads only new shas and keeps the shared file", async () => {
+  const shared = new TextEncoder().encode("shared");
+  const added = new TextEncoder().encode("added");
+  const sharedSha = sha256(shared);
+  const addedSha = sha256(added);
+  const first = groveManifest(sharedSha, shared.byteLength, 1);
+  const second = groveManifest(sharedSha, shared.byteLength, 2, [{ sha: addedSha, bytes: added.byteLength }]);
+  const files = memoryFileStore();
+  const db = openNodeSqlite();
+  await migrate(db);
+  const calls: string[] = [];
+  const http: HttpGet = async (url) => {
+    calls.push(url);
+    if (url.endsWith(".json")) return { status: 200, body: url.includes("/2.json") ? second : first };
+    if (url.includes(addedSha)) return { status: 200, body: added };
+    return { status: 200, body: shared };
+  };
+  const base = {
+    supabaseUrl: "http://127.0.0.1:54321",
+    http,
+    files,
+    db,
+    digest,
+    assetDirectory: "/assets",
+    stagingDirectory: "/staging",
+    now: () => "2026-01-01T00:00:00Z",
+  };
+  await installPack({ ...base, entry: entry(first, 1) });
+  const sharedPath = joinPath("/assets", `${sharedSha}.wav`);
+  calls.length = 0;
+  await installPack({ ...base, entry: entry(second, 2) });
+  const sharedUrl = publicMediaUrl("http://127.0.0.1:54321", `a/${sharedSha}.wav`);
+  const addedUrl = publicMediaUrl("http://127.0.0.1:54321", `a/${addedSha}.wav`);
+  expect(calls.filter((url) => url === sharedUrl)).toHaveLength(0);
+  expect(calls.filter((url) => url === addedUrl)).toHaveLength(1);
+  expect(await files.exists(sharedPath)).toBe(true);
+  const packs = await listPacks(db);
+  expect(packs).toHaveLength(1);
+  expect(packs[0]?.version).toBe(2);
   await db.close();
 });

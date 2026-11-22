@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Redirect } from "expo-router";
-import { counts, fetchPreview, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
+import { counts, fetchPreview, installGrove, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
 
 export default function DataDevScreen() {
   if (!__DEV__) return <Redirect href="/" />;
@@ -12,6 +12,7 @@ function DataDevBody() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [releaseId, setReleaseId] = useState("");
+  const [groveId, setGroveId] = useState("");
   const [status, setStatus] = useState("Idle");
   const [tally, setTally] = useState<DataCounts | null>(null);
 
@@ -39,6 +40,19 @@ function DataDevBody() {
       <DevButton
         label="Sync"
         onPress={() => run("Syncing", () => syncNow("wifi", async () => true))}
+      />
+      <TextInput
+        accessibilityLabel="Grove id"
+        autoCapitalize="none"
+        autoCorrect={false}
+        onChangeText={setGroveId}
+        placeholder="Grove id"
+        style={styles.input}
+        value={groveId}
+      />
+      <DevButton
+        label="Install grove"
+        onPress={() => run("Installing grove", () => installGrove(groveId.trim()))}
       />
       <DevButton label="Refresh counts" onPress={() => run("Counting", async () => undefined)} />
       <TextInput

@@ -154,4 +154,72 @@ On `9ac1bfa`, GitHub `check` and `db` completed success, and `Vercel Preview Com
 - The dev screen's copy is English in the component. i18n arrives with M5b. It uses the same hex colors as the existing screens. `src/ui/tokens.ts` is not in the tree yet.
 - There is no CI `expo export` job. That workflow lives under `.github`, which is Lane A's, and the review schedules it after A1.
 - Sync on Grove entry, queue flush, `my-entries`, the Chronicle replay rule, the age gate, and preview URL refresh are left for later milestones, as the review accepted.
-- `manifestShas`, `assetsToFetch`, and `assetsToDelete` are local copies until step 10 can re-export them from `@intell/shared`.
+- `src/packs/syncDiff.ts` re-exports `manifestShas`, `assetsToFetch`, and `assetsToDelete` from `@intell/shared` (step 10).
+
+## Review fixes and step 10
+
+### R1
+
+`syncContent` installs a grove only when that grove is already installed and the index version is newer. A region pack is installed when an installed grove that is still in the index names its `regionId`, and an already installed region pack is updated the same way. A grove that is only in the index is not downloaded. The dev screen's Sync button stays on that path. First install is the new Install grove action, which installs that grove and then runs sync so its region pack follows.
+
+Tests, all passed:
+
+- a grove in the index that isn't installed is never downloaded by sync
+- an installed grove with a newer version is updated
+- the region pack follows an installed grove (also updates an installed region to a newer version)
+- a declined cellular download does not install (the grove is installed and newer, and the callback returns false)
+
+### R2
+
+`installPack` asks `assetsToFetch` for shas that are not already in the `assets` table with a file on disk. Those are skipped. The pack row points at the existing file and does not move it. A shared sha is not requested again.
+
+Test, passed: an update downloads only new shas and keeps the shared file.
+
+### Merge and lockfile
+
+`git merge --no-edit origin/master` conflicted only in `pnpm-lock.yaml`. The master copy was taken, then `pnpm install --no-frozen-lockfile` regenerated the lockfile. That result is in merge commit `066d8ab`. `expo-application` was added after the merge, and the lockfile change from that install is in the review-fix commit. The lockfile was not edited by hand.
+
+React and react-dom now resolve to **19.3.0**. The root override is gone.
+
+### expo-doctor
+
+`npx expo-doctor` from `apps/mobile`: **19/20 checks passed**. The React version check that failed under the 19.2.4 override now passes. The remaining failure is a duplicate `intell-storage@0.0.0`, once at `modules/intell-storage` and once at the `file:` link in `node_modules`. It is the same local module, not two versions.
+
+### Registrar
+
+`httpRegistrar` POSTs a `RegisterDeviceRequest` to `{url}/functions/v1/register-device` with the publishable key in `apikey` and no user JWT. Age gate is omitted. `registerIfNeeded` runs on launch and when `nativeApplicationVersion` (falling back to the Expo config version when that is null) differs from `kv.last_registered_app_version`. The kv value is written only after `RegisterDeviceResponse` parses. A 429, a non-OK status, or a network failure returns `{ registered: false }` and leaves the kv unset, so the next launch tries again. Logs go through `logDevice`, which writes 8 characters.
+
+`expo-application` **58.1.2** was added so the app can read `nativeApplicationVersion`.
+
+Tests, all passed:
+
+- registers once per version
+- does not record the version on failure
+- handles 429 without logging the full device id
+
+### register-device hand check
+
+`127.0.0.1:54321` was already listening. Lane B did not start, stop, or reset it. One POST of a v4 `RegisterDeviceRequest` (`platform: android`, `appVersion: 0.0.0`, `uiLanguage: en`, no age gate) with the local anon key as `apikey` returned **403** and an empty body. The device id was not recorded here.
+
+### Test, typecheck, lint, export
+
+`pnpm --filter @intell/mobile test`: 12 suites, 27 tests, all passed. Typecheck passed. Lint passed. `expo export --platform android --clear` rebuilt an empty Metro cache and finished with exit 0 (1415 modules, about 15s).
+
+### CI and Vercel
+
+Recorded after this commit is pushed.
+
+### `git log --oneline origin/master..HEAD`
+
+Before this review-fix commit:
+
+```
+066d8ab Merge origin/master into b/m5a-mobile-data.
+65d4ab3 docs: M5a implementation review (R1 sync installed-only, R2 fetch missing assets only; step 10)
+fdcda15 docs: record the M5a mobile data layer
+9ac1bfa Keep listener progress in a backed-up database and downloaded packs out of backup.
+f4c5dcb docs: M5a plan review (approved, notes N1-N4); DATA_MODEL §14 backup split
+fdd56b9 docs: plan the M5a mobile data layer
+cdc288f docs: M5a brief (Lane B: mobile data layer, plan first); TECH_SPEC backup split (D6)
+```
+

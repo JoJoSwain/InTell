@@ -1,8 +1,9 @@
 import { GrovePack, PackIndexEntry, RegionPack } from "@intell/shared";
 import { assetObjectPath, publicMediaUrl } from "../api/mediaUrl";
 import type { SqlDriver } from "../db/driver";
-import { getAsset, listPacks, upsertAsset, upsertPack } from "../db/repos";
+import { getAsset, listAssets, listPacks, upsertAsset, upsertPack } from "../db/repos";
 import { joinPath, type FileStore } from "../files/store";
+import { assetsToFetch } from "./syncDiff";
 
 export type Digester = (bytes: Uint8Array) => Promise<string>;
 export type HttpResponse = { status: number; body: Uint8Array };
@@ -55,12 +56,18 @@ export async function installPack(args: {
 
   const parsed: unknown = JSON.parse(new TextDecoder().decode(manifestResponse.body));
   const pack = args.entry.scope === "grove" ? GrovePack.parse(parsed) : RegionPack.parse(parsed);
+  const present: string[] = [];
+  for (const row of await listAssets(args.db)) {
+    if (await args.files.exists(row.local_uri)) present.push(row.sha);
+  }
+  const missing = new Set(assetsToFetch(pack, present));
   const stageDir = joinPath(
     args.stagingDirectory,
     `${args.entry.scope}/${args.entry.id}/${args.entry.version}`,
   );
 
   for (const asset of pack.assets) {
+    if (!missing.has(asset.sha)) continue;
     const staged = joinPath(stageDir, `${asset.sha}.${asset.ext}`);
     const existing = await args.files.read(staged);
     if (existing && (await args.digest(existing)).toLowerCase() === asset.sha) continue;
@@ -76,6 +83,17 @@ export async function installPack(args: {
 
   const localUris: { sha: string; ext: string; bytes: number; localUri: string }[] = [];
   for (const asset of pack.assets) {
+    if (!missing.has(asset.sha)) {
+      const row = await getAsset(args.db, asset.sha);
+      if (!row || !(await args.files.exists(row.local_uri))) throw new Error("installed asset missing");
+      localUris.push({
+        sha: asset.sha,
+        ext: row.ext,
+        bytes: row.bytes,
+        localUri: row.local_uri,
+      });
+      continue;
+    }
     const staged = joinPath(stageDir, `${asset.sha}.${asset.ext}`);
     const dest = joinPath(args.assetDirectory, `${asset.sha}.${asset.ext}`);
     const stagedBytes = await args.files.read(staged);
