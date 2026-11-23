@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { GroveBoundaryMap } from "@/components/maps/grove-boundary-map";
 import {
   ServerActionForm,
@@ -15,6 +14,8 @@ export function GroveForm({
   regions,
   initial,
   canEdit,
+  derivedShapeJson,
+  farPieceWarning,
 }: {
   regions: RegionOption[];
   initial?: {
@@ -26,12 +27,12 @@ export function GroveForm({
     website_url: string;
     gatherings_url: string;
     allows_speaker_wildlife_sounds: boolean;
-    boundaryJson: string;
   };
   canEdit: boolean;
+  derivedShapeJson?: string;
+  farPieceWarning?: string | null;
 }) {
-  const [boundary, setBoundary] = useState(initial?.boundaryJson ?? "");
-  const showMap = mapsEnabled();
+  const showMap = mapsEnabled() && !!derivedShapeJson;
 
   if (!canEdit) {
     return (
@@ -42,14 +43,6 @@ export function GroveForm({
   return (
     <ServerActionForm action={saveGrove} className="space-y-4">
       {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
-      {initial ? (
-        <input
-          type="hidden"
-          name="original_boundary"
-          value={initial.boundaryJson}
-        />
-      ) : null}
-      <input type="hidden" name="boundary" value={boundary} />
       <label className="block text-sm">
         <span className="text-textMuted">Region</span>
         <select
@@ -125,29 +118,28 @@ export function GroveForm({
         <span>Allows speaker wildlife sounds</span>
       </label>
 
-      <label className="block text-sm">
-        <span className="text-textMuted">Boundary (GeoJSON Polygon)</span>
-        <textarea
-          rows={6}
-          value={boundary}
-          onChange={(e) => setBoundary(e.target.value)}
-          aria-label="Boundary GeoJSON"
-          required
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
-          placeholder='{"type":"Polygon","coordinates":[[[lng,lat],...]]}'
-        />
-      </label>
+      {farPieceWarning ? (
+        <p
+          className="rounded-md border border-amber-600/40 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          role="status"
+        >
+          {farPieceWarning}
+        </p>
+      ) : null}
 
-      {showMap ? (
-        <GroveBoundaryMap
-          initialGeoJson={boundary}
-          onChange={setBoundary}
-          className="overflow-hidden rounded-md border border-border"
-        />
+      {showMap && derivedShapeJson ? (
+        <div className="space-y-2">
+          <p className="text-sm text-textMuted">
+            Derived outline (union of fragment disks). Updates when you place or
+            move fragments.
+          </p>
+          <GroveBoundaryMap shapeJson={derivedShapeJson} />
+        </div>
       ) : (
         <p className="text-sm text-textMuted">
-          Map disabled (set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and
-          NEXT_PUBLIC_GOOGLE_MAP_ID). Use the GeoJSON field above.
+          {derivedShapeJson
+            ? "Add a Google Maps key and Map ID to preview the derived outline."
+            : "Place a fragment to see the derived grove outline."}
         </p>
       )}
 

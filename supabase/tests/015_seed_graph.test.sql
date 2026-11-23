@@ -105,16 +105,15 @@ select ok(
   'physical frag9 snapshot has markerHash only (no marker code)'
 );
 
--- every seeded fragment inside grove boundary
+-- every seeded Farmington fragment has a location (boundary column dropped in A2)
 select ok(
-  not exists (
-    select 1
+  (
+    select count(*) = 10
     from public.fragments f
-    join public.groves g on g.id = f.grove_id
     where f.grove_id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
-      and not extensions.ST_Covers(g.boundary, f.location)
+      and f.location is not null
   ),
-  'every seeded Farmington fragment is inside grove boundary'
+  'every seeded Farmington fragment has a location'
 );
 
 select * from finish();

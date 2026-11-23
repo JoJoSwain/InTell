@@ -8,20 +8,6 @@ const SEED_OTHER_GROVE = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0";
 const SEED_BRIDGE_FRAG = "aaaaaaaa-bbbb-4ccc-8ddd-0000000000c1";
 const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
 
-/** Small polygon around Farmington sun reference (~41.1, -111.9). */
-const BOUNDARY = JSON.stringify({
-  type: "Polygon",
-  coordinates: [
-    [
-      [-111.905, 41.095],
-      [-111.895, 41.095],
-      [-111.895, 41.105],
-      [-111.905, 41.105],
-      [-111.905, 41.095],
-    ],
-  ],
-});
-
 test.describe("M3c grove authoring", () => {
   test("editor builds grove with fragments, OR prereq, physical + print", async ({
     page,
@@ -40,7 +26,6 @@ test.describe("M3c grove authoring", () => {
     const name = `E2E Grove ${stamp}`;
     await page.getByLabel("Grove name").fill(name);
     await page.getByLabel("Premise").fill("E2E premise");
-    await page.getByLabel("Boundary GeoJSON").fill(BOUNDARY);
     // Region select already defaults to first (seed region)
     await page.getByLabel("Region").selectOption(SEED_REGION);
     await page.getByRole("button", { name: "Create grove" }).click();
@@ -206,9 +191,10 @@ test.describe("M3c grove authoring", () => {
       5,
     );
 
-    // Grove name-only save
-    const boundaryBefore = await page.getByLabel("Boundary GeoJSON").inputValue();
-    expect(boundaryBefore.trim().startsWith("{")).toBeTruthy();
+    // Grove name-only save (outline is derived; no drawn polygon)
+    await expect(
+      page.getByText(/Derived outline|Place a fragment to see the derived/i),
+    ).toBeVisible();
     const groveName = page.getByLabel("Grove name");
     const nameStamp = `Farmington C1 ${Date.now()}`;
     await groveName.fill(nameStamp);
@@ -218,11 +204,9 @@ test.describe("M3c grove authoring", () => {
       timeout: 15_000,
     });
     await waitForClientReady(page);
-    const boundaryAfter = await page.getByLabel("Boundary GeoJSON").inputValue();
-    expect(JSON.parse(boundaryAfter)).toEqual(JSON.parse(boundaryBefore));
 
     const groveCheck = await request.get(
-      `${auth.supabaseUrl}/rest/v1/groves?id=eq.${SEED_GROVE}&select=boundary_geojson`,
+      `${auth.supabaseUrl}/rest/v1/groves?id=eq.${SEED_GROVE}&select=id,slug`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -231,9 +215,7 @@ test.describe("M3c grove authoring", () => {
       },
     );
     expect(groveCheck.ok()).toBeTruthy();
-    const groveRows = (await groveCheck.json()) as {
-      boundary_geojson: { type: string };
-    }[];
-    expect(groveRows[0]?.boundary_geojson?.type).toBe("Polygon");
+    const groveRows = (await groveCheck.json()) as { id: string }[];
+    expect(groveRows[0]?.id).toBe(SEED_GROVE);
   });
 });
