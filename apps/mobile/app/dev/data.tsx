@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Redirect } from "expo-router";
+import { installDemoGrove, installStressGrove } from "../../src/map/installFixtures";
 import { counts, fetchPreview, installGrove, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
+import { strings } from "../../src/ui/strings";
 
 export default function DataDevScreen() {
   if (!__DEV__) return <Redirect href="/" />;
@@ -55,6 +57,11 @@ function DataDevBody() {
         onPress={() => run("Installing grove", () => installGrove(groveId.trim()))}
       />
       <DevButton label="Refresh counts" onPress={() => run("Counting", async () => undefined)} />
+      <DevButton label={strings.installDemo} onPress={() => run("Installing demo", () => installDemoGrove())} />
+      <DevButton
+        label={strings.installStress}
+        onPress={() => run("Installing stress grove", () => installStressGrove())}
+      />
       <TextInput
         accessibilityLabel="Staff email"
         autoCapitalize="none"

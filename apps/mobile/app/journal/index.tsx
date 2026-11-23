@@ -1,16 +1,23 @@
-import { Text, View, StyleSheet } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { brandFont } from "../../src/ui/fonts";
+import { strings } from "../../src/ui/strings";
+import { tokens } from "../../src/ui/tokens";
 
 export default function JournalHome() {
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Journal</Text>
-      <Text style={styles.body}>Stories you hear will gather here. (M0 stub)</Text>
+    <View style={[styles.root, { backgroundColor: tokens.day.bg }]}>
+      <Text maxFontSizeMultiplier={2} style={[styles.title, { color: tokens.day.text }]}>
+        {strings.journal}
+      </Text>
+      <Text maxFontSizeMultiplier={2} style={[styles.body, { color: tokens.day.textMuted }]}>
+        {strings.journalLater}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 24, backgroundColor: "#F6F2EA" },
-  title: { fontSize: 22, fontFamily: "Georgia", color: "#1F2419" },
-  body: { marginTop: 12, fontSize: 16, color: "#5B6152", lineHeight: 24 },
+  root: { flex: 1, padding: 24 },
+  title: { fontFamily: brandFont, fontSize: 28 },
+  body: { marginTop: 12, fontSize: 16, lineHeight: 24 },
 });

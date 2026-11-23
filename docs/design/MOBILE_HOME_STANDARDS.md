@@ -3,6 +3,12 @@
 **Decided:** 2026-11-22 design session (Jordan and Ashley, with Claude).
 **Status:** source of truth for the DESIGN.md mobile rewrite and the M5b brief. Where this document and DESIGN.md §1–§4 disagree, this document wins until DESIGN.md is rewritten.
 **Follow-up decisions (same night):** the plan-drawing and blueprint map (§3A), the buffer union as the real grove boundary, with locked fragments and islands included (§4.1), web lines that show the logic chain, with arrows for cross-grove links (§6), and a still Reduce Motion pulse (§5.3).
+**Changes on 2026-11-23, after the first look on a phone:**
+- The grove's outline itself now fades gently, replacing the outward halo (§4.3).
+- Markers have solid centers (§5.1).
+- Every unexplored pulse is the Root brick red (§1.2, §5.3).
+- Every ring is 2.5 pt (§5.1).
+
 **Living references:** the home-screen canvas, the Color Lab and the decision worksheet (links in the session notes; ask Claude to re-share). The canvas holds both base-map directions (§3) side by side.
 
 Units: **pt** means iOS points or Android dp. **ft** means real-world feet on the ground.
@@ -36,7 +42,7 @@ A dark-to-light ramp, so the tiers stay distinct for every type of color vision.
 | Branch | brand amber `#B06511` | bright amber `#E3953F` |
 | Leaf | light ochre `#DBAA5A` | pale ochre `#F6E0AE` |
 
-**Tier colors appear only in motion** (the pulses, §5). Markers themselves are ink rings.
+**Not used on the home map** (changed 2026-11-23). Every unexplored marker pulses in the Root brick (§5.3), and tiers differ by size. These colors stay reserved for other screens, such as the Chronicle.
 
 ### 1.3 Typography (worksheet 1.4)
 - **Questrial** (Google Fonts, OFL, single weight) for the brand voice: grove names, sheet titles, welcome and empty-state headlines, the bottom buttons, and the grove-name chip.
@@ -151,45 +157,42 @@ This style follows planning and landscape-architecture drawings:
 | Caps / joins | Butt / miter | Butt / miter | Butt / miter |
 | Fill | White 50% | `#2B5D7B` 50% | White 10% / 8% |
 
-### 4.3 Grove pulse: an outward halo
-- **Each second, a halo grows outward from the boundary and fades.** It's drawn **only outside** the grove (masked), and the inside stays calm.
-- **Size:** it reaches about 14 pt beyond the edge at its widest, as a stroke centered on the boundary growing from 0 to 28 pt with only the outer half visible. It follows the outline evenly, sharp points included.
-- **Easing:** ease-out, opacity 1 → 0 over the second, **on the same beat as the marker pulses** (§7).
-- **Color:**
-
-  | Screen | Halo |
-  |---|---|
-  | Plan day | Ink 22% |
-  | Blueprint night | White 25% |
-  | Aerial day | White 32% |
-  | Aerial night | White 25% |
-
-- **Reduce Motion:** no halo.
+### 4.3 Grove pulse: the outline breathes (changed 2026-11-23)
+- **The outward halo is gone.** On a phone it looked choppy and drew the eye.
+- **Instead, the dashed outline itself fades, very gently,** on the shared beat:
+  - its opacity eases from **100% down to 60% and back** once a second, on a smooth ease-in-out curve
+  - it's brightest at the start of each beat, in step with the marker pulses (§7)
+- **The fill doesn't change.** Only the outline's opacity moves.
+- **Tunable:** Jordan chose 60% after seeing it on a phone. The useful range runs from 85% (subtler) to 50% (stronger).
+- **Reduce Motion:** a steady outline at 100%.
 
 ---
 
 ## 5. Markers
 
 ### 5.1 Form
-- **Every marker is a hollow ring with no fill:** ink `#1B2A33` by day, white at night.
+- **Every marker is a ring with a solid center** (changed 2026-11-23), so street names and other map details never show through:
+  - **Day:** an ink `#1B2A33` ring with a white `#FFFFFF` center.
+  - **Night:** a white ring with a `#163447` center, the night button color. A white center would swallow the white ring.
 
   | Tier | Diameter | Ring width |
   |---|---|---|
   | Root | 22 pt | 2.5 pt |
   | Branch | 16 pt | 2.5 pt |
-  | Leaf | 12 pt | 2 pt |
+  | Leaf | 12 pt | 2.5 pt |
 
 - **Tap target:** 48 pt for every marker.
-- **Tier shows by size** (always) **and by pulse color** (when unexplored). QR (physical) markers look identical. Their sheet says "Scan the code here to listen."
+- **Every ring is 2.5 pt** (changed 2026-11-23; the Leaf was 2 pt).
+- **Tier shows by size,** and by how far the pulse grows. QR (physical) markers look identical. Their sheet says "Scan the code here to listen."
 
 ### 5.2 States
 
 | State | Ring | Pulse |
 |---|---|---|
-| **Unexplored** (unlocked, in window, not completed for the current contingency) | Full strength | Tier color |
+| **Unexplored** (unlocked, in window, not completed for the current contingency) | Full strength | **Root brick** (`#763329` day, `#B9574A` night), at its tier's size |
 | **Changed** (unheard Story Contingency, playable now) | Full strength | **Forest green** (`accent`), at its tier's size |
 | **Completed** | Full strength | None (still) |
-| **Locked** (prerequisites not met) | 35% opacity | None (still) |
+| **Locked** (prerequisites not met; out of window looks the same for now) | **Faded but opaque:** ring `#B0B4B8` by day (ink at 35% on white) and `#687B87` at night (white at 35% on `#163447`), with the usual solid center | None (still) |
 
 ### 5.3 The pulse
 - **Once per second (60 a minute).** A ring 2 pt wide starts at the marker's diameter + 6 pt, then **expands and fades** (opacity 0.95 → 0, ease-out):
@@ -200,8 +203,9 @@ This style follows planning and landscape-architecture drawings:
   | Branch | ×1.48 | 60% |
   | Leaf | ×1.24 | 30% |
 
+- **Color** (changed 2026-11-23): the **Root brick for every tier.** Branch and Leaf pulses are brick too, at their own sizes. Changed fragments pulse forest green.
 - **Only unexplored and changed markers pulse.**
-- **Reduce Motion (decided):** the pulse becomes a **still ring in the tier color** (green for changed), at the pulse's starting size. Unexplored and completed markers stay easy to tell apart without motion.
+- **Reduce Motion (decided):** the pulse becomes a **still brick ring** (green for changed), at the pulse's starting size. Unexplored and completed markers stay easy to tell apart without motion.
 - **Performance:** animate only the markers on screen (target: 300 markers panning smoothly on a mid-range Android).
 
 ---
@@ -225,7 +229,7 @@ This style follows planning and landscape-architecture drawings:
 ---
 
 ## 7. Motion: one shared clock
-- **One 1-second clock** drives everything: marker pulses and the grove halo start together on every beat.
+- **One 1-second clock** drives everything: the marker pulses and the grove outline's fade share every beat.
 - **No other ambient motion on the home map.**
 - **Reduce Motion** stops all of it.
 - Nothing flashes faster than 3 times per second.
