@@ -11,7 +11,7 @@ Behavior: `PRODUCT_SPEC.md`. Schema: `DATA_MODEL.md`. Sound: `AUDIO_SPEC.md`. Th
 | Language | TypeScript strict (`strict`, `noUncheckedIndexedAccess`) | |
 | Mobile | Expo (current stable SDK), **EAS dev builds** | Native modules; no Expo Go |
 | Navigation | Expo Router | The map is the root; Chronicle, Journal and Settings are full-height sheets/stacks |
-| Map | `react-native-maps` with `PROVIDER_GOOGLE` on iOS and Android (ADR 0002) | Online base map with a Google cloud map style; cheap memoized markers; no offline tiles |
+| Map | `react-native-maps` with `PROVIDER_GOOGLE` on iOS and Android (ADR 0002) | Online base map with JSON map styles kept in the repo (a plan drawing by day, a blueprint by night; ADR 0006, `docs/design/MOBILE_HOME_STANDARDS.md`); image markers with pre-rendered pulse frames, animated only on screen; no offline tiles |
 | Audio | `AudioEngine` interface over `react-native-audio-api` (**spike in M1**), with a custom Expo Module as the fallback | AUDIO_SPEC §2 |
 | Load animation | `lottie-react-native` (or Rive) + `expo-splash-screen` | |
 | Location | `expo-location` + `expo-task-manager` | While Using only |
@@ -144,7 +144,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 - **Image upload:** sha256, dimensions and alt text → `staging-images/{sha}.{ext}` → `image_assets`.
 - **Editors:**
   - Regions (timezone, sun reference, bounds)
-  - Grove (Google map with Terra Draw polygon or pasted GeoJSON; Embark journey passages per mode (optional); fragments placed on the map or by coordinates; tier, visibility, radius in feet, teaser, story order; the prerequisite-group editor with fragments from any grove; validation badges)
+  - Grove (Google map showing the grove's derived outline, read-only, with a far-piece warning (ADR 0006); Embark journey passages per mode (optional); fragments placed on the map or by coordinates; tier, visibility, radius in feet, teaser, story order; the prerequisite-group editor with fragments from any grove; validation badges)
   - Physical markers: generate the code and print a QR page (`/print/marker/[fragmentId]`)
   - Revision (Day/Night versions with narration, transcript and, when both versions exist, an other-time hint each; Story Contingency or Correction; a change teaser for every contingency after revision 1)
   - Story Notes (threads, private character notes, Indigeny notes) and characters (back story, required portrait, home grove, card lines per fragment link)
@@ -169,7 +169,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `invite-staff` | Admin (admin role) | Invites a staff member by email and creates their `staff` row; deactivates staff |
 | `export-archive` | Admin (editor+) | A zip of revisions, transcripts, Story Notes and metadata for preservation outside InTell (M11) |
 | `preview` | Staff JWT (writer, sound, editor, admin) | Returns a preview manifest for a `draft` / `scheduled` / `failed` release; 1-hour signed URLs for staged assets; published shas use public URLs (DATA_MODEL §12.5) |
-| `embark` | Mobile (M5) | Embark route: `{groveId, mode: walk\|bike\|transit, origin}` → looks up the grove's published opening point itself (so it can only route to groves) → Google Routes API `computeRoutes` (`WALK` / `BICYCLE` / `TRANSIT`, minimal field mask) with a server-only key → `{mode, distanceM, durationS, polyline, transitSteps?, betaNotice?}`. No `DRIVE`. Never stores or logs the origin; per-device daily cap via `embark_usage` plus a Google quota cap (ADR 0005 §5) |
+| `embark` | Mobile (M5) | Embark route: `{groveId, mode: walk\|bike\|transit, origin}` → looks up the grove's published opening point itself (so it can only route to groves) → Google Routes API `computeRoutes` (`WALK` / `BICYCLE` / `TRANSIT`, minimal field mask) with a server-only key → `{mode, distanceM, durationS, polyline, transitSteps?, betaNotice?}`. No `DRIVE`. Never stores or logs the origin; per-device daily cap via A1's `fn_device_rate_allow` (`'embark'`, 24 h) plus a Google quota cap (ADR 0005 §5) |
 | `register-device` | Mobile | Upsert a device (platform, version, language, age gate) |
 | `ingest-events` | Mobile | Batched events (≤ 200), idempotent, 600/h |
 | `journal-entry`, `my-entries` | Mobile | Submit a Journal entry (text, or reserve a voice upload); list your entries and their lineage (M9) |

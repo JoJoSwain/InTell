@@ -11,7 +11,7 @@ This is the single source of truth for the database, storage and content packagi
 ## 0. Design decisions
 
 1. **Replaceplace produces everything that plays.** There are no outside contributors, consents, credits or audio licenses. An asset is publicly reachable only while a current pack references it.
-2. **Places are geometry.** Groves (story places), ambience zones and music zones are PostGIS polygons that may overlap. Fragments are points. Coordinates live in Postgres and in packs (fragment points are public on the map). Marker codes never leave Postgres; packs carry only their sha256.
+2. **Places are geometry.** Ambience zones and music zones are PostGIS polygons that may overlap. A grove's boundary is **derived** from its fragments when packs build (the union of circles around them; ADR 0006), so groves may overlap too. Fragments are points. Coordinates live in Postgres and in packs (fragment points are public on the map). Marker codes never leave Postgres; packs carry only their sha256.
 3. **The server publishes static packs; devices don't query live while exploring.** Publishing builds versioned JSON **packs** (grove, region) into Storage. Devices download packs plus the assets they reference, so playback is smooth with the screen locked. The base map is online (ADR 0002). The database is the authoring system; packs are the delivery system.
 4. **Releases are the only way content reaches phones.** Staff edit freely; a published **release** writes immutable snapshots that the pack builder reads. Edits to live content are staged until the next release.
 5. **One story world.** Characters and threads are story-wide. Prerequisites can cross groves.
@@ -105,14 +105,13 @@ create table groves (
   slug text not null, name jsonb not null, premise jsonb not null default '{}',   -- L10n
   website_url text, gatherings_url text,
   allows_speaker_wildlife_sounds boolean not null default false,
-  boundary geography(Polygon,4326) not null,
+  -- no boundary column: the grove's shape is derived from its fragments when packs build (ADR 0006, A2)
   growth_cue_id uuid references audio_assets(id),  -- "This part grew from ideas listeners shared… including yours."
   status publish_status not null default 'draft',
   pack_version int not null default 0,
   published_at timestamptz,
   …ts, unique (region_id, slug)
 );
-create index on groves using gist (boundary);
 -- v3/ADR 0005: no access_notes. Arrival logistics (parking, racks, stops, terrain) are left to the listener.
 
 -- Embark journey passages (ADR 0005 §5): one optional passage per grove per mode, written by staff,
@@ -158,7 +157,7 @@ create table fragments (
   check (not is_ending or tier = 'root')
 );
 create index on fragments using gist (location);
--- trigger fn_fragment_guard: ST_Covers(grove.boundary, location); physical ⇒ marker_code not null
+-- trigger fn_fragment_guard: the grove exists; physical ⇒ marker_code not null (no boundary check since ADR 0006)
 
 -- Prerequisites (ADR 0003 as amended): unlocked ⇔ EVERY group has ≥1 member the device has completed
 -- for that member's latest contingency. No groups ⇒ unlocked from the start. Members may be in ANY grove.
@@ -444,10 +443,9 @@ create table events (id bigint generated always as identity primary key,
   unique (device_id, client_event_id));
 create index on events (grove_id, occurred_at);
 
-create table embark_usage (                        -- M5: per-device daily cap for the `embark` relay (ADR 0005 §5)
-  device_id uuid not null references devices(id) on delete cascade,
-  day date not null, requests int not null default 0,
-  primary key (device_id, day));                   -- counts only: never coordinates, groves or routes; service role only
+-- Embark's per-device daily cap (ADR 0005 §5) uses A1's generic limiter: device_rate_limits through
+-- fn_device_rate_allow(device_id, 'embark', limit, 86400). No separate embark_usage table (A3).
+-- The limiter stores counts only: never coordinates, groves or routes; service role only.
 
 create table pack_builds (id bigint generated always as identity primary key,
   scope text not null check (scope in ('grove','region')), scope_id uuid not null,
@@ -455,6 +453,7 @@ create table pack_builds (id bigint generated always as identity primary key,
   content_sha256 text,                             -- canonical JSON sans packVersion/builtAt; equal ⇒ no-op
   asset_hashes text[] not null, bytes_total bigint not null,
   release_id uuid references releases(id),         -- builds triggered by a release go live together
+  bbox double precision[4],                        -- grove builds: [west, south, east, north] of the derived boundary (A2)
   live boolean not null default false,             -- true once every build of its release succeeded
   built_at timestamptz not null default now(), reason text);
 
@@ -474,7 +473,7 @@ Existing tables keep the id types they shipped with in M2; the sketches above do
 **Release status flow:** `draft` → (`scheduled`) → `publishing` (go-live in progress: check, copy, commit and pack builds — including the moment `fn_enqueue_due_releases` moves a due release here before the check runs) → `published` (every pack for the release is live; `published_at` set) or `failed` (the check failed at go-live, or a pack build exhausted its retries; `last_check` says why). A failed release can be retried. `cancelled` is for a scheduled release withdrawn before go-live. The admin badge for `publishing` reads "Publishing…".
 **Snapshot projection.** One SQL function, `fn_snapshot_projection(entity, entity_id) returns jsonb`, produces an entity's publishable projection from its working rows. Commit stores its output in `published_snapshots.data`; the admin's "Unreleased changes" marker is `projection(working) is distinct from snapshot.data`. A zod schema per entity in `packages/shared/src/schemas/snapshots.ts` validates the payloads, and `build-pack` parses them with it.
 
-**What a snapshot holds.** `grove`: name, premise, links, wildlife-speaker setting, boundary, growth cue, journey passages (M3e; access notes removed by ADR 0005). `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, back story (`public_intro`), portrait, home grove (M3e). `image`: sha, ext, alt text. Sound entities (`ambience_profile` with its layers and assets, `ambience_zone`, `music_zone`, `music_cue` with its stems, `ui_cue`): their publishable fields, so M4's sound tools publish through releases too. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
+**What a snapshot holds.** `grove`: name, premise, links, wildlife-speaker setting, growth cue (no boundary since ADR 0006; older snapshots that still carry one parse and ignore it), journey passages (M3e; access notes removed by ADR 0005). `fragment`: tier, is_ending, title, teaser, location, visibility, radius, marker hash (never the code), story order, status, prerequisite groups and members, thread ids, character links (prominence, introduces, card line). `character`: public name, back story (`public_intro`), portrait, home grove (M3e). `image`: sha, ext, alt text. Sound entities (`ambience_profile` with its layers and assets, `ambience_zone`, `music_zone`, `music_cue` with its stems, `ui_cue`): their publishable fields, so M4's sound tools publish through releases too. Revisions don't need snapshots: a published revision is immutable. Story Notes fields (`notes`, Indigeny notes, thread titles) are never snapshotted.
 
 ---
 
@@ -498,7 +497,7 @@ Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired
 **Publishing a release** (two-phase, through the `publish` edge function, now or by schedule):
 1. **`fn_publish_check(release_id)`**, read-only: runs the checklist (§11) over everything in the release *plus* the live snapshots it depends on (for example a prerequisite in another grove). Returns `{ok, failures[], asset_shas_to_publish[], image_shas_to_publish[]}` and writes it to `releases.last_check`.
 2. The edge function copies each staged asset to `public-media/a/{sha}.{ext}` (audio) or `public-media/i/{sha}.{ext}` (images), with `Cache-Control: public, max-age=3600`. If any copy fails, it stops and nothing is committed.
-3. **`fn_publish_commit(release_id)`**, in one transaction: re-runs the checks; sets revision statuses and `release_id`; writes a `published_snapshots` row (via `fn_snapshot_projection`) for **every release item except revisions** (groves, fragments, characters, images and sound entities); sets the release `publishing`; marks entry links `grown` for published targets; writes the audit log; **enqueues** `rebuild_pack` jobs, tagged with the release id, for every affected scope **plus every grove containing a fragment that requires a fragment whose revision or snapshot changed in this release** (so cross-grove `externalPrerequisites` stay current).
+3. **`fn_publish_commit(release_id)`**, in one transaction: re-runs the checks; sets revision statuses and `release_id`; writes a `published_snapshots` row (via `fn_snapshot_projection`) for **every release item except revisions** (groves, fragments, characters, images and sound entities); sets the release `publishing`; marks entry links `grown` for published targets; writes the audit log; **enqueues** `rebuild_pack` jobs, tagged with the release id, for every affected scope **plus every grove linked, in either direction, to any non-retired fragment of a grove the release touches**, counting links in both the live and the about-to-be-replaced snapshots (`fn_release_linked_groves`, A2). That keeps cross-grove `externalPrerequisites`, `crossGroveLinks` and arrow tips current, even when a link is removed.
 
 **What a release must contain.** Items are explicit; commit never adds dependencies on its own. The checklist reports a missing dependency as `DEPENDENCY_UNPUBLISHED`: a revision whose fragment isn't published or in the release; a fragment whose grove isn't; a fragment linked to a character that isn't; a character whose portrait image or home grove isn't; a cue or layer whose zone or profile isn't. (The admin in M3d offers "add the missing items" as a convenience.) Audio files need no release item: the copy step publishes every staged audio sha the release's content references. **All status changes reach phones only through a release or an unpublish**; retiring a fragment means setting it to `retired` and publishing it in a release. There is no status-change trigger that rebuilds packs.
 
@@ -533,7 +532,6 @@ Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired
 | `NO_VERSION` | error | Every revision has at least one version (Day and/or Night) |
 | `NO_TRANSCRIPT` | error | Every version has a non-empty transcript |
 | `NO_TEASER` | error | Every fragment has a teaser |
-| `OUTSIDE_GROVE` | error | The fragment is inside its grove polygon |
 | `PREREQ_UNPUBLISHED` | error | Every prerequisite group has ≥1 member that is published or retired (in any grove) or in the same release |
 | `DEPENDENCY_UNPUBLISHED` | error | Something the release's content depends on is neither published nor in the release (see §10, "What a release must contain") |
 | `EMPTY_PREREQ_GROUP` | error | Every prerequisite group has at least one member |
@@ -550,6 +548,7 @@ Removed in v3: `fn_asset_is_playable` (rights), `fn_site_ok`, `fn_date_unexpired
 | `NO_START` | warning | No fragment in the grove is open from the start (every one has at least one prerequisite group, including groves whose only starts depend on other groves) |
 | `PREREQ_ONE_WINDOW` | warning | A prerequisite exists only by day or only by night, so it blocks listeners at the other time |
 | `RADIUS_OVERLAP` | warning | Two standard fragments' circles overlap, unless one must precede the other (ADR 0003 §4) |
+| `GROVE_FAR_PIECE` | warning | A piece of a grove's derived outline is more than 1 km from the rest of the grove, which usually means a misplaced fragment (computed in the admin, not SQL; ADR 0006) |
 | `LOUDNESS` | warning | An asset is more than ±2 LU from its target (AUDIO_SPEC §6), or its loudness wasn't measured |
 | `AUDIO_FORMAT` | warning | An asset's format, channels or bitrate differs from AUDIO_SPEC §6 |
 | `PACK_BUILD_FAILED` | error | A `rebuild_pack` job for this release exhausted its retries; set on `releases.last_check` by `run-jobs` (release-level, not a row checklist item) |
@@ -561,11 +560,12 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
 ## 12. Content packs (the delivery format)
 
 ### 12.1 Grove pack
-`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by `build-pack` from **published snapshots** and current revisions. Fragments with snapshot status `published` or `retired` are included; `unpublished` ones are omitted. Canonical JSON rules are unchanged from v2: deep-sorted keys, no insignificant whitespace, UTF-8; arrays in defined order (fragments by `storyOrder` then `id`; revisions by `fragmentId`; versions by `lang` then `timeWindow`; `requires` groups and members by `sort_order` then id; assets by `sha`; other lists by `id`); coordinates rounded to 6 decimals. `builtAt` is the latest `published_at` among the snapshots and revisions that fed the pack. zod `GrovePack` (**schema 3**, M3e; schema 2 differed only by `accessNotes` and the ADR 0005 fields):
+`public-media/packs/grove/{grove_id}/{pack_version}.json`, built by `build-pack` from **published snapshots** and current revisions. Fragments with snapshot status `published` or `retired` are included; `unpublished` ones are omitted. Canonical JSON rules are unchanged from v2: deep-sorted keys, no insignificant whitespace, UTF-8; arrays in defined order (fragments by `storyOrder` then `id`; revisions by `fragmentId`; versions by `lang` then `timeWindow`; `requires` groups and members by `sort_order` then id; assets by `sha`; other lists by `id`); coordinates rounded to 6 decimals. `builtAt` is the latest `published_at` among the snapshots and revisions that fed the pack. zod `GrovePack` (**schema 4**, A2: a derived MultiPolygon boundary and `crossGroveLinks`; schema 3 was M3e):
 ```ts
 {
-  schema: 3, groveId, regionId, packVersion, builtAt,
-  grove: { id, name, premise, websiteUrl?, gatheringsUrl?, boundary: GeoJSON.Polygon,
+  schema: 4, groveId, regionId, packVersion, builtAt,
+  grove: { id, name, premise, websiteUrl?, gatheringsUrl?,
+           boundary: GeoJSON.MultiPolygon,   // derived: union of circles around the published, non-retired fragments (ADR 0006)
            allowsSpeakerWildlifeSounds: boolean, growthCueAssetSha?: string,
            openingFragmentId: string,                                   // first root by story order
            journeys: { walk?: L10n, bike?: L10n, transit?: L10n } },     // Embark passages, all optional
@@ -579,6 +579,8 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
                 characters: [{ characterId, prominence, introduces, cardLine }] }],
   externalPrerequisites: [{ fragmentId, groveId, contingencyRevisionNo }],   // prerequisite members in OTHER groves,
                                                     // so devices can evaluate unlocks without that grove's pack installed
+  crossGroveLinks: [{ fragmentId, otherFragmentId, otherGroveId, direction: 'requires'|'unlocks',
+                     tip: { lat, lng } }],      // ADR 0006 §3: each grove draws its end of a cross-grove link as an arrow to tip
   revisions: [{ id, fragmentId, revisionNo, changeKind, contingencyRevisionNo,   // current revision only (ADR 0004 §16)
                 changeTeaser?,     // from the revision numbered contingencyRevisionNo (the latest contingency), even if
                                    // corrections followed it; omitted when contingencyRevisionNo = 1
@@ -597,7 +599,7 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
 `public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack` (`schema: 2`): `timezone`, `sunReference: {lat, lng}`, `ambienceProfiles` with their layers (each with `timeWindow`) and asset shas, `landcover: {gridSha, h3Resolution, classes} | null`, region-wide `ambienceZones` and `musicZones`/cues not tied to a grove, `uiCues`, `assets`. Profile and layer names are plain strings (staff-facing), as in SQL.
 
 ### 12.3 Index
-`get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox, opening?}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists. For grove rows, `opening: {lat, lng}` is the published opening root's point (M3e), so the phone can find the nearest grove for Embark without downloading every grove pack. **Storage:** `pack_builds` carries nullable `opening_lat` / `opening_lng` (both null or both set). `build-pack` writes them from the opening root after assembling a grove pack; the index reads them. Region rows and builds without an opening omit the field.
+`get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox, opening?}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists. For grove rows, `opening: {lat, lng}` is the published opening root's point (M3e), so the phone can find the nearest grove for Embark without downloading every grove pack. **Storage:** `pack_builds` carries nullable `opening_lat` / `opening_lng` (both null or both set). `build-pack` writes them from the opening root after assembling a grove pack; the index reads them. Region rows and builds without an opening omit the field. **Grove bbox:** read from `pack_builds.bbox`, which `build-pack` writes from the derived boundary, so the index and the pack always agree. A grove build without a bbox isn't listed.
 
 ### 12.4 Rules
 - Packs **never** include: marker codes (only their hashes), Story Notes (thread titles and notes, character notes, Indigeny notes), Journal entries, internal change notes, or anything from an unpublished release.
@@ -616,7 +618,7 @@ Signed URL TTL is **1 hour**. Staged asset shas get signed URLs; already-public 
 PreviewManifest {
   schema: "preview/1",
   releaseId, generatedAt, expiresAt,
-  groves: GrovePack[],   // schema 3
+  groves: GrovePack[],   // schema 4
   assets: [{ sha, ext, url, expiresAt }]
 }
 ```
