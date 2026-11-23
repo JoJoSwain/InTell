@@ -72,7 +72,7 @@ Run on every location fix and at least every 5 s, as a pure function in `package
 1. Find the ambience zones containing the user. For each, `weight = clamp(distanceToEdge / edge_fade_m, 0, 1)`.
 2. Sort by `priority` descending. Take the top zone. If its weight is below 1, blend it with the next zone, or with the **landcover fallback** for the remaining weight.
 3. **Landcover fallback:** look up the user's H3 cell (resolution 9, ~0.1 km²) in the region's grid, then `class → profile`. Smooth it by taking the majority class of the cell and its 6 neighbors, so the sound doesn't flicker at boundaries.
-4. Output: `[{profileSlug, weight}]`, at most 2 entries, weights summing to 1. Profile changes crossfade over 4–8 s.
+4. Output: `[{profileSlug, weight}]`, at most 2 entries, weights summing to 1. Entries with the same profile merge into one (weights summed). Landcover majority ignores cells with no data; a tie goes to the center cell's class when it is one of the tied classes. Profile changes crossfade over 4–8 s.
 
 ### 3.2 Context filters (every layer, every evaluation)
 - **Time window** (shared by all three layers, `packages/shared/src/time/timeWindow.ts`): `day` from sunrise to sunset, `night` otherwise, computed with `suncalc` at the **region's** `sunReference` in the region's timezone. Skip layers whose `timeWindow` isn't the current window. Where the sun doesn't rise or set (polar regions), fall back to `day` 06:00–18:00 local time.
@@ -83,7 +83,7 @@ Run on every location fix and at least every 5 s, as a pure function in `package
 ### 3.3 Beds
 - Each eligible bed layer in the active profile picks one asset (weighted random, avoiding the last `no_repeat_last`) and loops it.
 - When its loop ends, it may switch to another asset with an equal-power crossfade over `crossfade_ms`.
-- Gain is randomized within the min/max range at each switch, multiplied by the profile weight.
+- Gain is randomized within the min/max range at each switch, then scaled by the profile weight as linear gain: `gainDb + 20·log10(weight)` (silent at weight 0).
 
 ### 3.4 One-shots
 For each eligible oneshot layer:
@@ -98,6 +98,7 @@ on tick ≥ nextAt and concurrent(layer) < max_concurrent:
 ```
 - A seeded RNG (seed = session id) makes runs reproducible in tests and in the admin simulator.
 - **Global density cap:** no more than 1 one-shot per 4 s across all layers while narration is playing. A 1.5 s silence guard after narration starts and before it ends keeps the first and last words clear.
+- A one-shot blocked by `max_concurrent`, the density cap or the silence guard is dropped, and the next one is drawn from that tick. Random draws happen only when a shot is scheduled, so results don't depend on the tick rate.
 
 ---
 
@@ -108,6 +109,8 @@ on tick ≥ nextAt and concurrent(layer) < max_concurrent:
 type StoryState = {
   groveId?: string;                 // grove containing the user, if any
   playingFragmentId?: string;       // narration currently playing
+  playingTier?: 'root'|'branch'|'leaf';   // tier of the playing fragment (used by `tiers` while narration plays)
+  playingThreadIds: string[];       // threads of the playing fragment (used by `threadIds`)
   lastFragmentId?: string;          // most recently completed
   lastTier?: 'root'|'branch'|'leaf';
   lastThreadIds: string[];
@@ -126,15 +129,15 @@ const MusicCondition = z.object({
   heardAny:    z.array(z.string().uuid()).optional(),
   notHeard:    z.array(z.string().uuid()).optional(),
   narrationPlaying: z.boolean().optional(),
-}).strict();   // every present key must match (AND); empty object = always
+}).strict();   // every present key must match (AND); empty object = always; an empty array behaves like an absent key
 ```
 
 ### 4.3 Selection (pure function `packages/shared/audio/music.ts`)
 1. Candidate cues: those whose `timeWindow` is the current window, whose zone polygon contains the user (or grove boundary when `useGroveBoundary`), and whose `conditions` match `StoryState`. (Day/Night is a required field on the cue, not a condition.)
 2. Pick the highest `priority`. **Hysteresis:** keep the current cue while it is still a candidate and has played for less than `min_dwell_s`, or if its priority equals the best.
 3. When the cue changes, crossfade over `crossfade_ms` (equal-power). The new cue starts at bar 1 of its loop. (Musical bar-synced transitions are out of scope for v1.)
-4. **Stems:** all stems start together, sample-aligned. Each stem's gain = `gainDb` plus the first matching rule in `state_gains`, re-evaluated on every state change with a 2 s ramp. Example: a strings layer fades up only while a Branch plays.
-5. **Edges:** music gain multiplies by `clamp(distanceToEdge / edge_fade_m, 0, 1)`. Outside every zone and grove, music fades to silence. Silence is a valid state.
+4. **Stems:** all stems start together, sample-aligned. Each stem plays at its `gainDb` (its resting level) unless a rule in `state_gains` matches; the first matching rule's `gain_db` then replaces the resting level. Re-evaluated on every state change with a 2 s ramp. Example: a strings layer fades up only while a Branch plays.
+5. **Edges:** music gain multiplies (linear gain) by `clamp(distanceToEdge / edge_fade_m, 0, 1)`. A cue on its grove boundary, or on a grove-pack zone without its own fade, uses 60 m. Outside every zone and grove, music fades to silence. Silence is a valid state.
 
 ### 4.4 Example
 ```
@@ -153,6 +156,7 @@ Cue "Salt Marsh – After the Flood" grove=Salt Marsh, night, priority 300, cond
   - Fade the music and surroundings buses to -inf over 4 s.
   - At silence + 1 s, play the `hush` UI voice cue ("Listen.") at -12 dB, recorded by the grove narrator.
   - Hold 60–90 s (random), then fade back in over 6 s.
+  - The interval and the hold are drawn once (when the quiet period and the hold begin) and kept in the session's Hush state, so the schedule doesn't depend on the tick rate.
   - If a fragment triggers during a Hush, end the Hush at once with a 1 s fade.
 - **Afterglow:** after a fragment ends, hold the ducked levels for 8 s before releasing. This leaves a beat of quiet for the story to land.
 

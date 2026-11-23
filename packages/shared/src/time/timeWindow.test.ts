@@ -1,3 +1,4 @@
+import { getTimes } from "suncalc";
 import { describe, expect, it } from "vitest";
 import {
   currentTimeWindow,
@@ -57,6 +58,72 @@ describe("currentTimeWindow", () => {
     ).toBe("day");
     expect(
       currentTimeWindow(new Date("2026-06-21T00:00:00.000Z"), northPole, "UTC"),
+    ).toBe("night");
+  });
+
+  it("is day at local noon and night in the evening in winter at mid-latitudes", () => {
+    // 2026-12-21 12:00 MST and 20:00 MST
+    expect(
+      currentTimeWindow(new Date("2026-12-21T19:00:00.000Z"), WASATCH, TZ),
+    ).toBe("day");
+    expect(
+      currentTimeWindow(new Date("2026-12-22T03:00:00.000Z"), WASATCH, TZ),
+    ).toBe("night");
+  });
+
+  it("treats sunrise as day and sunset as night", () => {
+    const noon = new Date("2026-06-15T18:00:00.000Z");
+    const { sunrise, sunset } = getTimes(noon, WASATCH.lat, WASATCH.lng);
+    if (!sunrise || !sunset) throw new Error("suncalc returned no sunrise or sunset");
+    expect(currentTimeWindow(sunrise, WASATCH, TZ)).toBe("day");
+    expect(
+      currentTimeWindow(new Date(sunrise.getTime() - 1), WASATCH, TZ),
+    ).toBe("night");
+    expect(currentTimeWindow(sunset, WASATCH, TZ)).toBe("night");
+    expect(
+      currentTimeWindow(new Date(sunset.getTime() - 1), WASATCH, TZ),
+    ).toBe("day");
+  });
+
+  it("is day at local noon and night at local midnight on the equator", () => {
+    const equator = { lat: 0, lng: 0 };
+    expect(
+      currentTimeWindow(new Date("2026-06-15T12:00:00.000Z"), equator, "UTC"),
+    ).toBe("day");
+    expect(
+      currentTimeWindow(new Date("2026-06-15T00:00:00.000Z"), equator, "UTC"),
+    ).toBe("night");
+  });
+
+  it("is day at local noon in southern winter and summer", () => {
+    const sydney = { lat: -33.87, lng: 151.21 };
+    const tz = "Australia/Sydney";
+    // 2026-06-21 12:00 AEST (UTC+10) and 2026-12-21 12:00 AEDT (UTC+11)
+    expect(
+      currentTimeWindow(new Date("2026-06-21T02:00:00.000Z"), sydney, tz),
+    ).toBe("day");
+    expect(
+      currentTimeWindow(new Date("2026-06-20T14:00:00.000Z"), sydney, tz),
+    ).toBe("night");
+    expect(
+      currentTimeWindow(new Date("2026-12-21T01:00:00.000Z"), sydney, tz),
+    ).toBe("day");
+  });
+
+  it("uses local 06:00–18:00 in a non-UTC zone when the sun does not set", () => {
+    const northPole = { lat: 89.9, lng: 0 };
+    // 2026-06-21 local times in America/Denver (MDT, UTC-6)
+    expect(
+      currentTimeWindow(new Date("2026-06-21T11:59:00.000Z"), northPole, TZ),
+    ).toBe("night");
+    expect(
+      currentTimeWindow(new Date("2026-06-21T12:00:00.000Z"), northPole, TZ),
+    ).toBe("day");
+    expect(
+      currentTimeWindow(new Date("2026-06-21T23:59:00.000Z"), northPole, TZ),
+    ).toBe("day");
+    expect(
+      currentTimeWindow(new Date("2026-06-22T00:00:00.000Z"), northPole, TZ),
     ).toBe("night");
   });
 });
