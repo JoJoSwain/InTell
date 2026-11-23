@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
@@ -9,7 +9,7 @@ import { listCompletions, listPacks, listUnlocks } from "../db/repos";
 import { dataLayer } from "../runtime/dataLayer";
 import { pointInGrove } from "./groves";
 import { HomeMap, fallbackCamera } from "./HomeMap";
-import { modelsFromPacks, type HomeModel } from "./homeModel";
+import { modelsFromPacks, storyTimeWindow, type HomeModel } from "./homeModel";
 import { useMapTheme } from "../theme/useMapTheme";
 import { brandFont } from "../ui/fonts";
 import { useReduceMotion } from "../ui/reduceMotion";
@@ -20,6 +20,7 @@ const EMPTY: HomeModel = {
   groves: [],
   markers: [],
   links: [],
+  crossLinks: [],
   sunReference: null,
   timeZone: null,
 };
@@ -39,18 +40,37 @@ export function HomeScreen() {
   const [away, setAway] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetGroveId, setSheetGroveId] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [focused, setFocused] = useState(true);
   const mapRef = useRef<MapView | null>(null);
   const placed = useRef(false);
 
-  const load = useCallback((timeWindow: "day" | "night") => {
+  const load = useCallback(() => {
     let alive = true;
     void dataLayer()
       .then(async ({ db }) => {
+        const packs = await listPacks(db);
+        let sunReference: HomeModel["sunReference"] = null;
+        let timeZone: string | null = null;
+        for (const row of packs) {
+          if (row.scope !== "region") continue;
+          try {
+            const manifest = JSON.parse(row.manifest_json) as {
+              sunReference?: { lat: number; lng: number };
+              timezone?: string;
+            };
+            sunReference ??= manifest.sunReference ?? null;
+            timeZone ??= manifest.timezone ?? null;
+          } catch {
+            continue;
+          }
+        }
+        const window = storyTimeWindow(new Date(), sunReference, timeZone);
         const next = modelsFromPacks(
-          await listPacks(db),
+          packs,
           await listCompletions(db),
           await listUnlocks(db),
-          timeWindow,
+          window,
         );
         if (alive) setModel(next);
       })
@@ -60,8 +80,17 @@ export function HomeScreen() {
     };
   }, []);
 
-  useEffect(() => load(theme), [load, theme]);
-  useFocusEffect(useCallback(() => load(theme), [load, theme]));
+  useEffect(() => load(), [load]);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      const cancel = load();
+      return () => {
+        setFocused(false);
+        cancel();
+      };
+    }, [load]),
+  );
 
   useEffect(() => {
     void Location.getForegroundPermissionsAsync().then((result) => {
@@ -72,9 +101,10 @@ export function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || placed.current || permission === "unknown" || permission === "prompt") return;
+    if (!mapReady || placed.current || permission === "unknown" || permission === "prompt") return;
     if (permission !== "granted" && model.groves.length === 0 && model.sunReference === null) return;
+    const map = mapRef.current;
+    if (!map) return;
     placed.current = true;
     void (async () => {
       if (permission === "granted") {
@@ -90,15 +120,57 @@ export function HomeScreen() {
         return;
       }
       if (model.sunReference) {
-        map.animateToRegion({
-          latitude: model.sunReference.lat,
-          longitude: model.sunReference.lng,
-          latitudeDelta: 0.2,
-          longitudeDelta: 0.2,
-        }, 0);
+        map.animateToRegion(
+          {
+            latitude: model.sunReference.lat,
+            longitude: model.sunReference.lng,
+            latitudeDelta: 0.2,
+            longitudeDelta: 0.2,
+          },
+          0,
+        );
       }
     })();
-  }, [model, permission]);
+  }, [mapReady, model, permission]);
+
+  useEffect(() => {
+    if (permission !== "granted" || !focused) return;
+    let subscription: Location.LocationSubscription | null = null;
+    let alive = true;
+    void Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Balanced,
+        distanceInterval: 5,
+        timeInterval: 1000,
+      },
+      (position) => {
+        if (!alive || AppState.currentState !== "active") return;
+        setUser({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+    ).then((value) => {
+      subscription = value;
+    });
+    const appSub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+    });
+    return () => {
+      alive = false;
+      subscription?.remove();
+      appSub.remove();
+    };
+  }, [focused, permission]);
+
+  const onSelectMarker = useCallback((id: string) => {
+    setSelectedId(id);
+    setSheetGroveId(null);
+  }, []);
+
+  const onUserLocation = useCallback((point: { latitude: number; longitude: number }) => {
+    setUser(point);
+  }, []);
 
   const palette = tokens[theme];
   const selected = model.markers.find((marker) => marker.id === selectedId) ?? null;
@@ -107,7 +179,7 @@ export function HomeScreen() {
     user === null
       ? null
       : (model.groves.find((grove) =>
-          pointInGrove({ lat: user.latitude, lng: user.longitude }, grove.pieces),
+          pointInGrove({ lat: user.latitude, lng: user.longitude }, grove.boundary),
         ) ?? null);
 
   async function allowLocation(): Promise<void> {
@@ -123,22 +195,22 @@ export function HomeScreen() {
         groves={model.groves}
         markers={model.markers}
         links={model.links}
+        crossLinks={model.crossLinks}
         showUser={permission === "granted"}
         reduceMotion={reduceMotion}
         initialTarget={fallbackCamera}
         user={user}
         onReady={(map) => {
           mapRef.current = map;
+          setMapReady(true);
         }}
-        onSelectMarker={(id) => {
-          setSelectedId(id);
-          setSheetGroveId(null);
-        }}
+        onSelectMarker={onSelectMarker}
         onPressMap={() => {
           setSelectedId(null);
           setSheetGroveId(null);
         }}
         onUserMoved={setAway}
+        onUserLocation={onUserLocation}
       />
       {__DEV__ ? (
         <Text style={[styles.devMark, { top: insets.top + 16, color: palette.textMuted }]} accessibilityElementsHidden>
@@ -245,9 +317,7 @@ function Pill({
       onPress={() => router.push(href)}
       style={[
         embark ? styles.embark : styles.pill,
-        embark
-          ? { backgroundColor: palette.primary }
-          : chrome(theme),
+        embark ? { backgroundColor: palette.primary } : chrome(theme),
       ]}
     >
       <Text
@@ -334,7 +404,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pill: { flex: 1, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
-  embark: { flex: 1.15, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", marginBottom: 8, paddingHorizontal: 16 },
+  embark: {
+    flex: 1.15,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
   pillText: { fontFamily: brandFont, fontSize: 16 },
   embarkText: { fontFamily: brandFont, fontSize: 19 },
 });

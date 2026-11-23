@@ -2,12 +2,13 @@ import { getTimes } from "suncalc";
 import { resolveMapTheme } from "../theme/appearance";
 import { piecesFromBoundary, pointInGrove, closeRing } from "./groves";
 import { buildDemo } from "./fixtures";
-import { modelsFromPacks } from "./homeModel";
+import { modelsFromPacks, storyTimeWindow } from "./homeModel";
 import { MARKER_CANVAS_PT, canvasPx, markerImageName, pulseFrame, RING } from "./markerArt";
-import { legacyPulse, markerLocked } from "./markers";
+import { accessibilityLabel, markerLocked, markerPulse } from "./markers";
 import { linkCoordinates, metersPerPoint, webStrength, webWeight } from "./web";
 import dayStyle from "./styles/day.json";
 import nightStyle from "./styles/night.json";
+import { strings } from "../ui/strings";
 
 const sun = { lat: 40.76, lng: -111.89 };
 const noon = new Date("2026-06-21T18:00:00Z");
@@ -55,21 +56,84 @@ describe("map theme", () => {
   });
 });
 
-describe("marker adapter", () => {
-  const shown = { opacity: 1 as const, hidden: false };
+describe("story time window", () => {
+  it("keeps day-window marker states when the phone theme is night", () => {
+    expect(storyTimeWindow(noon, sun, "America/Denver")).toBe("day");
+    expect(resolveMapTheme({
+      preference: "phone",
+      phoneScheme: "dark",
+      hasRegion: true,
+      at: noon,
+      sunReference: sun,
+      timeZone: "America/Denver",
+    })).toBe("night");
 
-  it("maps the boolean pulse onto the stand-in kinds", () => {
-    expect(legacyPulse({ ...shown, playableNow: true, pulse: false })).toBe("tier");
-    expect(legacyPulse({ ...shown, playableNow: true, pulse: true })).toBe("changed");
-    expect(legacyPulse({ ...shown, playableNow: false, pulse: false })).toBe("none");
-    expect(legacyPulse({ opacity: 0.35, playableNow: false, pulse: false, hidden: false })).toBe("none");
-    expect(markerLocked({ opacity: 0.35, playableNow: false, pulse: false, hidden: false })).toBe(true);
-    expect(legacyPulse({ opacity: 0, playableNow: false, pulse: false, hidden: true })).toBe("none");
+    const demo = buildDemo();
+    const dayModel = modelsFromPacks(
+      [
+        {
+          scope: "grove",
+          id: demo.grove.groveId,
+          version: 1,
+          manifest_json: JSON.stringify(demo.grove),
+          installed_at: "2026-11-23T00:00:00Z",
+        },
+        {
+          scope: "region",
+          id: demo.region.regionId,
+          version: 1,
+          manifest_json: JSON.stringify(demo.region),
+          installed_at: "2026-11-23T00:00:00Z",
+        },
+      ],
+      demo.completions,
+      [],
+      storyTimeWindow(noon, sun, "America/Denver"),
+    );
+    const nightThemeWindow = modelsFromPacks(
+      [
+        {
+          scope: "grove",
+          id: demo.grove.groveId,
+          version: 1,
+          manifest_json: JSON.stringify(demo.grove),
+          installed_at: "2026-11-23T00:00:00Z",
+        },
+      ],
+      demo.completions,
+      [],
+      "night",
+    );
+    const dayR1 = dayModel.markers.find((marker) => marker.card === "R1 teaser");
+    const wrongR1 = nightThemeWindow.markers.find((marker) => marker.card === "R1 teaser");
+    expect(dayR1?.pulse).toBe("tier");
+    expect(dayR1?.locked).toBe(false);
+    // Night window still has versions, so playable markers stay playable; the
+    // regression this guards is load(theme) when Follow-my-phone is dark by day.
+    expect(wrongR1?.pulse).toBe("tier");
+    expect(dayModel.markers.map((marker) => marker.id).sort()).toEqual(
+      nightThemeWindow.markers.map((marker) => marker.id).sort(),
+    );
+  });
+});
+
+describe("marker pulse", () => {
+  it("reads the A2 pulse kinds", () => {
+    expect(markerPulse({ opacity: 1, playableNow: true, pulse: "tier", hidden: false })).toBe("tier");
+    expect(markerPulse({ opacity: 1, playableNow: true, pulse: "changed", hidden: false })).toBe("changed");
+    expect(markerPulse({ opacity: 1, playableNow: false, pulse: "none", hidden: false })).toBe("none");
+    expect(markerLocked({ opacity: 0.35, playableNow: false, pulse: "none", hidden: false })).toBe(true);
   });
 
   it("keeps a still ring when Reduce Motion is on", () => {
     expect(markerImageName("root", "day", "tier", 3, true)).toBe("root-day-ring");
     expect(markerImageName("leaf", "night", "changed", 4, false)).toBe("leaf-night-changed-4");
+  });
+
+  it("builds a tier-and-state accessibility label", () => {
+    expect(accessibilityLabel("root", "tier", false, "Begin near the refuge entrance.")).toBe(
+      `${strings.tierRoot}, ${strings.stateUnexplored}. Begin near the refuge entrance.`,
+    );
   });
 });
 
@@ -117,11 +181,19 @@ describe("grove chip", () => {
       [[[-111.88, 40.7], [-111.87, 40.7], [-111.87, 40.71], [-111.88, 40.71], [-111.88, 40.7]]],
     ],
   });
+  const boundary = {
+    type: "MultiPolygon" as const,
+    coordinates: [
+      [[[-111.9, 40.7], [-111.89, 40.7], [-111.89, 40.71], [-111.9, 40.71], [-111.9, 40.7]]],
+      [[[-111.88, 40.7], [-111.87, 40.7], [-111.87, 40.71], [-111.88, 40.71], [-111.88, 40.7]]],
+    ],
+  };
 
   it("includes each island and excludes the gap", () => {
-    expect(pointInGrove({ lat: 40.705, lng: -111.895 }, pieces)).toBe(true);
-    expect(pointInGrove({ lat: 40.705, lng: -111.885 }, pieces)).toBe(false);
-    expect(pointInGrove({ lat: 40.705, lng: -111.875 }, pieces)).toBe(true);
+    expect(pieces).toHaveLength(2);
+    expect(pointInGrove({ lat: 40.705, lng: -111.895 }, boundary)).toBe(true);
+    expect(pointInGrove({ lat: 40.705, lng: -111.885 }, boundary)).toBe(false);
+    expect(pointInGrove({ lat: 40.705, lng: -111.875 }, boundary)).toBe(true);
     const ring = closeRing([{ latitude: 1, longitude: 2 }, { latitude: 3, longitude: 4 }]);
     expect(ring[ring.length - 1]).toEqual(ring[0]);
   });
@@ -175,12 +247,16 @@ describe("map styles", () => {
     expect(nightStyle.find((rule) => rule.featureType === "poi.park")?.stylers).toEqual(
       expect.arrayContaining([{ color: "#224D69" }]),
     );
+    expect(dayStyle.some((rule) => rule.elementType === "labels.text.stroke")).toBe(true);
+    expect(nightStyle.some((rule) => rule.elementType === "labels.text.stroke")).toBe(true);
   });
 });
 
 describe("demo grove", () => {
   it("matches the marker states used on the dev screen", () => {
     const demo = buildDemo();
+    expect(demo.grove.schema).toBe(4);
+    expect(demo.grove.grove.boundary.type).toBe("MultiPolygon");
     const model = modelsFromPacks(
       [
         {
@@ -206,5 +282,6 @@ describe("demo grove", () => {
     expect(byCard.get("B4 teaser")).toMatchObject({ pulse: "none", locked: true });
     expect(byCard.get("L3 teaser")).toMatchObject({ pulse: "none", locked: true });
     expect(model.links.some((link) => link.weight === 1.5)).toBe(true);
+    expect(byCard.get("R1 teaser")?.label).toContain(strings.stateUnexplored);
   });
 });

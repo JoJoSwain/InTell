@@ -1,4 +1,10 @@
-import { pointInPolygon, type LatLng } from "@intell/shared";
+import {
+  pointInPolygon,
+  toMultiPolygon,
+  type GeoJsonArea,
+  type GeoJsonMultiPolygon,
+  type LatLng,
+} from "@intell/shared";
 
 export type MapPoint = { latitude: number; longitude: number };
 
@@ -9,21 +15,8 @@ export type GrovePiece = {
 
 type GeoRing = number[][];
 
-/**
- * Schema 3 stores one Polygon. Treat it as a one-piece MultiPolygon.
- * Step 8 deletes this wrap when packs publish a real MultiPolygon.
- */
-export function piecesFromBoundary(boundary: {
-  type: string;
-  coordinates: unknown;
-}): GrovePiece[] {
-  if (boundary.type === "Polygon") {
-    return [ringsToPiece(boundary.coordinates as GeoRing[])];
-  }
-  if (boundary.type === "MultiPolygon") {
-    return (boundary.coordinates as GeoRing[][]).map(ringsToPiece);
-  }
-  return [];
+export function piecesFromBoundary(boundary: GeoJsonArea): GrovePiece[] {
+  return toMultiPolygon(boundary).coordinates.map(ringsToPiece);
 }
 
 function ringsToPiece(rings: GeoRing[]): GrovePiece {
@@ -54,17 +47,8 @@ export function closeRing(points: readonly MapPoint[]): MapPoint[] {
   return [...points, first];
 }
 
-export function pointInGrove(point: LatLng, pieces: readonly GrovePiece[]): boolean {
-  return pieces.some((piece) =>
-    pointInPolygon(point, {
-      type: "Polygon",
-      coordinates: [toGeo(piece.outer), ...piece.holes.map(toGeo)],
-    }),
-  );
-}
-
-function toGeo(points: readonly MapPoint[]): number[][] {
-  return points.map((point) => [point.longitude, point.latitude]);
+export function pointInGrove(point: LatLng, boundary: GeoJsonArea): boolean {
+  return pointInPolygon(point, boundary);
 }
 
 export function ringCentroid(points: readonly MapPoint[]): MapPoint | null {
@@ -76,4 +60,23 @@ export function ringCentroid(points: readonly MapPoint[]): MapPoint | null {
     lng += point.longitude;
   }
   return { latitude: lat / points.length, longitude: lng / points.length };
+}
+
+/**
+ * Band between a grown outer MultiPolygon and the grove: outer ring with the
+ * grove as holes. Used for the four halo widths at a settled zoom.
+ */
+export function haloBandPieces(
+  base: GeoJsonMultiPolygon,
+  grown: GeoJsonMultiPolygon,
+): GrovePiece[] {
+  const baseHoles = base.coordinates.map((piece) => ringToPoints(piece[0] ?? []));
+  return grown.coordinates.map((piece, index) => {
+    const outer = ringToPoints(piece[0] ?? []);
+    const matched = base.coordinates[index];
+    const holes = matched
+      ? [ringToPoints(matched[0] ?? []), ...matched.slice(1).map((ring) => ringToPoints(ring))]
+      : baseHoles;
+    return { outer, holes };
+  });
 }

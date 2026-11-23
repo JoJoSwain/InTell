@@ -1,15 +1,13 @@
-import type { MarkerState } from "@intell/shared";
-
-/** Stand-in until A2 makes `pulse` the string "tier" | "changed" | "none". */
-export function legacyPulse(state: MarkerState): "tier" | "changed" | "none" {
-  if (state.hidden || state.opacity === 0 || state.opacity === 0.35) return "none";
-  if (state.pulse) return "changed";
-  if (state.playableNow) return "tier";
-  return "none";
-}
+import type { MarkerState, PulseKind } from "@intell/shared";
+import { strings } from "../ui/strings";
+import type { WebTier } from "./web";
 
 export function markerLocked(state: MarkerState): boolean {
   return !state.hidden && state.opacity === 0.35;
+}
+
+export function markerPulse(state: MarkerState): PulseKind {
+  return state.pulse;
 }
 
 export function isOnScreen(
@@ -20,4 +18,22 @@ export function isOnScreen(
     Math.abs(point.latitude - region.latitude) <= region.latitudeDelta / 2 &&
     Math.abs(point.longitude - region.longitude) <= region.longitudeDelta / 2
   );
+}
+
+export function accessibilityLabel(
+  tier: WebTier,
+  pulse: PulseKind,
+  locked: boolean,
+  card: string,
+): string {
+  const tierName =
+    tier === "root" ? strings.tierRoot : tier === "branch" ? strings.tierBranch : strings.tierLeaf;
+  const state = locked
+    ? strings.stateLocked
+    : pulse === "changed"
+      ? strings.stateChanged
+      : pulse === "tier"
+        ? strings.stateUnexplored
+        : strings.stateCompleted;
+  return `${tierName}, ${state}. ${card}`;
 }

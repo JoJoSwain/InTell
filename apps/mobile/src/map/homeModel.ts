@@ -1,15 +1,19 @@
 import {
   GrovePack,
   RegionPack,
+  currentTimeWindow,
   markerState,
   pickL10n,
+  storyWebLinks,
   type CompletionRow,
   type FragmentInput,
+  type GeoJsonMultiPolygon,
+  type PulseKind,
   type TimeWindow,
 } from "@intell/shared";
 import type { PackRow } from "../db/repos";
 import { piecesFromBoundary, ringCentroid, type GrovePiece, type MapPoint } from "./groves";
-import { legacyPulse, markerLocked } from "./markers";
+import { accessibilityLabel, markerLocked, markerPulse } from "./markers";
 import { strings } from "../ui/strings";
 import { webStrength, webWeight, type WebTier } from "./web";
 
@@ -17,8 +21,10 @@ export type HomeGrove = {
   id: string;
   name: string;
   premise: string;
+  boundary: GeoJsonMultiPolygon;
   pieces: GrovePiece[];
   centroid: MapPoint | null;
+  shapeFragments: { id: string; tier: WebTier; lat: number; lng: number }[];
 };
 
 export type HomeMarker = {
@@ -26,7 +32,7 @@ export type HomeMarker = {
   groveId: string;
   tier: WebTier;
   coordinate: MapPoint;
-  pulse: "tier" | "changed" | "none";
+  pulse: PulseKind;
   locked: boolean;
   card: string;
   label: string;
@@ -43,13 +49,31 @@ export type HomeLink = {
   weight: number;
 };
 
+export type HomeCrossLink = {
+  id: string;
+  groveId: string;
+  from: { lat: number; lng: number };
+  tip: { lat: number; lng: number };
+  strength: number;
+};
+
 export type HomeModel = {
   groves: HomeGrove[];
   markers: HomeMarker[];
   links: HomeLink[];
+  crossLinks: HomeCrossLink[];
   sunReference: { lat: number; lng: number } | null;
   timeZone: string | null;
 };
+
+export function storyTimeWindow(
+  at: Date,
+  sunReference: { lat: number; lng: number } | null,
+  timeZone: string | null,
+): TimeWindow {
+  if (!sunReference || !timeZone) return "day";
+  return currentTimeWindow(at, sunReference, timeZone);
+}
 
 export function modelsFromPacks(
   packs: readonly PackRow[],
@@ -75,6 +99,7 @@ export function modelsFromPacks(
   const groves: HomeGrove[] = [];
   const markers: HomeMarker[] = [];
   const links: HomeLink[] = [];
+  const crossLinks: HomeCrossLink[] = [];
   let sunReference: HomeModel["sunReference"] = null;
   let timeZone: string | null = null;
 
@@ -91,12 +116,22 @@ export function modelsFromPacks(
     if (!parsed.success) continue;
     const pack = parsed.data;
     const pieces = piecesFromBoundary(pack.grove.boundary);
+    const shapeFragments = pack.fragments
+      .filter((fragment) => !fragment.retired)
+      .map((fragment) => ({
+        id: fragment.id,
+        tier: fragment.tier,
+        lat: fragment.lat,
+        lng: fragment.lng,
+      }));
     groves.push({
       id: pack.groveId,
       name: pickL10n(pack.grove.name, "en") ?? "",
       premise: pickL10n(pack.grove.premise, "en") ?? "",
+      boundary: pack.grove.boundary,
       pieces,
       centroid: ringCentroid(pieces[0]?.outer ?? []),
+      shapeFragments,
     });
 
     const inputs = pack.fragments.map((fragment) => toInput(pack.groveId, fragment, pack.revisions));
@@ -114,44 +149,53 @@ export function modelsFromPacks(
       });
       if (state.hidden) continue;
       const revision = currentRevision(fragment.id, pack.revisions);
-      const card = cardText(fragment, revision?.changeTeaser, state);
+      const pulse = markerPulse(state);
+      const locked = markerLocked(state);
+      const card = cardText(fragment, revision?.changeTeaser, pulse);
       markers.push({
         id: fragment.id,
         groveId: pack.groveId,
         tier: fragment.tier,
         coordinate: { latitude: fragment.lat, longitude: fragment.lng },
-        pulse: legacyPulse(state),
-        locked: markerLocked(state),
+        pulse,
+        locked,
         card,
-        label: card,
+        label: accessibilityLabel(fragment.tier, pulse, locked, card),
       });
     }
 
     const byId = new Map(pack.fragments.map((fragment) => [fragment.id, fragment]));
-    for (const fragment of pack.fragments) {
-      const target = markers.find((marker) => marker.id === fragment.id);
-      if (!target) continue;
-      for (const group of fragment.requires) {
-        for (const memberId of group) {
-          const source = byId.get(memberId);
-          const sourceMarker = markers.find((marker) => marker.id === memberId);
-          if (!source || !sourceMarker) continue;
-          links.push({
-            id: `${memberId}-${fragment.id}`,
-            groveId: pack.groveId,
-            a: { lat: source.lat, lng: source.lng },
-            b: { lat: fragment.lat, lng: fragment.lng },
-            tierA: source.tier,
-            tierB: fragment.tier,
-            strength: webStrength(target.locked),
-            weight: webWeight(source.tier, fragment.tier),
-          });
-        }
-      }
+    for (const link of storyWebLinks(pack.fragments)) {
+      const source = byId.get(link.fromId);
+      const target = byId.get(link.toId);
+      const targetMarker = markers.find((marker) => marker.id === link.toId);
+      if (!source || !target || !targetMarker) continue;
+      links.push({
+        id: `${link.fromId}-${link.toId}`,
+        groveId: pack.groveId,
+        a: { lat: source.lat, lng: source.lng },
+        b: { lat: target.lat, lng: target.lng },
+        tierA: source.tier,
+        tierB: target.tier,
+        strength: webStrength(targetMarker.locked),
+        weight: webWeight(source.tier, target.tier),
+      });
+    }
+
+    for (const link of pack.crossGroveLinks) {
+      const here = markers.find((marker) => marker.id === link.fragmentId);
+      if (!here) continue;
+      crossLinks.push({
+        id: `${link.fragmentId}-${link.otherFragmentId}-${link.direction}`,
+        groveId: pack.groveId,
+        from: { lat: here.coordinate.latitude, lng: here.coordinate.longitude },
+        tip: link.tip,
+        strength: webStrength(here.locked),
+      });
     }
   }
 
-  return { groves, markers, links, sunReference, timeZone };
+  return { groves, markers, links, crossLinks, sunReference, timeZone };
 }
 
 function toInput(
@@ -188,11 +232,14 @@ function currentRevision(fragmentId: string, revisions: GrovePack["revisions"]) 
 function cardText(
   fragment: GrovePack["fragments"][number],
   changeTeaser: GrovePack["revisions"][number]["changeTeaser"] | undefined,
-  state: { pulse: boolean; opacity: number },
+  pulse: PulseKind,
 ): string {
-  if (fragment.visibility === "physical") return strings.scanHere;
-  if (state.pulse && state.opacity === 1 && changeTeaser) {
-    return pickL10n(changeTeaser, "en") ?? pickL10n(fragment.teaser, "en") ?? "";
+  const teaser = pickL10n(fragment.teaser, "en") ?? "";
+  if (fragment.visibility === "physical") {
+    return teaser ? `${teaser} ${strings.scanHere}` : strings.scanHere;
   }
-  return pickL10n(fragment.teaser, "en") ?? "";
+  if (pulse === "changed" && changeTeaser) {
+    return pickL10n(changeTeaser, "en") ?? teaser;
+  }
+  return teaser;
 }

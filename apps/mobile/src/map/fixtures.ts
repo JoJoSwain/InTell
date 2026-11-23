@@ -1,4 +1,10 @@
-import { GrovePack, RegionPack, type GrovePack as GrovePackType, type RegionPack as RegionPackType } from "@intell/shared";
+import {
+  GrovePack,
+  RegionPack,
+  groveShape,
+  type GrovePack as GrovePackType,
+  type RegionPack as RegionPackType,
+} from "@intell/shared";
 
 const SHA = "ab".repeat(32);
 
@@ -43,19 +49,6 @@ const DEMO: DemoFragment[] = [
   { id: fixtureId(18), tier: "leaf", name: "L3", requires: [[fixtureId(13)]], lat: 40.7614, lng: -111.8912, currentRevision: 1 },
 ];
 
-const BOUNDARY = {
-  type: "Polygon" as const,
-  coordinates: [
-    [
-      [-111.893, 40.7588],
-      [-111.8894, 40.7588],
-      [-111.8894, 40.762],
-      [-111.893, 40.762],
-      [-111.893, 40.7588],
-    ],
-  ],
-};
-
 export type FixtureCompletion = {
   fragment_id: string;
   revision_no: number;
@@ -71,15 +64,30 @@ export function buildDemo(): {
   region: RegionPackType;
   completions: FixtureCompletion[];
 } {
+  const shapeFragments = DEMO.map((fragment) => ({
+    id: fragment.id,
+    tier: fragment.tier,
+    lat: fragment.lat,
+    lng: fragment.lng,
+  }));
+  const boundary = groveShape(shapeFragments);
+  if (!boundary) throw new Error("demo grove shape failed");
+
   const revisions = DEMO.flatMap((fragment) => {
     const rows = [];
     for (let revisionNo = 1; revisionNo <= fragment.currentRevision; revisionNo += 1) {
-      rows.push(revision(fragment.id, revisionNo, revisionNo === fragment.currentRevision ? fragment.changeTeaser : undefined));
+      rows.push(
+        revision(
+          fragment.id,
+          revisionNo,
+          revisionNo === fragment.currentRevision ? fragment.changeTeaser : undefined,
+        ),
+      );
     }
     return rows;
   });
   const grove = GrovePack.parse({
-    schema: 3,
+    schema: 4,
     groveId: GROVE_ID,
     regionId: REGION_ID,
     packVersion: 1,
@@ -88,7 +96,7 @@ export function buildDemo(): {
       id: GROVE_ID,
       name: { en: "Demo Grove" },
       premise: { en: "A small grove for checking the map." },
-      boundary: BOUNDARY,
+      boundary,
       allowsSpeakerWildlifeSounds: false,
       openingFragmentId: fixtureId(10),
       journeys: {},
@@ -116,6 +124,7 @@ export function buildDemo(): {
     music: { cues: [] },
     ambienceZones: [],
     gatherings: [],
+    crossGroveLinks: [],
     assets: [{ sha: SHA, ext: "m4a", bytes: 1, kind: "narration" }],
   });
   const region = regionPack(REGION_ID, 40.76, -111.89);
@@ -152,8 +161,17 @@ export function buildStress(): { grove: GrovePackType; region: RegionPackType } 
     });
     revisions.push(revision(id, 1));
   }
+  const boundary = groveShape(
+    fragments.map((fragment) => ({
+      id: fragment.id,
+      tier: fragment.tier,
+      lat: fragment.lat,
+      lng: fragment.lng,
+    })),
+  );
+  if (!boundary) throw new Error("stress grove shape failed");
   const grove = GrovePack.parse({
-    schema: 3,
+    schema: 4,
     groveId: STRESS_GROVE_ID,
     regionId: STRESS_REGION_ID,
     packVersion: 1,
@@ -162,18 +180,7 @@ export function buildStress(): { grove: GrovePackType; region: RegionPackType } 
       id: STRESS_GROVE_ID,
       name: { en: "Stress Grove" },
       premise: { en: "Three hundred markers for a pan check." },
-      boundary: {
-        type: "Polygon",
-        coordinates: [
-          [
-            [-111.952, 40.798],
-            [-111.94, 40.798],
-            [-111.94, 40.808],
-            [-111.952, 40.808],
-            [-111.952, 40.798],
-          ],
-        ],
-      },
+      boundary,
       allowsSpeakerWildlifeSounds: false,
       openingFragmentId: fixtureId(1000),
       journeys: {},
@@ -186,6 +193,7 @@ export function buildStress(): { grove: GrovePackType; region: RegionPackType } 
     music: { cues: [] },
     ambienceZones: [],
     gatherings: [],
+    crossGroveLinks: [],
     assets: [{ sha: SHA, ext: "m4a", bytes: 1, kind: "narration" }],
   });
   return { grove, region: regionPack(STRESS_REGION_ID, 40.8, -111.95) };

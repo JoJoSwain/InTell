@@ -9,6 +9,7 @@
   { "featureType": "landscape.man_made", "elementType": "geometry.stroke", "stylers": [{ "color": "#BCC7CF" }] },
   { "featureType": "landscape.man_made", "elementType": "geometry.fill", "stylers": [{ "color": "#1E4560" }] },
   { "elementType": "labels.text.fill", "stylers": [{ "color": "#9AABB7" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#1E4560" }] },
   { "featureType": "poi", "elementType": "labels", "stylers": [{ "visibility": "off" }] },
   { "featureType": "poi.business", "elementType": "labels", "stylers": [{ "visibility": "off" }] },
   { "featureType": "transit.station", "elementType": "labels", "stylers": [{ "visibility": "off" }] },
