@@ -27,6 +27,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Export the mobile bundle (no secrets)
+        run: |
+          OUT=$(mktemp -d)
+          pnpm --filter @intell/mobile exec expo export --platform android --output-dir "$OUT"
       - run: pnpm --filter @intell/admin build
 
   db:

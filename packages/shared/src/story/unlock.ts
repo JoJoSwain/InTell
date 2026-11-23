@@ -44,10 +44,13 @@ export type ExternalPrerequisite = {
   contingencyRevisionNo: number;
 };
 
+export type PulseKind = "tier" | "changed" | "none";
+
 export type MarkerState = {
   opacity: 1 | 0.35 | 0;
   playableNow: boolean;
-  pulse: boolean;
+  /** Only a playable-now marker pulses. A changed fragment out of window is "none". */
+  pulse: PulseKind;
   hidden: boolean;
 };
 
@@ -172,7 +175,7 @@ export function markerState(input: {
 }): MarkerState {
   const { fragment } = input;
   if (fragment.retired) {
-    return { opacity: 0, playableNow: false, pulse: false, hidden: true };
+    return { opacity: 0, playableNow: false, pulse: "none", hidden: true };
   }
 
   const hasVersion =
@@ -185,9 +188,10 @@ export function markerState(input: {
     input.unlocks,
   ).unlocked;
   const done = completedEpoch(fragment, input.completions);
-  const pulse = heardOlderEpoch(fragment, input.completions) && !done;
+  const changed = heardOlderEpoch(fragment, input.completions) && !done;
   const playableNow = unlocked && hasVersion && !done;
   const opacity: 1 | 0.35 = unlocked && hasVersion ? 1 : 0.35;
+  const pulse: PulseKind = !playableNow ? "none" : changed ? "changed" : "tier";
 
   return { opacity, playableNow, pulse, hidden: false };
 }

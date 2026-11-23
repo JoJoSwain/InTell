@@ -59,9 +59,30 @@ export {
   distanceInsideMeters,
   distanceMeters,
   pointInPolygon,
+  toMultiPolygon,
+  type GeoJsonArea,
+  type GeoJsonMultiPolygon,
   type GeoJsonPolygon,
   type LatLng,
 } from "./geo/polygon";
+
+export {
+  FAR_PIECE_M,
+  GROVE_BUFFER_M,
+  farPieces,
+  groveShape,
+  type GroveShapeFragment,
+} from "./geo/groveShape";
+
+export {
+  CROSS_LINK_TIP_M,
+  crossGroveLinks,
+  crossLinkTip,
+  storyWebLinks,
+  type CrossGroveFragment,
+  type CrossGroveLink,
+  type StoryWebFragment,
+} from "./story/web";
 
 export {
   completionSatisfiesContingency,
@@ -82,6 +103,7 @@ export {
   type ExternalPrerequisite,
   type FragmentInput,
   type MarkerState,
+  type PulseKind,
   type UnlockRow,
   type VersionRef,
 } from "./story/unlock";

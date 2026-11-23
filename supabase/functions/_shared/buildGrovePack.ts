@@ -2,6 +2,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { roundCoord } from "./from-shared/canonicalJson.ts";
 import { isL10nBlank } from "./from-shared/l10n.ts";
+import { groveShape } from "./from-shared/groveShape.ts";
+import { crossGroveLinks } from "./from-shared/web.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
 import {
   itemKey,
@@ -84,8 +86,12 @@ export async function buildGrovePackObject(
     string,
     { row: SnapRow; data: ReturnType<typeof parseSnapshot<"fragment">> }
   >();
+  const allFrags = new Map<string, ReturnType<typeof parseSnapshot<"fragment">>>();
   for (const row of (fragRows ?? []) as SnapRow[]) {
     const data = parseSnapshot("fragment", row.data);
+    if (data.status === "published" || data.status === "retired") {
+      allFrags.set(data.id, data);
+    }
     if (data.groveId !== groveId) continue;
     if (data.status !== "published" && data.status !== "retired") continue;
     fragById.set(data.id, { row, data });
@@ -98,6 +104,7 @@ export async function buildGrovePackObject(
       const fid = key.slice("fragment:".length);
       const dataRaw = await projectEntity(supabase, "fragment", fid);
       const data = parseSnapshot("fragment", dataRaw);
+      if (data.status !== "unpublished") allFrags.set(fid, data);
       if (data.groveId !== groveId) continue;
       if (data.status !== "published" && data.status !== "retired" && data.status !== "draft") {
         continue;
@@ -546,8 +553,69 @@ export async function buildGrovePackObject(
     }
   }
 
+  const shapeInputs = (snaps: { data: ReturnType<typeof parseSnapshot<"fragment">> }[]) =>
+    snaps
+      .filter((f) => f.data.status !== "retired")
+      .map((f) => {
+        const [lng, lat] = f.data.location.coordinates;
+        return {
+          id: f.data.id,
+          tier: f.data.tier,
+          lat,
+          lng,
+        };
+      });
+
+  const boundary = groveShape(shapeInputs(fragSnaps));
+  if (!boundary) {
+    throw new Error(`grove ${groveId} has no derived boundary (PACK_BUILD_FAILED)`);
+  }
+
+  const linkFragments = fragSnaps.map((f) => ({
+    id: f.data.id,
+    groveId: f.data.groveId,
+    retired: f.data.status === "retired",
+    lat: f.data.location.coordinates[1] ?? 0,
+    lng: f.data.location.coordinates[0] ?? 0,
+    requires: f.data.requires.map((group) => group.members.map((member) => member.fragmentId)),
+  }));
+  for (const data of allFrags.values()) {
+    if (data.groveId === groveId) continue;
+    if (data.status === "retired" || data.status === "unpublished") continue;
+    linkFragments.push({
+      id: data.id,
+      groveId: data.groveId,
+      retired: false,
+      lat: data.location.coordinates[1] ?? 0,
+      lng: data.location.coordinates[0] ?? 0,
+      requires: data.requires.map((group) => group.members.map((member) => member.fragmentId)),
+    });
+  }
+
+  const boundaries: { groveId: string; boundary: NonNullable<ReturnType<typeof groveShape>> }[] = [
+    { groveId, boundary },
+  ];
+  const otherGroveIds = new Set(
+    linkFragments.filter((f) => f.groveId !== groveId).map((f) => f.groveId),
+  );
+  for (const otherId of [...otherGroveIds].sort()) {
+    const others = [...allFrags.values()].filter(
+      (f) => f.groveId === otherId && f.status !== "retired" && f.status !== "unpublished",
+    );
+    const otherShape = groveShape(
+      others.map((f) => ({
+        id: f.id,
+        tier: f.tier,
+        lat: f.location.coordinates[1] ?? 0,
+        lng: f.location.coordinates[0] ?? 0,
+      })),
+    );
+    if (otherShape) boundaries.push({ groveId: otherId, boundary: otherShape });
+  }
+  const links = crossGroveLinks(groveId, linkFragments, boundaries);
+
   const pack: Record<string, unknown> = {
-    schema: 3,
+    schema: 4,
     groveId,
     regionId: groveSnap.regionId,
     packVersion: 0,
@@ -560,7 +628,7 @@ export async function buildGrovePackObject(
       ...(groveSnap.gatheringsUrl
         ? { gatheringsUrl: groveSnap.gatheringsUrl }
         : {}),
-      boundary: groveSnap.boundary,
+      boundary,
       allowsSpeakerWildlifeSounds: groveSnap.allowsSpeakerWildlifeSounds,
       ...(groveSnap.growthCueAssetSha
         ? { growthCueAssetSha: groveSnap.growthCueAssetSha }
@@ -570,6 +638,7 @@ export async function buildGrovePackObject(
     },
     characters,
     fragments,
+    crossGroveLinks: links,
     externalPrerequisites,
     revisions: revisions.sort(
       (a, b) =>

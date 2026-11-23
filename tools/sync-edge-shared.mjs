@@ -11,11 +11,14 @@ const destRoot = path.join(root, "supabase/functions/_shared/from-shared");
 
 const files = [
   ["src/canonicalJson.ts", "canonicalJson.ts"],
+  ["src/geo/groveShape.ts", "groveShape.ts"],
+  ["src/geo/polygon.ts", "polygon.ts"],
   ["src/schemas/device.ts", "device.ts"],
   ["src/schemas/l10n.ts", "l10n.ts"],
   ["src/schemas/music.ts", "music.ts"],
   ["src/schemas/packs.ts", "packs.ts"],
   ["src/schemas/snapshots.ts", "snapshots.ts"],
+  ["src/story/web.ts", "web.ts"],
 ];
 
 fs.mkdirSync(destRoot, { recursive: true });
@@ -29,7 +32,9 @@ for (const [srcRel, destName] of files) {
     .replace(/from "\.\/snapshots"/g, 'from "./snapshots.ts"')
     .replace(/from "\.\/schemas\/l10n"/g, 'from "./l10n.ts"')
     .replace(/from "\.\/schemas\/music"/g, 'from "./music.ts"')
-    .replace(/from "\.\/schemas\/snapshots"/g, 'from "./snapshots.ts"');
+    .replace(/from "\.\/schemas\/snapshots"/g, 'from "./snapshots.ts"')
+    .replace(/from "\.\/polygon"/g, 'from "./polygon.ts"')
+    .replace(/from "\.\.\/geo\/polygon"/g, 'from "./polygon.ts"');
   const dest = path.join(destRoot, destName);
   fs.writeFileSync(dest, text);
   console.log(`copied ${srcRel} → ${path.relative(root, dest)}`);
