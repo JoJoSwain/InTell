@@ -33,7 +33,8 @@ pnpm typecheck                     # tsc --noEmit
 Run lint and typecheck before declaring any task done.
 
 ## Native rules
-- `ios/` and `android/` are generated (Continuous Native Generation) and gitignored. Never create or edit them by hand. Configure native behavior in `app.json`, `app.config.js` and config plugins.
+- `ios/` and `android/` are generated (Continuous Native Generation) and gitignored. Never create or edit them by hand. Configure native behavior in `app.json`, `app.config.ts` and config plugins.
+- `modules/intell-storage` is a local Expo module, committed on purpose. It returns the iOS Application Support directory for `intell.db` (so the database and its `-wal` / `-shm` files are backed up) and re-applies `NSURLIsExcludedFromBackupKey` every time it creates `intell-assets`, `intell-preview`, or `intell-staging`. Android exclusion of those three folders is `plugins/withBackupSplit.ts`, not a file flag. Do not put this module's Swift or Kotlin in the generated `ios/` or `android/` trees.
 - This app needs a **development build** (`expo-dev-client`), not Expo Go, because of its native modules. Don't run prebuild, native builds or device installs unless the product owner asks.
 - Secrets (e.g. map keys) come from `apps/mobile/.env` (gitignored) via `app.config.js`. Add new keys to `.env.example` with empty values.
 
