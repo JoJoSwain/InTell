@@ -3,12 +3,22 @@ import { resolveMapTheme } from "../theme/appearance";
 import { piecesFromBoundary, pointInGrove, closeRing } from "./groves";
 import { buildDemo } from "./fixtures";
 import { modelsFromPacks, storyTimeWindow } from "./homeModel";
-import { MARKER_CANVAS_PT, canvasPx, markerImageName, pulseFrame, RING } from "./markerArt";
+import {
+  MARKER_CANVAS_PT,
+  MAX_PULSING_ON_SCREEN,
+  OUTLINE_FADE_MIN,
+  canvasPx,
+  markerImageName,
+  outlineOpacity,
+  pulseFrame,
+  RING,
+} from "./markerArt";
 import { accessibilityLabel, markerLocked, markerPulse } from "./markers";
 import { linkCoordinates, metersPerPoint, webStrength, webWeight } from "./web";
 import dayStyle from "./styles/day.json";
 import nightStyle from "./styles/night.json";
 import { strings } from "../ui/strings";
+import { tokens } from "../ui/tokens";
 
 const sun = { lat: 40.76, lng: -111.89 };
 const noon = new Date("2026-06-21T18:00:00Z");
@@ -125,9 +135,31 @@ describe("marker pulse", () => {
     expect(markerLocked({ opacity: 0.35, playableNow: false, pulse: "none", hidden: false })).toBe(true);
   });
 
-  it("keeps a still ring when Reduce Motion is on", () => {
-    expect(markerImageName("root", "day", "tier", 3, true)).toBe("root-day-ring");
-    expect(markerImageName("leaf", "night", "changed", 4, false)).toBe("leaf-night-changed-4");
+  it("uses a still brick or green ring for Reduce Motion and the pulse cap", () => {
+    expect(markerImageName("root", "day", "tier", 3, { reduceMotion: true })).toBe("root-day-pulse-0");
+    expect(markerImageName("leaf", "night", "changed", 4, { reduceMotion: true })).toBe(
+      "leaf-night-changed-0",
+    );
+    expect(markerImageName("branch", "day", "tier", 5, { pulsesCapped: true })).toBe(
+      "branch-day-pulse-0",
+    );
+    expect(markerImageName("leaf", "night", "changed", 4, {})).toBe("leaf-night-changed-4");
+  });
+
+  it("uses opaque locked images instead of marker opacity", () => {
+    expect(markerImageName("root", "day", "none", 0, { locked: true })).toBe("root-day-locked");
+    expect(markerImageName("leaf", "night", "tier", 2, { locked: true })).toBe("leaf-night-locked");
+    expect(tokens.marker.day.lockedRing).toBe("#B0B4B8");
+    expect(tokens.marker.night.lockedRing).toBe("#687B87");
+    expect(tokens.marker.day.center).toBe("#FFFFFF");
+    expect(tokens.marker.night.center).toBe("#163447");
+  });
+
+  it("pulses every unexplored tier in Root brick", () => {
+    expect(tokens.marker.day.pulse).toBe("#763329");
+    expect(tokens.marker.night.pulse).toBe("#B9574A");
+    expect(tokens.marker.day.pulse).toBe(tokens.marker.day.root);
+    expect(tokens.marker.night.pulse).toBe(tokens.marker.night.root);
   });
 
   it("builds a tier-and-state accessibility label", () => {
@@ -138,15 +170,29 @@ describe("marker pulse", () => {
 });
 
 describe("marker canvas", () => {
-  it("uses one 48 pt canvas and a stable pulse size", () => {
+  it("uses one 48 pt canvas, 2.5 pt rings, and a stable pulse size", () => {
     expect(MARKER_CANVAS_PT).toBeGreaterThanOrEqual(48);
     expect(canvasPx()).toBe(144);
     expect(RING.root.diameterPt).toBe(22);
+    expect(RING.root.strokePt).toBe(2.5);
+    expect(RING.branch.strokePt).toBe(2.5);
+    expect(RING.leaf.strokePt).toBe(2.5);
     const start = pulseFrame("root", 0);
     const end = pulseFrame("root", 7);
     expect(start.radiusPt).toBeCloseTo((22 + 6) / 2);
     expect(end.radiusPt).toBeCloseTo((22 * 1.8) / 2);
     expect(end.opacity).toBe(0);
+    expect(MAX_PULSING_ON_SCREEN).toBe(40);
+  });
+});
+
+describe("grove outline fade", () => {
+  it("breathes from 100% to OUTLINE_FADE_MIN and back; Reduce Motion stays at 100%", () => {
+    expect(OUTLINE_FADE_MIN).toBe(0.6);
+    expect(outlineOpacity(0, false)).toBeCloseTo(1);
+    expect(outlineOpacity(4, false)).toBeCloseTo(OUTLINE_FADE_MIN, 2);
+    expect(outlineOpacity(0, true)).toBe(1);
+    expect(outlineOpacity(4, true)).toBe(1);
   });
 });
 

@@ -1,13 +1,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet } from "react-native";
 import MapView, { Marker, Polygon, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
-import { groveShape } from "@intell/shared";
-import { closeRing, haloBandPieces, type GrovePiece, type MapPoint } from "./groves";
+import { closeRing, type MapPoint } from "./groves";
 import type { HomeCrossLink, HomeGrove, HomeLink, HomeMarker } from "./homeModel";
-import { PULSE_FRAMES, markerImageName } from "./markerArt";
+import {
+  MAX_PULSING_ON_SCREEN,
+  PULSE_FRAMES,
+  markerImageName,
+  outlineOpacity,
+} from "./markerArt";
 import { markerImages } from "./markerImages";
 import { isOnScreen } from "./markers";
-import { haloBandIndex } from "./pulseClock";
 import { usePulseFrame } from "./usePulseFrame";
 import { dashPattern, linkCoordinates, metersPerPoint, zoomFromLatitudeDelta } from "./web";
 import dayStyle from "./styles/day.json";
@@ -34,8 +37,6 @@ type Props = {
 };
 
 const WORLD: CameraTarget = { latitude: 20, longitude: 0, latitudeDelta: 80, longitudeDelta: 80 };
-const HALO_PT = 14;
-const HALO_FRACTIONS = [0.25, 0.5, 0.75, 1] as const;
 
 type DrawnLink = {
   id: string;
@@ -135,44 +136,17 @@ export function HomeMap(props: Props) {
     }));
   }, [crossLinks, meters, theme.web]);
 
-  const haloBands = useMemo(() => {
-    if (reduceMotion) return [] as { key: string; piece: GrovePiece; band: number }[];
-    const rows: { key: string; piece: GrovePiece; band: number }[] = [];
-    for (const grove of groves) {
-      for (let band = 0; band < HALO_FRACTIONS.length; band += 1) {
-        const fraction = HALO_FRACTIONS[band];
-        if (fraction === undefined) continue;
-        const extraM = HALO_PT * fraction * meters;
-        const grown = groveShape(grove.shapeFragments, { extraM });
-        if (!grown) continue;
-        const pieces = haloBandPieces(grove.boundary, grown);
-        for (let index = 0; index < pieces.length; index += 1) {
-          const piece = pieces[index];
-          if (!piece) continue;
-          rows.push({ key: `${grove.id}-halo-${band}-${index}`, piece, band });
-        }
-      }
-    }
-    return rows;
-  }, [groves, meters, reduceMotion]);
-
-  useEffect(() => {
-    if (!__DEV__ || reduceMotion || haloBands.length === 0) return;
-    const started = performance.now();
-    for (const grove of groves) {
-      for (const fraction of HALO_FRACTIONS) {
-        groveShape(grove.shapeFragments, { extraM: HALO_PT * fraction * meters });
-      }
-    }
-    console.info(
-      `halo-bands ms=${(performance.now() - started).toFixed(1)} bands=${haloBands.length} mPerPt=${meters.toFixed(3)}`,
-    );
-  }, [groves, haloBands.length, meters, reduceMotion]);
-
-  const onScreenCount = useMemo(
-    () => markers.filter((marker) => isOnScreen(marker.coordinate, region)).length,
+  const pulsingOnScreen = useMemo(
+    () =>
+      markers.filter(
+        (marker) =>
+          !marker.locked &&
+          marker.pulse !== "none" &&
+          isOnScreen(marker.coordinate, region),
+      ).length,
     [markers, region],
   );
+  const pulsesCapped = !reduceMotion && pulsingOnScreen > MAX_PULSING_ON_SCREEN;
 
   useEffect(() => {
     if (!__DEV__ || reduceMotion) return;
@@ -190,12 +164,12 @@ export function HomeMap(props: Props) {
       const worst = Math.max(...samples);
       const expected = 1000 / PULSE_FRAMES;
       console.info(
-        `marker-spike device=Pixel_11 frames=${PULSE_FRAMES} tickAvgMs=${average.toFixed(1)} tickMaxMs=${worst.toFixed(1)} expectedMs=${expected.toFixed(1)} onScreen=${onScreenCount}`,
+        `marker-spike device=Pixel_11 frames=${PULSE_FRAMES} tickAvgMs=${average.toFixed(1)} tickMaxMs=${worst.toFixed(1)} expectedMs=${expected.toFixed(1)} pulsingOnScreen=${pulsingOnScreen} capped=${String(pulsesCapped)}`,
       );
       clearInterval(id);
     }, 1000 / PULSE_FRAMES);
     return () => clearInterval(id);
-  }, [onScreenCount, reduceMotion]);
+  }, [pulsingOnScreen, pulsesCapped, reduceMotion]);
 
   return (
     <MapView
@@ -258,13 +232,6 @@ export function HomeMap(props: Props) {
           />
         )),
       )}
-      {!reduceMotion ? (
-        <HaloLayer
-          bands={haloBands}
-          color={themeName === "night" ? "#FFFFFF" : "#1B2A33"}
-          baseAlpha={themeName === "night" ? 0.25 : 0.22}
-        />
-      ) : null}
       {drawnLinks.map((link) => (
         <Polyline
           key={link.id}
@@ -287,18 +254,12 @@ export function HomeMap(props: Props) {
           zIndex={1}
         />
       ))}
-      {outlineRings.map((ring) => (
-        <Polyline
-          key={ring.key}
-          coordinates={ring.coordinates}
-          strokeColor={theme.outline}
-          strokeWidth={2.25}
-          lineDashPattern={outlineDash}
-          lineCap="butt"
-          lineJoin="miter"
-          zIndex={2}
-        />
-      ))}
+      <OutlineLayer
+        rings={outlineRings}
+        color={theme.outline}
+        dash={outlineDash}
+        reduceMotion={reduceMotion}
+      />
       {markers.map((marker) => (
         <Pin
           key={marker.id}
@@ -306,6 +267,7 @@ export function HomeMap(props: Props) {
           theme={themeName}
           region={region}
           reduceMotion={reduceMotion}
+          pulsesCapped={pulsesCapped}
           onSelect={selectMarker}
         />
       ))}
@@ -313,35 +275,34 @@ export function HomeMap(props: Props) {
   );
 }
 
-const HaloLayer = memo(function HaloLayer({
-  bands,
+const OutlineLayer = memo(function OutlineLayer({
+  rings,
   color,
-  baseAlpha,
+  dash,
+  reduceMotion,
 }: {
-  bands: { key: string; piece: GrovePiece; band: number }[];
+  rings: { key: string; coordinates: MapPoint[] }[];
   color: string;
-  baseAlpha: number;
+  dash: [number, number];
+  reduceMotion: boolean;
 }) {
-  const frame = usePulseFrame(bands.length > 0);
-  const active = haloBandIndex(frame);
+  const frame = usePulseFrame(rings.length > 0 && !reduceMotion);
+  const opacity = outlineOpacity(frame, reduceMotion);
+  const stroke = withAlpha(color, opacity);
   return (
     <>
-      {bands.map((band) => {
-        if (band.band !== active) return null;
-        const fade = 1 - active / 3;
-        return (
-          <Polygon
-            key={band.key}
-            coordinates={band.piece.outer}
-            holes={band.piece.holes}
-            fillColor={withAlpha(color, baseAlpha * fade)}
-            strokeWidth={0}
-            strokeColor="transparent"
-            tappable={false}
-            zIndex={0}
-          />
-        );
-      })}
+      {rings.map((ring) => (
+        <Polyline
+          key={ring.key}
+          coordinates={ring.coordinates}
+          strokeColor={stroke}
+          strokeWidth={2.25}
+          lineDashPattern={dash}
+          lineCap="butt"
+          lineJoin="miter"
+          zIndex={2}
+        />
+      ))}
     </>
   );
 });
@@ -351,24 +312,25 @@ const Pin = memo(function Pin({
   theme,
   region,
   reduceMotion,
+  pulsesCapped,
   onSelect,
 }: {
   marker: HomeMarker;
   theme: MapThemeName;
   region: Region;
   reduceMotion: boolean;
+  pulsesCapped: boolean;
   onSelect: (id: string) => void;
 }) {
   const onScreen = isOnScreen(marker.coordinate, region);
-  const pulsing = onScreen && !reduceMotion && marker.pulse !== "none";
+  const pulsing =
+    onScreen && !reduceMotion && !pulsesCapped && !marker.locked && marker.pulse !== "none";
   const frame = usePulseFrame(pulsing);
-  const name = markerImageName(
-    marker.tier,
-    theme,
-    pulsing ? marker.pulse : "none",
-    frame,
-    reduceMotion || !onScreen,
-  );
+  const name = markerImageName(marker.tier, theme, marker.pulse, frame, {
+    reduceMotion,
+    locked: marker.locked,
+    pulsesCapped: pulsesCapped && marker.pulse !== "none" && !marker.locked,
+  });
   const image = markerImages[name];
   if (!image) return null;
   return (
@@ -376,7 +338,7 @@ const Pin = memo(function Pin({
       coordinate={marker.coordinate}
       anchor={{ x: 0.5, y: 0.5 }}
       image={image}
-      opacity={marker.locked ? 0.35 : 1}
+      opacity={1}
       tracksViewChanges={false}
       onPress={() => onSelect(marker.id)}
       accessibilityLabel={marker.label}

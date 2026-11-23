@@ -38,6 +38,10 @@ export const tokens = {
   marker: {
     day: {
       ring: "#1B2A33",
+      center: "#FFFFFF",
+      lockedRing: "#B0B4B8",
+      /** Root brick — every unexplored pulse (§5.3). */
+      pulse: "#763329",
       root: "#763329",
       branch: "#B06511",
       leaf: "#DBAA5A",
@@ -45,6 +49,9 @@ export const tokens = {
     },
     night: {
       ring: "#FFFFFF",
+      center: "#163447",
+      lockedRing: "#687B87",
+      pulse: "#B9574A",
       root: "#B9574A",
       branch: "#E3953F",
       leaf: "#F6E0AE",

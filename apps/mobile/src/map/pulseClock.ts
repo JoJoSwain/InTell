@@ -40,7 +40,3 @@ export function subscribePulse(listener: Listener): () => void {
   };
 }
 
-/** Shared beat 0..3 for the four halo bands over one second. */
-export function haloBandIndex(pulseFrame: number): number {
-  return Math.min(3, Math.floor((pulseFrame / PULSE_FRAMES) * 4));
-}

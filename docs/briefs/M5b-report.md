@@ -61,5 +61,34 @@ Dashes in metres on iOS, points on Android. Styles not checked on an iOS device.
 
 - Night style “white at N%” stays flattened to 6-digit hex.
 - Road bands remain color and weight only.
-- Stress halo recompute is multi-second with 300 fragments; demo stays in the low teens of ms.
 - Kept 8 pulse frames after the 12-frame device trial.
+- Halo multi-second recompute is gone (design update removed the halo).
+
+## Design update
+
+Jordan’s Pixel look + ADR 0006 / standards §4.3, §5.1–§5.3. Brief: `docs/briefs/M5b-design-update.md`.
+
+**1. Outline breathes; halo removed.** No `groveShape(…, { extraM })` or halo bands. Dashed outline opacity eases **100% → `OUTLINE_FADE_MIN` (0.6) → 100%** on the shared clock (`outlineOpacity`); fill unchanged. Reduce Motion: outline at 100%. Cost is one alpha on the outline polylines per beat.
+
+**2. Solid centers.** Day `#FFFFFF`, night `#163447`. Locked / out-of-window use opaque faded rings (`#B0B4B8` / `#687B87`) via `*-locked` PNGs — **no** `Marker` image opacity.
+
+**3. Brick pulse for every unexplored tier.** `tokens.marker.*.pulse` is Root brick; changed stays forest green. Tier size/growth unchanged.
+
+**4. Every ring 2.5 pt** (Leaf was 2).
+
+**D1.** `MAX_PULSING_ON_SCREEN = 40`: above that, every pulsing marker uses the still (Reduce Motion) frame until the count drops. All-or-nothing.
+
+**D2. gfxinfo** — **not run yet.** The Pixel sat on the PIN lock screen for the screenshot pass; unlock and a short follow-up will collect the three 10s pans (demo, stress capped/zoomed out, stress ~30 markers).
+
+**Screenshots** — `day.png` / `night.png` below are still the **pre–design-update** set (with halo). Fresh design-update shots need the unlocked device.
+
+**D3. Checks after these edits**
+
+| Check | Result |
+|---|---|
+| `pnpm --filter @intell/mobile test` | 13 suites, **45** tests, passed |
+| `pnpm --filter @intell/mobile typecheck` | passed |
+| `pnpm --filter @intell/mobile lint` | passed |
+| `CI=1 expo export --platform android --clear` | passed → `%TEMP%\m5b-design-export` |
+
+PNGs regenerated with `scripts/generate-marker-pngs.ts` (108 names / 216 files including `@3x` and locked).

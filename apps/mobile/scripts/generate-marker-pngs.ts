@@ -50,6 +50,21 @@ function over(dst: Rgba, src: Rgba): Rgba {
   };
 }
 
+function stampDisk(pixels: Rgba[], size: number, radiusPx: number, color: Rgba): void {
+  const center = size / 2;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const dist = Math.hypot(x + 0.5 - center, y + 0.5 - center);
+      const coverage = Math.max(0, Math.min(1, radiusPx + 0.5 - dist));
+      if (coverage <= 0) continue;
+      const index = y * size + x;
+      const current = pixels[index];
+      if (!current) continue;
+      pixels[index] = over(current, { ...color, a: Math.round(color.a * coverage) });
+    }
+  }
+}
+
 function stampRing(
   pixels: Rgba[],
   size: number,
@@ -118,15 +133,26 @@ function crc32(buf: Buffer): number {
   return ~c;
 }
 
-function draw(tier: MarkerTier, theme: MarkerThemeName, kind: string, frame: number, scale: number): Buffer {
+function draw(
+  tier: MarkerTier,
+  theme: MarkerThemeName,
+  kind: string,
+  frame: number,
+  scale: number,
+): Buffer {
   const size = canvasPx(scale);
   const pixels = Array.from({ length: size * size }, () => ({ r: 0, g: 0, b: 0, a: 0 }));
   const ring = RING[tier];
   const colors = tokens.marker[theme];
-  stampRing(pixels, size, (ring.diameterPt / 2) * scale, ring.strokePt * scale, parseHex(colors.ring));
-  if (kind !== "ring") {
+  const ringColor = kind === "locked" ? colors.lockedRing : colors.ring;
+  const radiusPx = (ring.diameterPt / 2) * scale;
+  const strokePx = ring.strokePt * scale;
+  const centerRadius = Math.max(0, radiusPx - strokePx / 2);
+  stampDisk(pixels, size, centerRadius, parseHex(colors.center));
+  stampRing(pixels, size, radiusPx, strokePx, parseHex(ringColor));
+  if (kind === "pulse" || kind === "changed") {
     const pulse = pulseFrame(tier, frame);
-    const color = parseHex(kind === "changed" ? colors.changed : colors[tier]);
+    const color = parseHex(kind === "changed" ? colors.changed : colors.pulse);
     stampRing(
       pixels,
       size,
@@ -142,7 +168,10 @@ mkdirSync(outDir, { recursive: true });
 const names: string[] = [];
 for (const tier of tiers) {
   for (const theme of themes) {
-    const jobs: { name: string; kind: string; frame: number }[] = [{ name: `${tier}-${theme}-ring`, kind: "ring", frame: 0 }];
+    const jobs: { name: string; kind: string; frame: number }[] = [
+      { name: `${tier}-${theme}-ring`, kind: "ring", frame: 0 },
+      { name: `${tier}-${theme}-locked`, kind: "locked", frame: 0 },
+    ];
     for (let frame = 0; frame < PULSE_FRAMES; frame += 1) {
       jobs.push({ name: `${tier}-${theme}-pulse-${frame}`, kind: "pulse", frame });
       jobs.push({ name: `${tier}-${theme}-changed-${frame}`, kind: "changed", frame });
