@@ -37,7 +37,8 @@ export const GroveSnapshot = z
     websiteUrl: z.string().nullable().optional(),
     gatheringsUrl: z.string().nullable().optional(),
     allowsSpeakerWildlifeSounds: z.boolean(),
-    boundary: GeoJsonPolygon,
+    /** Present on pre-A2 snapshots; ignored after the derived pack boundary. */
+    boundary: GeoJsonPolygon.optional(),
     growthCueAssetId: Uuid.nullable().optional(),
     growthCueAssetSha: Sha256.nullable().optional(),
     status: PublishStatus,

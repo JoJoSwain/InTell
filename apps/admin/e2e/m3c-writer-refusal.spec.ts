@@ -52,18 +52,6 @@ test.describe("M3c writer refusal", () => {
           slug: `writer-refuse-${Date.now()}`,
           name: { en: "Nope" },
           premise: { en: "Nope" },
-          boundary: {
-            type: "Polygon",
-            coordinates: [
-              [
-                [-111.9, 41.1],
-                [-111.89, 41.1],
-                [-111.89, 41.11],
-                [-111.9, 41.11],
-                [-111.9, 41.1],
-              ],
-            ],
-          },
         },
       },
     );

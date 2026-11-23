@@ -9,7 +9,7 @@ values ('aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054', 'two-grove golive', 'publishing'
 
 insert into public.pack_builds (
   scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total,
-  live, release_id
+  live, release_id, bbox
 ) values
   (
     'grove',
@@ -20,7 +20,8 @@ insert into public.pack_builds (
     '{}',
     10,
     false,
-    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'
+    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054',
+    array[-111.93, 40.96, -111.91, 40.97]::double precision[]
   ),
   (
     'grove',
@@ -31,7 +32,8 @@ insert into public.pack_builds (
     '{}',
     11,
     false,
-    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'
+    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054',
+    array[-111.93, 40.96, -111.91, 40.97]::double precision[]
   ),
   (
     'region',
@@ -42,7 +44,8 @@ insert into public.pack_builds (
     '{}',
     12,
     false,
-    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054'
+    'aaaaaaaa-bbbb-4ccc-8ddd-ffff00000054',
+    null
   );
 
 -- Pending rebuild job blocks go-live

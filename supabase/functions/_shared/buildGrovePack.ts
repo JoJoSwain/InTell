@@ -4,6 +4,8 @@ import { roundCoord } from "./from-shared/canonicalJson.ts";
 import { isL10nBlank } from "./from-shared/l10n.ts";
 import { groveShape } from "./from-shared/groveShape.ts";
 import { crossGroveLinks } from "./from-shared/web.ts";
+import { pagePublishedSnapshots } from "./pageSnapshots.ts";
+import { bboxFromMultiPolygon } from "./packBbox.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
 import {
   itemKey,
@@ -77,17 +79,15 @@ export async function buildGrovePackObject(
     watermarks.push(groveSnapRow.published_at);
   }
 
-  const { data: fragRows } = await supabase
-    .from("published_snapshots")
-    .select("entity, entity_id, data, published_at")
-    .eq("entity", "fragment");
+  // P1: page past PostgREST max_rows so another grove's shape/links stay correct.
+  const fragRows = await pagePublishedSnapshots(supabase, "fragment");
 
   const fragById = new Map<
     string,
     { row: SnapRow; data: ReturnType<typeof parseSnapshot<"fragment">> }
   >();
   const allFrags = new Map<string, ReturnType<typeof parseSnapshot<"fragment">>>();
-  for (const row of (fragRows ?? []) as SnapRow[]) {
+  for (const row of fragRows) {
     const data = parseSnapshot("fragment", row.data);
     if (data.status === "published" || data.status === "retired") {
       allFrags.set(data.id, data);
@@ -679,6 +679,9 @@ export async function buildGrovePack(
     supabase,
     groveId,
   );
+  const boundary = (pack.grove as { boundary?: Parameters<typeof bboxFromMultiPolygon>[0] })
+    ?.boundary;
+  const bbox = boundary ? bboxFromMultiPolygon(boundary) : null;
   return persistPackIfChanged(supabase, {
     scope: "grove",
     scopeId: groveId,
@@ -688,5 +691,6 @@ export async function buildGrovePack(
     reason,
     releaseId,
     opening,
+    bbox,
   });
 }

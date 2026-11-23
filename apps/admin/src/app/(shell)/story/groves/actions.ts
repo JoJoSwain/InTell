@@ -16,7 +16,7 @@ import {
   loadStaff,
 } from "@/lib/staff";
 import { generateMarkerCode } from "@/lib/markers/code";
-import { asL10n, geoJsonEqual } from "@/lib/geo";
+import { asL10n } from "@/lib/geo";
 import { saveHref } from "@/lib/server-action-result";
 
 async function requireEditor() {
@@ -63,33 +63,13 @@ export async function saveGrove(formData: FormData) {
   const gatheringsUrl =
     String(formData.get("gatherings_url") ?? "").trim() || null;
   const wildlife = formData.get("allows_speaker_wildlife_sounds") === "on";
-  const boundaryGeoJson = String(formData.get("boundary") ?? "").trim();
-  const originalBoundary = String(
-    formData.get("original_boundary") ?? "",
-  ).trim();
   const slugInput = String(formData.get("slug") ?? "").trim();
 
   if (!regionId || !nameEn) throw new Error("region and name required");
-  if (!boundaryGeoJson) throw new Error("boundary GeoJSON required");
-
-  let geo: { type?: string; coordinates?: unknown };
-  try {
-    geo = JSON.parse(boundaryGeoJson) as {
-      type?: string;
-      coordinates?: unknown;
-    };
-  } catch {
-    throw new Error("boundary must be valid GeoJSON");
-  }
-  if (geo.type !== "Polygon" || !Array.isArray(geo.coordinates)) {
-    throw new Error("boundary must be a GeoJSON Polygon");
-  }
 
   const name = asL10n(nameEn);
   const premise = asL10n(premiseEn);
   const slug = slugInput || slugify(nameEn);
-  const boundaryChanged =
-    !id || !originalBoundary || !geoJsonEqual(boundaryGeoJson, originalBoundary);
 
   if (id) {
     const { error } = await supabase
@@ -106,22 +86,11 @@ export async function saveGrove(formData: FormData) {
       .eq("id", id);
     if (error) throw new Error(error.message);
 
-    if (boundaryChanged) {
-      const { error: bErr } = await supabase.rpc("fn_set_grove_boundary", {
-        p_grove_id: id,
-        p_geojson: JSON.stringify(geo),
-      });
-      if (bErr) throw new Error(bErr.message);
-    }
-
     revalidatePath("/story/groves");
     revalidatePath(`/story/groves/${id}`);
     return { ok: true as const, href: saveHref(`/story/groves/${id}`) };
   }
 
-  // Placeholder EWKT so NOT NULL boundary is satisfied; real shape via invoker RPC.
-  const placeholder =
-    "SRID=4326;POLYGON((-180 -85,-180 85,180 85,180 -85,-180 -85))";
   const { data, error } = await supabase
     .from("groves")
     .insert({
@@ -132,18 +101,11 @@ export async function saveGrove(formData: FormData) {
       gatherings_url: gatheringsUrl,
       allows_speaker_wildlife_sounds: wildlife,
       slug,
-      boundary: placeholder,
     })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
   const newId = data.id as string;
-
-  const { error: bErr } = await supabase.rpc("fn_set_grove_boundary", {
-    p_grove_id: newId,
-    p_geojson: JSON.stringify(geo),
-  });
-  if (bErr) throw new Error(bErr.message);
 
   revalidatePath("/story/groves");
   return { ok: true as const, href: saveHref(`/story/groves/${newId}`) };

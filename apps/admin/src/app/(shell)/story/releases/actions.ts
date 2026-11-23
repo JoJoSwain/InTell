@@ -20,6 +20,7 @@ import {
   type ChecklistFailure,
 } from "@/components/checklist-badges";
 import { saveHref } from "@/lib/server-action-result";
+import { farPieceFailures } from "@/lib/grove-shape-preview";
 
 async function requireStaff() {
   const supabase = await createClient();
@@ -215,6 +216,62 @@ async function resetTowardDraft(
   }
 }
 
+async function farPieceWarningsForRelease(
+  supabase: Awaited<ReturnType<typeof requireEditor>>["supabase"],
+  releaseId: string,
+): Promise<ChecklistFailure[]> {
+  const { data: items } = await supabase
+    .from("release_items")
+    .select("entity, entity_id")
+    .eq("release_id", releaseId);
+  const groveIds = new Set<string>();
+  for (const item of items ?? []) {
+    if (item.entity === "grove") groveIds.add(item.entity_id as string);
+    if (item.entity === "fragment") {
+      const { data: frag } = await supabase
+        .from("fragments")
+        .select("grove_id")
+        .eq("id", item.entity_id)
+        .maybeSingle();
+      if (frag?.grove_id) groveIds.add(frag.grove_id as string);
+    }
+    if (item.entity === "revision") {
+      const { data: rev } = await supabase
+        .from("fragment_revisions")
+        .select("fragment_id")
+        .eq("id", item.entity_id)
+        .maybeSingle();
+      if (rev?.fragment_id) {
+        const { data: frag } = await supabase
+          .from("fragments")
+          .select("grove_id")
+          .eq("id", rev.fragment_id)
+          .maybeSingle();
+        if (frag?.grove_id) groveIds.add(frag.grove_id as string);
+      }
+    }
+  }
+  const warnings: ChecklistFailure[] = [];
+  for (const groveId of groveIds) {
+    const { data: fragments } = await supabase
+      .from("fragments")
+      .select("id, tier, status, location_geojson")
+      .eq("grove_id", groveId);
+    warnings.push(
+      ...farPieceFailures(
+        groveId,
+        (fragments ?? []) as {
+          id: string;
+          tier: string;
+          status: string;
+          location_geojson: { coordinates?: number[] } | null;
+        }[],
+      ),
+    );
+  }
+  return warnings;
+}
+
 export async function runPublishCheck(
   releaseId: string,
 ): Promise<
@@ -230,11 +287,14 @@ export async function runPublishCheck(
     ok?: boolean;
     failures?: ChecklistFailure[];
   } | null;
+  const sqlFailures = Array.isArray(payload?.failures) ? payload!.failures! : [];
+  const farWarnings = await farPieceWarningsForRelease(supabase, releaseId);
   revalidateRelease(releaseId);
   return {
     ok: true,
+    // Go-live still blocks only on SQL errors; far pieces are warnings.
     checkOk: Boolean(payload?.ok),
-    failures: Array.isArray(payload?.failures) ? payload!.failures! : [],
+    failures: [...sqlFailures, ...farWarnings],
   };
 }
 

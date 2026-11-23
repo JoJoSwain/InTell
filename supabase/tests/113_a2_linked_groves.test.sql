@@ -9,7 +9,7 @@ insert into public.releases (id, name, status)
 values ('aaaaaaaa-bbbb-4ccc-8ddd-ffffa20000e0', 'a2-links', 'draft');
 
 insert into public.groves (
-  id, region_id, slug, name, premise, boundary,
+  id, region_id, slug, name, premise,
   allows_speaker_wildlife_sounds, status, pack_version
 ) values
   (
@@ -18,10 +18,6 @@ insert into public.groves (
     'a2-grove-a',
     '{"en":"A"}'::jsonb,
     '{}'::jsonb,
-    extensions.ST_Buffer(
-      extensions.ST_SetSRID(extensions.ST_MakePoint(-112.50, 40.50), 4326)::extensions.geography,
-      400
-    ),
     false, 'draft', 0
   ),
   (
@@ -30,10 +26,6 @@ insert into public.groves (
     'a2-grove-b',
     '{"en":"B"}'::jsonb,
     '{}'::jsonb,
-    extensions.ST_Buffer(
-      extensions.ST_SetSRID(extensions.ST_MakePoint(-112.40, 40.50), 4326)::extensions.geography,
-      400
-    ),
     false, 'draft', 0
   );
 

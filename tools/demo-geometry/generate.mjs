@@ -82,7 +82,6 @@ create table public._seed_geometry (
 );
 
 insert into public._seed_geometry (key, kind, geog) values
-  ('grove_boundary', 'polygon', extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 50)),
   ('ambience_marsh', 'polygon', extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 50)),
   ('music_zone', 'polygon', extensions.ST_Intersection(
      extensions.ST_Buffer(extensions.ST_GeogFromText('${hullWkt}'), 50)::extensions.geometry,

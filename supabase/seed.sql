@@ -172,8 +172,6 @@ declare
   c_asset_stem_br_lyr_id   constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000123';
   c_asset_hush_id          constant uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-000000000130';
 
-  v_grove_boundary         extensions.geography(Polygon, 4326);
-  v_grove2_boundary        extensions.geography(Polygon, 4326);
   v_region_bounds          extensions.geography(Polygon, 4326);
   v_ambience_poly          extensions.geography(Polygon, 4326);
   v_music_poly             extensions.geography(Polygon, 4326);
@@ -195,7 +193,6 @@ declare
   v_commit                 jsonb;
   v_lng_offset             double precision := 0.00357; -- ~300 m east at ~41°N
 begin
-  select geog into strict v_grove_boundary from public._seed_geometry where key = 'grove_boundary';
   select geog into strict v_region_bounds  from public._seed_geometry where key = 'region_bounds';
   select geog into strict v_ambience_poly  from public._seed_geometry where key = 'ambience_marsh';
   select geog into strict v_music_poly     from public._seed_geometry where key = 'music_zone';
@@ -210,10 +207,6 @@ begin
   select geog into strict v_pt_frag8  from public._seed_geometry where key = 'frag8';
   select geog into strict v_pt_frag9  from public._seed_geometry where key = 'frag9';
   select geog into strict v_pt_frag10 from public._seed_geometry where key = 'frag10';
-
-  v_grove2_boundary := extensions.ST_Translate(
-    v_grove_boundary::geometry, v_lng_offset, 0
-  )::extensions.geography;
 
   v_pt_g2_frag1 := extensions.ST_Translate(v_pt_frag1::geometry, v_lng_offset, 0)::extensions.geography;
   v_pt_g2_frag2 := extensions.ST_Translate(v_pt_frag7::geometry, v_lng_offset, 0.0003)::extensions.geography;
@@ -405,7 +398,7 @@ begin
   -- Groves (working status draft until publish commit)
   ---------------------------------------------------------------------------
   insert into public.groves (
-    id, region_id, slug, name, premise, boundary,
+    id, region_id, slug, name, premise,
     website_url, gatherings_url, allows_speaker_wildlife_sounds,
     growth_cue_id, status, pack_version
   ) values (
@@ -414,7 +407,6 @@ begin
     'demo',
     '{"en":"Farmington Bird Refuge Grove"}'::jsonb,
     '{"en":"Synthetic test grove for M3a seed and integration tests (Farmington fixture)."}'::jsonb,
-    v_grove_boundary,
     null,
     null,
     false,
@@ -424,28 +416,20 @@ begin
   );
 
   insert into public.groves (
-    id, region_id, slug, name, premise, boundary,
+    id, region_id, slug, name, premise,
     allows_speaker_wildlife_sounds, status, pack_version
   ) values
     (c_grove_ogden_id, c_region_id, 'ogden-nature-center',
      '{"en":"Ogden Nature Center (draft placeholder)"}'::jsonb,
      '{"en":"Draft grove — placeholder geometry only."}'::jsonb,
-     extensions.ST_Buffer(
-       extensions.ST_SetSRID(extensions.ST_MakePoint(-111.90, 41.01), 4326)::extensions.geography,
-       200
-     ),
      false, 'draft', 0),
     (c_grove_pia_id, c_region_id, 'pia-okwai',
      '{"en":"Nature Center at Pia Okwai (draft placeholder)"}'::jsonb,
      '{"en":"Draft grove — placeholder geometry only."}'::jsonb,
-     extensions.ST_Buffer(
-       extensions.ST_SetSRID(extensions.ST_MakePoint(-111.88, 41.00), 4326)::extensions.geography,
-       200
-     ),
      false, 'draft', 0);
 
   insert into public.groves (
-    id, region_id, slug, name, premise, boundary,
+    id, region_id, slug, name, premise,
     allows_speaker_wildlife_sounds, status, pack_version
   ) values (
     c_grove2_id,
@@ -453,7 +437,6 @@ begin
     'demo-nearby',
     '{"en":"Nearby test grove (bridge prereq)"}'::jsonb,
     '{"en":"Second small grove ~300 m east for cross-grove unlock tests."}'::jsonb,
-    v_grove2_boundary,
     false,
     'draft',
     0
