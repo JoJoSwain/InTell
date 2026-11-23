@@ -2,10 +2,9 @@
 
 Lane A · M4a
 
-**Branch:** `a/m4a-shared-logic`
-**PR:** https://github.com/JoJoSwain/InTell/pull/22
+**Branch:** `a/m4a-sound` (story half landed on `a/m4a-shared-logic` and `a/m4a-story-fixes`)
 **Review:** `docs/briefs/M4a-plan-review.md` (`2fcce26`)
-**Stop for review.** Music, ambience, and hush are not started. They belong on a new branch after this PR merges.
+**Stop for review.**
 
 The local database was not reset.
 
@@ -49,3 +48,15 @@ On `a/m4a-story-fixes`, after merging `origin/master` (`3ed1b8b`, PR #22). PR #2
 **N2.** A one-line comment on the missing-radius path. Behavior is unchanged: no `radiusM` never proximity-triggers.
 
 `pnpm lint`, `pnpm typecheck`, and `pnpm test` passed. `@intell/shared` is 137 tests. Trigger tests are 17 (three added).
+
+## Sound half
+
+On `a/m4a-sound`, from master `104b257`. `RegionPack` and the pack builder are unchanged. The modules take their own input types (A1).
+
+**`audio/music.ts`.** `selectMusicCue` and `stemGainDb`. Empty condition arrays match (M5). Before dwell the current cue stays against a higher priority; after dwell only a strictly higher priority replaces it; equal priority keeps the current cue, and a fresh tie goes to the lower id (M1). The first matching stem rule replaces the resting level (M2). `edgeGain` is the linear 0–1 fade. `GROVE_MUSIC_EDGE_FADE_M` is 60 for a grove boundary or a grove-pack zone with no fade of its own (M3). A change crossfades over the incoming cue; silence uses the outgoing cue.
+
+**`audio/ambience.ts`.** `activeProfiles`, `eligibleLayers`, `pickBed`, `nextOneShot`. Profiles that share a slug merge. Landcover ignores null cells; a tie prefers the center when it is tied, otherwise the tied class that appears first; a class with no profile mapping adds nothing (A3). Bed gain is `gainDb + 20·log10(weight)`, silent at weight 0. One-shot pan and rate use the layer's pan and pitch-cent ranges (A5). `nextOneShot` is a state reducer: it draws only when it schedules, and a shot blocked by `maxConcurrent`, the 4 s narration cap, or the 1.5 s guard is dropped and the next gap is drawn from that tick. Calling it twice with the same state and seed returns the same event.
+
+**`audio/hush.ts`.** `hushStep` keeps `nextHushAt` and `holdEndsAt` on the state. The ±2 minute offset is drawn when idle begins, and the 60–90 s hold is drawn when the hold begins. A later call with the same state does not draw again. Narration or a queued fragment blocks the start. A trigger during a Hush returns a 1 s fade. Exported timings: 4 s out, 1 s to the cue, 6 s back, 1 s trigger exit, and `HUSH_CUE_GAIN_DB` −12.
+
+`pnpm lint`, `pnpm typecheck`, and `pnpm test` passed. `@intell/shared` is 21 files and 166 tests. The new tests are 11 music, 13 ambience, and 5 hush.
