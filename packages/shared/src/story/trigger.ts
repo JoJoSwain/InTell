@@ -53,9 +53,11 @@ function eligible(
 
 /**
  * Standard fragments the fix history can start.
+ * Pass recent fixes only: a pair stays valid for as long as it remains in
+ * this list. The M6 session should trim the buffer; 60 s is enough.
  * A fix over the accuracy tolerance is skipped. An accurate fix outside the
  * radius clears the proximity pair. Accessible uses the latest accurate fix
- * within 35 ft of the point.
+ * within 35 ft of the point. The playing fragment is never a candidate.
  */
 export function proximityCandidates(input: {
   fragments: readonly FragmentInput[];
@@ -66,11 +68,13 @@ export function proximityCandidates(input: {
   timeWindow: TimeWindow;
   lang: string;
   accessible: boolean;
+  playingFragmentId: string | null;
 }): TriggerCandidate[] {
   const fixes = [...input.fixes].sort(byTime);
   const out: TriggerCandidate[] = [];
 
   for (const fragment of input.fragments) {
+    if (fragment.id === input.playingFragmentId) continue;
     if (
       !eligible(
         fragment,
@@ -92,6 +96,7 @@ export function proximityCandidates(input: {
       if (fix.accuracyM > input.accuracyToleranceM) continue;
       latestAccurate = fix;
       const distanceM = distanceMeters(fix, fragment);
+      // No radius never proximity-triggers. Packs omit radiusM only for physical fragments.
       if (radiusM === undefined || distanceM > radiusM) {
         lastInside = null;
         proximity = null;
@@ -159,10 +164,18 @@ export function scanDecision(
   };
 }
 
+function chosenId(
+  chosen: TriggerCandidate | { fragmentId: string; via: "scan" },
+): string {
+  return "fragment" in chosen ? chosen.fragment.id : chosen.fragmentId;
+}
+
 /**
  * Queue of one. A waiting proximity or accessible fragment leaves the slot
  * when it is no longer in range. A scan replaces whatever is waiting and
- * does not leave for range.
+ * does not leave for range. A chosen fragment that is the one playing is
+ * ignored. Before anything starts, `isEligible` is checked for every kind,
+ * including a scan; a fragment that fails leaves the slot.
  */
 export function queueAfterTrigger(input: {
   chosen: TriggerCandidate | { fragmentId: string; via: "scan" } | null;
@@ -171,17 +184,23 @@ export function queueAfterTrigger(input: {
   afterglowEndsAt: Date | null;
   now: Date;
   stillInRange: (fragmentId: string) => boolean;
+  /** Unlocked, not retired, a version for the current window, and not completed for the epoch. */
+  isEligible: (fragmentId: string) => boolean;
 }): { startNow: string | null; queued: QueuedFragment | null } {
   let slot: QueuedFragment | null = input.queued;
   if (slot && slot.via !== "scan" && !input.stillInRange(slot.fragmentId)) {
     slot = null;
   }
 
-  if (input.chosen) {
-    if ("via" in input.chosen && input.chosen.via === "scan") {
-      slot = { fragmentId: input.chosen.fragmentId, via: "scan" };
-    } else if (!slot && "fragment" in input.chosen) {
-      slot = { fragmentId: input.chosen.fragment.id, via: input.chosen.via };
+  const chosen =
+    input.chosen && chosenId(input.chosen) !== input.playingFragmentId
+      ? input.chosen
+      : null;
+  if (chosen) {
+    if ("fragment" in chosen) {
+      if (!slot) slot = { fragmentId: chosen.fragment.id, via: chosen.via };
+    } else {
+      slot = { fragmentId: chosen.fragmentId, via: "scan" };
     }
   }
 
@@ -189,6 +208,9 @@ export function queueAfterTrigger(input: {
   const inAfterglow =
     input.afterglowEndsAt !== null && input.now < input.afterglowEndsAt;
   if (!playing && !inAfterglow && slot) {
+    if (!input.isEligible(slot.fragmentId)) {
+      return { startNow: null, queued: null };
+    }
     if (slot.via === "scan" || input.stillInRange(slot.fragmentId)) {
       return { startNow: slot.fragmentId, queued: null };
     }

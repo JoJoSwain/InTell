@@ -35,3 +35,17 @@ All of these are exported from `packages/shared/src/index.ts`.
 - Accessible play looks at the latest accurate fix. An earlier fix inside 35 ft does not fire once a later accurate fix is outside that distance.
 - A scan replaces a waiting accessible fragment as well as a waiting proximity one.
 - A standard fragment with no `radiusM` never proximity-triggers. Accessible play can still start it.
+
+### R1–R2
+
+On `a/m4a-story-fixes`, after merging `origin/master` (`3ed1b8b`, PR #22). PR #20 is still open, so it was not in that merge.
+
+**R1.** `proximityCandidates` takes `playingFragmentId` and never returns it. `queueAfterTrigger` ignores a chosen proximity, accessible, or scan fragment when that id is the one playing. While Root X plays inside its own radius it is not queued, and when it ends nothing starts. A Leaf entered during X takes the slot and starts after the afterglow.
+
+**R2.** `queueAfterTrigger` takes `isEligible`. It is checked before `startNow` for every kind, including a scan. A fragment that fails leaves the slot. The sunset case (queued Day-only fragment, window gone) does not start, and the slot clears.
+
+**N1.** The `proximityCandidates` doc comment tells M6 to pass recent fixes only. A pair stays valid while it remains in the list; 60 s is enough.
+
+**N2.** A one-line comment on the missing-radius path. Behavior is unchanged: no `radiusM` never proximity-triggers.
+
+`pnpm lint`, `pnpm typecheck`, and `pnpm test` passed. `@intell/shared` is 137 tests. Trigger tests are 17 (three added).
