@@ -350,6 +350,34 @@ describe("nextOneShot", () => {
     ).toBeTruthy();
   });
 
+  it("never produces a shot when the profile weight is 0", () => {
+    const silent = layer({ kind: "oneshot", meanIntervalS: 8 });
+    let state = { nextAtSec: null as number | null };
+    for (let tick = 0; tick <= 500; tick += 1) {
+      const result = step(
+        { layer: silent, profileWeight: 0, nowSec: tick, state },
+        () => {
+          throw new Error("drew at weight 0");
+        },
+      );
+      expect(result.shot).toBeNull();
+      state = result.state;
+    }
+    expect(state.nextAtSec).toBe(Number.POSITIVE_INFINITY);
+
+    const meanZero = step(
+      {
+        layer: layer({ kind: "oneshot", meanIntervalS: 0, minIntervalS: 0 }),
+        profileWeight: 1,
+      },
+      () => {
+        throw new Error("drew at mean 0");
+      },
+    );
+    expect(meanZero.shot).toBeNull();
+    expect(meanZero.state.nextAtSec).toBe(Number.POSITIVE_INFINITY);
+  });
+
   it("returns the same event for the same state and seed, and does not draw while waiting", () => {
     const state = { nextAtSec: 0 };
     const once = step({ state, nowSec: 5 }, createSeededRng(3));

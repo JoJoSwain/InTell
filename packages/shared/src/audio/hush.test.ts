@@ -102,6 +102,34 @@ describe("hushStep", () => {
     expect(run(4).holdEndsAt).toEqual(run(4).holdEndsAt);
   });
 
+  it("fades back over 6 s when the setting turns off during the hold", () => {
+    const armed = step(initialHushState(), start);
+    const fading = step(armed, armed.nextHushAt!);
+    const cue = step(fading, new Date(fading.phaseStartedAt!.getTime() + HUSH_FADE_OUT_MS));
+    const holding = step(cue, new Date(cue.phaseStartedAt!.getTime() + HUSH_CUE_DELAY_MS));
+    const back = step(holding, new Date(holding.phaseStartedAt!.getTime() + 1000), {
+      settingOn: false,
+    });
+    expect(back).toMatchObject({
+      phase: "fadingIn",
+      fadeMs: HUSH_FADE_IN_MS,
+      playCue: false,
+    });
+  });
+
+  it("fades back over 6 s when the listener leaves the grove during the fade-out", () => {
+    const armed = step(initialHushState(), start);
+    const fading = step(armed, armed.nextHushAt!);
+    const left = step(fading, new Date(fading.phaseStartedAt!.getTime() + 500), {
+      insideGrove: false,
+    });
+    expect(left).toMatchObject({
+      phase: "fadingIn",
+      fadeMs: HUSH_FADE_IN_MS,
+      playCue: false,
+    });
+  });
+
   it("ends a hold with a 1 s fade when a fragment triggers", () => {
     const armed = step(initialHushState(), start);
     const fading = step(armed, armed.nextHushAt!);

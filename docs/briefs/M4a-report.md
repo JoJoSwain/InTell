@@ -60,3 +60,11 @@ On `a/m4a-sound`, from master `104b257`. `RegionPack` and the pack builder are u
 **`audio/hush.ts`.** `hushStep` keeps `nextHushAt` and `holdEndsAt` on the state. The ±2 minute offset is drawn when idle begins, and the 60–90 s hold is drawn when the hold begins. A later call with the same state does not draw again. Narration or a queued fragment blocks the start. A trigger during a Hush returns a 1 s fade. Exported timings: 4 s out, 1 s to the cue, 6 s back, 1 s trigger exit, and `HUSH_CUE_GAIN_DB` −12.
 
 `pnpm lint`, `pnpm typecheck`, and `pnpm test` passed. `@intell/shared` is 21 files and 166 tests. The new tests are 11 music, 13 ambience, and 5 hush.
+
+### R1–R2
+
+**R1.** During `fadingOut`, `cue`, or `holding`, `settingOn` false or `insideGrove` false goes to `fadingIn` with the normal 6 s fade. Idle still draws the next time when that fade finishes. Turning the setting off during the hold fades back over 6 s. Leaving the grove during the fade-out does the same. A fragment trigger still uses the 1 s fade.
+
+**R2.** `exponentialDelay` returns `Infinity` when `density × weight` is 0 or the mean is 0, so `nextAtSec` never comes due. A profile weight of 0 produces no shot across 501 ticks, and it does not draw a random number. A mean of 0 does the same.
+
+`pnpm lint`, `pnpm typecheck`, and `pnpm test` passed. `@intell/shared` is 169 tests (7 hush, 14 ambience).

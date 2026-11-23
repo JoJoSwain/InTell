@@ -216,7 +216,8 @@ function exponentialDelay(
   weight: number,
 ): number {
   const scale = density * weight;
-  if (!(scale > 0) || !(meanS > 0)) return minS;
+  // A zero weight or mean must not collapse to minS, or an unset minimum fires every tick.
+  if (!(scale > 0) || !(meanS > 0)) return Number.POSITIVE_INFINITY;
   const expo = -Math.log(1 - rng()) * (meanS / scale);
   return Math.max(minS, expo);
 }

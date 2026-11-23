@@ -77,6 +77,21 @@ export function hushStep(input: {
   const pending = input.narrationPlaying || input.queuedFragment;
 
   if (state.phase !== "idle") {
+    const hushCanApply =
+      state.phase === "fadingOut" || state.phase === "cue" || state.phase === "holding";
+    if (hushCanApply && (!input.settingOn || !input.insideGrove)) {
+      return result(
+        {
+          phase: "fadingIn",
+          phaseStartedAt: now,
+          nextHushAt: null,
+          holdEndsAt: null,
+          fadeInMs: HUSH_FADE_IN_MS,
+        },
+        HUSH_FADE_IN_MS,
+        false,
+      );
+    }
     if (input.triggerArrived || pending) {
       if (state.phase === "fadingIn" && state.fadeInMs === HUSH_TRIGGER_FADE_MS) {
         return advanceFadeIn(input);
