@@ -288,6 +288,30 @@ export function HomeScreen() {
           <Text style={{ color: palette.text }}>◎</Text>
         </Pressable>
       ) : null}
+      {__DEV__ && model.groves.some((grove) => grove.centroid) ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Fly to installed grove"
+          onPress={() => {
+            const stress = model.groves.find((grove) => grove.name.includes("Stress"));
+            const target = (stress ?? model.groves[0])?.centroid;
+            if (!target || !mapRef.current) return;
+            mapRef.current.animateToRegion(
+              {
+                ...target,
+                latitudeDelta: stress ? 0.02 : 0.012,
+                longitudeDelta: stress ? 0.02 : 0.012,
+              },
+              250,
+            );
+          }}
+          style={[styles.flyGrove, chrome(theme), { top: insets.top + 70 }]}
+        >
+          <Text maxFontSizeMultiplier={2} style={[styles.pillText, { color: palette.text, fontSize: 14 }]}>
+            Grove
+          </Text>
+        </Pressable>
+      ) : null}
       <View style={[styles.row, { bottom: insets.bottom + 34 }]}>
         <Pill href="/chronicle" label={strings.chronicle} theme={theme} />
         <Pill href="/embark" label={strings.embark} theme={theme} embark />
@@ -392,6 +416,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  flyGrove: {
+    position: "absolute",
+    left: 16,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
   },

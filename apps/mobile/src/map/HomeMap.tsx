@@ -175,18 +175,22 @@ export function HomeMap(props: Props) {
   );
 
   useEffect(() => {
-    if (!__DEV__ || spiked.current || reduceMotion) return;
+    if (!__DEV__ || reduceMotion) return;
+    spiked.current = false;
     const samples: number[] = [];
     let last = Date.now();
     const id = setInterval(() => {
+      if (spiked.current) return;
       const now = Date.now();
       samples.push(now - last);
       last = now;
-      if (samples.length < 16) return;
+      if (samples.length < 40) return;
       spiked.current = true;
       const average = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+      const worst = Math.max(...samples);
+      const expected = 1000 / PULSE_FRAMES;
       console.info(
-        `marker-spike frames=${PULSE_FRAMES} tickAvgMs=${average.toFixed(1)} onScreen=${onScreenCount}`,
+        `marker-spike device=Pixel_11 frames=${PULSE_FRAMES} tickAvgMs=${average.toFixed(1)} tickMaxMs=${worst.toFixed(1)} expectedMs=${expected.toFixed(1)} onScreen=${onScreenCount}`,
       );
       clearInterval(id);
     }, 1000 / PULSE_FRAMES);

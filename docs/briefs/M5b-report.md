@@ -1,75 +1,65 @@
 # Lane B · M5b
 
-Map home with the first-pass review fixes and step 8 (A2 Part 1). Stopped before the device run.
+Map home device run on Pixel 11 (`67090DLKY005KL`) after the Maps key SHA-1 and `apps/mobile/.env` (key never printed, logged, or committed).
 
 ## Debug signing (N4)
 
-`npx expo prebuild --platform android --no-install`, then `keytool` on `apps/mobile/android/app/debug.keystore` (gitignored CNG folder):
-
-**SHA-1:** `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`
-
-This is the certificate `expo run:android` uses. It is **not** the keystore under `%USERPROFILE%\.android` (`AE:0E:CE:…`). Put this SHA-1 on the Android Maps key. There is still no `apps/mobile/.env` here.
+**SHA-1:** `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (Expo prebuild `android/app/debug.keystore`, not `%USERPROFILE%\.android`).
 
 ## Versions
 
 - Expo `~58.0.26`, React Native `0.88.1`
 - `react-native-maps` `1.29.11`
 - `expo-location` `58.0.22`
-- `expo-font` `~58.0.12`
 - Questrial Regular, SIL OFL, under `apps/mobile/assets/fonts/`
 
-## Review fixes (R1–R4, N1–N3)
+## Device checks (Pixel 11, 1080×2424, density 420)
 
-- **R1.** Pulse clock is a module store (`pulseClock` + `useSyncExternalStore`). Only on-screen pulsing `Pin`s and the halo layer subscribe. Grove fills, outlines, and trimmed web lines are memoized on the model and settled zoom. Marker selection uses one stable `useCallback`.
-- **R2.** Marker states use `storyTimeWindow` (region sun clock, or `"day"` with no region). Theme only picks colors. Test: Follow my phone dark at noon still loads day-window states.
-- **R3.** Live puck via `onUserLocationChange` (throttled) and `watchPositionAsync` while focused and active. Cleared when the screen blurs. Memory only; never SQLite or logs.
-- **R4.** Accessibility label is tier and state from `strings`, then the card text.
-- **N1.** `mapReady` state drives the first-camera effect.
-- **N2.** `labels.text.stroke` is paper by day and ground by night.
-- **N3.** Physical cards show the teaser, then "Scan the code here to listen."
+Screenshots under `docs/briefs/M5b-screens/`:
 
-## Step 8 (A2)
+| File | What it shows |
+|---|---|
+| `day.png` | Demo grove, day style, markers + halo |
+| `night.png` | Same grove after Follow my phone + `cmd uimode night yes`; blueprint style, no remount (`MapView` `key="home-map"`) |
+| `reduce-motion.png` | Animator scales at 0; still pulse-color rings; no halo (`AccessibilityInfo` → true; no `halo-bands` log after reload) |
 
-Merged `origin/master` (A2 Part 1). `pnpm install`; lockfile unchanged. Wired:
+**Simulated sunset:** Follow my phone, then `adb shell cmd uimode night yes`. Style swapped without reload. Confirmed.
 
-- Schema 4 MultiPolygon boundaries via `toMultiPolygon` / `pointInPolygon`
-- `MarkerState.pulse` as `"tier" | "changed" | "none"` (stand-in adapter deleted)
-- `storyWebLinks` for in-grove lines
-- Pack `crossGroveLinks` for tips and open chevrons
-- Halo: four `groveShape(…, { extraM })` bands at ¼–1× 14 pt when zoom settles; one band shown per beat at falling opacity; Reduce Motion hides it; `__DEV__` logs band compute time
+**Reduce Motion:** `settings put global transition_animation_scale 0` (and animator/window). Live change after reload: still rings, halo suppressed. Scales restored to 1 afterward.
 
-Demo and stress fixtures now publish schema 4 shapes from `groveShape`. A2 already updated `sync.test.ts` / `install.test.ts` on master; this branch did not edit them further.
+**300-marker pan (kept 8 frames):**
+```
+marker-spike device=Pixel_11 frames=8 tickAvgMs=167.8 tickMaxMs=269.0 expectedMs=125.0 onScreen=300
+```
+12-frame trial (regen PNGs, reload, same grove):
+```
+marker-spike device=Pixel_11 frames=12 tickAvgMs=181.6 tickMaxMs=7071.0 expectedMs=83.3 onScreen=300
+```
+12 was farther from budget (and the max sample coincided with a multi-second halo recompute). **Kept `PULSE_FRAMES = 8`.**
 
-## Device spike
+**Root ring size:** Spec / asset `RING.root.diameterPt = 22`. At density 420 (2.625 px/pt) that is **57.75 device px**. Screenshot outer-ink scan on `day.png` read about **25.9 pt** (stroke + AA / possible pulse overlay); mid-stroke earlier pass was about **19.8 pt**. Logical diameter remains 22 pt.
 
-Still pending the device run. AVD `Medium_Phone_API_37.0` exists; earlier boot exited. Pixel 11 (`67090DLKY005KL`) was attached before; nothing installed. No frame times, no 12-frame trial, no screenshots, no on-device Root size check. Halo `groveShape` timing will be read from the device log on that run.
+**Halo band timing (`groveShape` × 4 fractions, logged in `__DEV__`):**
+- Demo grove alone: about **4–13 ms** (4 bands)
+- Demo + Stress installed (8 bands, 300-fragment shape): about **2.2–3.5 s** on zoom settle — expensive; worth a later optimize, not changed in this run
 
-## Tests and export
+Dev helpers used on device only: `__DEV__` Grove fly (prefers Stress), spike + halo logs. Mock GPS was blocked (`MOCK_LOCATION`); fly replaced it. Expo Tools FAB overlaps Settings; used `intell://settings` / `intell://dev/data`.
 
-`pnpm --filter @intell/mobile test` — 13 suites, 42 tests, passed.  
-`pnpm --filter @intell/mobile typecheck` — passed.  
-`pnpm --filter @intell/mobile lint` — passed.  
-Clean export: `CI=1 expo export --platform android --clear` — 1591 modules, exit 0 (`%TEMP%\m5b-export`).
+## Review fixes and step 8 (unchanged from prior stop)
+
+R1–R4, N1–N3, A2 Part 1 wiring as in the previous report. Stand-ins deleted; schema 4 / `groveShape` / `storyWebLinks` / string `pulse` in use.
+
+## Tests
+
+`pnpm --filter @intell/mobile test` / `typecheck` / `lint` were green before the device run. Re-run after the small HomeMap/HomeScreen device-log and Grove-fly edits before push.
 
 ## iOS, still pending
 
-Dashes in metres on iOS, points on Android. Styles and dashes not checked on an iOS device.
-
-## `git log --oneline origin/master..HEAD`
-
-```
-9213603 Fix M5b review items and wire A2 map home fields.
-d1a299d Merge origin/master for A2 Part 1 (schema 4, groveShape, story web).
-33ddce1 docs: M5b first-pass review (R1 pulse re-renders, R2 story window, R3 live puck, R4 labels)
-2f79efe Record the M5b branch log in the implementation report.
-35e9379 Add the M5b map home, stopping before the A2 pack fields.
-7a449aa docs: M5b plan review (R1 POI labels only, R2 48 pt marker canvas, R3 halo after A2)
-57a6ff6 docs: plan the M5b map home
-```
+Dashes in metres on iOS, points on Android. Styles not checked on an iOS device.
 
 ## Deviations
 
-- Night style “white at N%” colors stay flattened to 6-digit hex (Maps style has no alpha).
+- Night style “white at N%” stays flattened to 6-digit hex.
 - Road bands remain color and weight only.
-- Dev fixtures still install into local SQLite; a later sync drops packs not in the published index.
-- Ready for the Pixel 11 device checks once the Maps key includes the prebuild SHA-1 above.
+- Stress halo recompute is multi-second with 300 fragments; demo stays in the low teens of ms.
+- Kept 8 pulse frames after the 12-frame device trial.
