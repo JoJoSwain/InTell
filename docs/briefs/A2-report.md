@@ -59,11 +59,16 @@ The nearby grove (`…00c0`) is 2 pieces. Its link is the other direction: `…0
 
 ## git log
 
-`git log --oneline origin/master..HEAD` is in the commit that adds this report. At implementation time the branch already had:
+`git log --oneline origin/master..HEAD` after the implementation commit:
 
-- `7038bae` docs: A2 plan review (R1 nested pieces, R2 tip inside the grove, R3 grove-level cascade)
-- `0d4f8ea` docs: A2 plan for the derived grove boundary
-- `8e25861` docs: ADR 0006 (map home), A2 and M5b briefs, roadmap
+```
+b1dce9e feat: derive grove boundaries and publish them as schema 4
+7038bae docs: A2 plan review (R1 nested pieces, R2 tip inside the grove, R3 grove-level cascade)
+0d4f8ea docs: A2 plan for the derived grove boundary
+8e25861 docs: ADR 0006 (map home), A2 and M5b briefs, roadmap
+a84f986 docs: roadmap status at the end of 2026-11-22
+8eff2c3 docs: mobile home-screen design standards from the 2026-11-22 session
+```
 
 ## Deviations
 
