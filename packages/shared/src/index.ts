@@ -56,12 +56,48 @@ export {
 } from "./canonicalJson";
 
 export {
+  distanceInsideMeters,
+  distanceMeters,
+  pointInPolygon,
+  type GeoJsonPolygon,
+  type LatLng,
+} from "./geo/polygon";
+
+export {
   completionSatisfiesContingency,
   contingencyRevisionNo,
   type ChangeKind,
   type RevisionChange,
   type RevisionForContingency,
 } from "./story/contingency";
+
+export {
+  chronicleReplay,
+  isUnlocked,
+  markerState,
+  memberSatisfied,
+  pickVersion,
+  unlocksToWrite,
+  type CompletionRow,
+  type ExternalPrerequisite,
+  type FragmentInput,
+  type MarkerState,
+  type UnlockRow,
+  type VersionRef,
+} from "./story/unlock";
+
+export {
+  ACCESSIBLE_RADIUS_M,
+  chooseTrigger,
+  proximityCandidates,
+  queueAfterTrigger,
+  scanDecision,
+  TWO_FIX_WINDOW_MS,
+  type LocationFix,
+  type QueuedFragment,
+  type TriggerCandidate,
+  type TriggerVia,
+} from "./story/trigger";
 
 export {
   currentTimeWindow,
