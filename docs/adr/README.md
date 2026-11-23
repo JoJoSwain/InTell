@@ -8,3 +8,4 @@
 | [0003](./0003-story-graph.md) | Story graph: prerequisite groups replace the fragment tree (Accepted; amended by 0004) |
 | [0004](./0004-product-realignment.md) | Product realignment before M3 (Accepted; amended by 0005) |
 | [0005](./0005-listener-experience.md) | Listener experience: Embark, story changes, character cards, progress (Accepted) |
+| [0006](./0006-map-home.md) | The map home: derived grove boundaries, marker pulses and the story web (Accepted) |

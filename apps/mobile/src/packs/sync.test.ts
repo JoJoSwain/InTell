@@ -15,7 +15,7 @@ const FRAGMENT = "33333333-3333-4333-8333-333333333333";
 function groveManifest(regionId: string): string {
   return JSON.stringify(
     GrovePack.parse({
-      schema: 3,
+      schema: 4,
       groveId: GROVE,
       regionId,
       packVersion: 1,
@@ -24,12 +24,16 @@ function groveManifest(regionId: string): string {
         id: GROVE,
         name: { en: "Demo" },
         premise: { en: "A test grove" },
-        boundary: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        boundary: {
+          type: "MultiPolygon",
+          coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]],
+        },
         allowsSpeakerWildlifeSounds: false,
         openingFragmentId: FRAGMENT,
         journeys: {},
       },
       characters: [],
+      crossGroveLinks: [],
       fragments: [
         {
           id: FRAGMENT,

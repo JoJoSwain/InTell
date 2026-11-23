@@ -36,6 +36,19 @@ describe("pointInPolygon", () => {
     expect(pointInPolygon(justOutside, square())).toBe(false);
   });
 
+  it("accepts a point in a second MultiPolygon piece", () => {
+    const east = square();
+    east.coordinates[0] = east.coordinates[0]!.map(([lng, lat]) => [lng! + 0.002, lat!]);
+    const multi = {
+      type: "MultiPolygon" as const,
+      coordinates: [square().coordinates, east.coordinates],
+    };
+    const inSecond = { lat: 40.9805, lng: -111.8975 };
+    expect(pointInPolygon(inSecond, multi)).toBe(true);
+    expect(distanceInsideMeters(inSecond, multi)).toBeGreaterThan(10);
+    expect(distanceInsideMeters(justOutside, multi)).toBe(0);
+  });
+
   it("rejects a point inside a hole", () => {
     const withHole: GeoJsonPolygon = {
       type: "Polygon",

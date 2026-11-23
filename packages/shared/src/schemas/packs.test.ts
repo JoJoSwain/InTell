@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { GrovePack, PreviewManifest, RegionPack } from "./packs";
 
 const boundary = {
-  type: "Polygon" as const,
+  type: "MultiPolygon" as const,
   coordinates: [
     [
-      [-111.93, 40.96],
-      [-111.92, 40.96],
-      [-111.92, 40.97],
-      [-111.93, 40.97],
-      [-111.93, 40.96],
+      [
+        [-111.93, 40.96],
+        [-111.92, 40.96],
+        [-111.92, 40.97],
+        [-111.93, 40.97],
+        [-111.93, 40.96],
+      ],
     ],
   ],
 };
@@ -21,7 +23,7 @@ const homeGroveId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const fragId = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
 
 const baseGrove = {
-  schema: 3 as const,
+  schema: 4 as const,
   groveId: homeGroveId,
   regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
   packVersion: 1,
@@ -74,6 +76,13 @@ const baseGrove = {
       ],
     },
   ],
+  crossGroveLinks: [] as {
+    fragmentId: string;
+    otherFragmentId: string;
+    otherGroveId: string;
+    direction: "requires" | "unlocks";
+    tip: { lat: number; lng: number };
+  }[],
   externalPrerequisites: [] as {
     fragmentId: string;
     groveId: string;
@@ -118,10 +127,10 @@ const baseGrove = {
   ],
 };
 
-describe("GrovePack schema 3", () => {
+describe("GrovePack schema 4", () => {
   it("accepts a minimal valid pack", () => {
     const parsed = GrovePack.parse(baseGrove);
-    expect(parsed.schema).toBe(3);
+    expect(parsed.schema).toBe(4);
     expect(parsed.regionId).toBe(baseGrove.regionId);
     expect(parsed.grove.openingFragmentId).toBe(fragId);
     expect(parsed.grove.journeys.walk).toEqual({ en: "TEST walk journey" });

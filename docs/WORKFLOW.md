@@ -81,14 +81,21 @@
 
 ---
 
-## 6. Lane roadmap (updated 2026-11-22)
+## 6. Lane roadmap (updated 2026-11-23)
 
 Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering the shared logic and server pieces Lane B will need, and works on admin and analytics in between.
 
+**Where we stopped (2026-11-22, 11 pm MT):** `master` is at `ecefe74`, with A1, M5a and both halves of M4a merged. Staging is current with A1 (migrations, 8 functions, `device_rate_limits`, cron returning 200, Vercel Ready). Jordan and Ashley set the home-screen design standards in `docs/design/MOBILE_HOME_STANDARDS.md`, which is committed on `b/m5b-map-home` and not pushed yet. Both lanes are resting.
+
+**2026-11-23:** ADR 0006 records the map-home decisions that change data and shared logic. Lane A starts **A2** and Lane B starts **M5b**, both plan first.
+
 **Lane A (Platform)**
 0. ✅ **A1, the M5a enablers** (PR #21): `register-device`, the shared sync-diff helper, React unified at 19.3.0.
-1. **M4a:** the shared logic in `packages/shared`, built in two halves. ✅ The story half (geo, unlock, time-window tests, trigger) merged in PRs #22 and #23. ▶ Next is the sound half (music, ambience, Hush) on `a/m4a-sound`.
-2. **Server pieces for M5**, moved ahead of M4b so they're ready when Lane B reaches Embark: the `embark` relay (Routes API key, `embark_usage` cap, origin never stored or logged), plus the CI `expo export` job (A1 review F1).
+1. ✅ **M4a:** the shared logic in `packages/shared`. The story half (geo, unlock, time-window tests, trigger) merged in PRs #22 and #23; the sound half (music, ambience, Hush) in PR #24.
+2. ▶ **A2, the derived grove boundary** (ADR 0006; brief `docs/briefs/A2-grove-boundary.md`), in two PRs.
+   - **Part 1** comes first, because M5b needs it: the CI mobile export check (A1 review F1), the shared `groveShape`, MultiPolygon geometry, marker pulse kinds, story-web helpers, grove pack schema 4 and the pack builder.
+   - **Part 2:** the database and the admin stop using drawn grove polygons.
+2b. **A3, the Embark relay** for M5c: the Routes API key, the `embark_usage` cap, and an origin that's never stored or logged.
 3. **M4b:** admin sound design and the Listening Simulator. It carries the region-pack extension for the sound fields (M4a plan review A1; a pack schema bump, which the phone already tolerates per M5a R4), M3c N3 (the loudness Web Worker), M3e F2 (a typed pack-build error), M3h V1/V2 and M3f K1–K3.
 4. **M11:** analytics ingest, dashboard, delete-device-data and export. These can be built from TECH_SPEC §8–9 with fixtures.
 5. **Pure logic ahead of Lane B:** the session state machine (M6), AudioDirector rules (M7) and Chronicle selectors (M8), all in `packages/shared` with tests.
@@ -97,10 +104,12 @@ Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering 
 
 **Lane B (Mobile)**
 1. ✅ **M5a** (PR #20): the device database (where the OS backup includes it), pack index, download and sync with mandatory deletion, device registration, and staff preview mode.
-2. **M5b:** the UI, after the DESIGN mobile rewrite with Ashley (her and Jordan's worksheet picks, then the brief): tokens, map home, markers at day and night opacity, the Embark card and route drawing, and the pulsing changed-fragment marker.
+2. ▶ **M5b, the map home** (brief `docs/briefs/M5b-map-home.md`, built from `docs/design/MOBILE_HOME_STANDARDS.md`): tokens and fonts, the styled map by day and night, groves, markers and pulses, the story web, and the constant controls. It wires in A2 Part 1 when that merges.
+   - **M5c, Embark:** the card, the three modes, route drawing and the beta notice. It waits for worksheet rows 4.2 and 4.4 and for A3.
+   - **M5d, first run:** the splash, brand animation, welcome cards, location explainer and app icon. It waits for worksheet rows 6.x and 1.6.
 3. **M6, then M7, then M8** (after CHRONICLE_SPEC), **then M9 mobile** (after the Journal spec and counsel), **then M12 mobile and the field tests.**
 
-**Docs Claude must have ready ahead of Lane B:** the DESIGN mobile sections (with Ashley) before M5b, CHRONICLE_SPEC before M8, and the Journal spec (with counsel on children's privacy) before M9.
+**Docs Claude must have ready ahead of Lane B:** ✅ the home-screen standards before M5b (the remaining worksheet rows before the screens that need them), CHRONICLE_SPEC before M8, and the Journal spec (with counsel on children's privacy) before M9.
 
 ---
 

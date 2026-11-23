@@ -19,7 +19,7 @@ const digest = async (bytes: Uint8Array) => sha256(bytes);
 
 function groveManifest(assetSha: string, assetBytes: number, version = 1, extra: { sha: string; bytes: number }[] = []): Uint8Array {
   const pack = GrovePack.parse({
-    schema: 3,
+    schema: 4,
     groveId: GROVE,
     regionId: REGION,
     packVersion: version,
@@ -28,12 +28,16 @@ function groveManifest(assetSha: string, assetBytes: number, version = 1, extra:
       id: GROVE,
       name: { en: "Demo" },
       premise: { en: "A test grove" },
-      boundary: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      boundary: {
+        type: "MultiPolygon",
+        coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]],
+      },
       allowsSpeakerWildlifeSounds: false,
       openingFragmentId: FRAGMENT,
       journeys: {},
     },
     characters: [],
+    crossGroveLinks: [],
     fragments: [
       {
         id: FRAGMENT,

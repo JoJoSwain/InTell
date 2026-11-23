@@ -1,4 +1,8 @@
-import { distanceInsideMeters, pointInPolygon, type GeoJsonPolygon } from "../geo/polygon";
+import {
+  distanceInsideMeters,
+  pointInPolygon,
+  type GeoJsonArea,
+} from "../geo/polygon";
 import type { MusicCondition, StemRulePack } from "../schemas/music";
 import type { TimeWindow } from "../time/timeWindow";
 
@@ -38,7 +42,7 @@ export type MusicCueInput = {
   conditions: MusicCondition;
   minDwellS: number;
   crossfadeMs: number;
-  boundary: GeoJsonPolygon;
+  boundary: GeoJsonArea;
   edgeFadeM: number;
   stems: MusicStemInput[];
 };
