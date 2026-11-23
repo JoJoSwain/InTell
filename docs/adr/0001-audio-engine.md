@@ -27,17 +27,17 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 
 | # | Test | Android | iOS | Notes |
 |---|---|---|---|---|
-| T1 | 60-minute locked run + clock health | | | clockGapMs stable (no jumps &gt; 50 ms; total growth &lt; 250 ms) |
-| T2 | Stem alignment (ear) | | | no audible flams (maxStemDriftMs not measurable in Web Audio) |
-| T3 | Ducking | | | |
-| T4 | Route switching | | | pause on unplug |
-| T5 | Phone call | | | |
-| T6 | Other app audio | | | |
-| T7 | Lock-screen controls | | | |
-| T8 | Memory &lt; 150 MB | | | |
-| T9 | Battery (informational) | | | |
+| T1 | 60-minute locked run + clock health | blocked | | spike UI crash — see BS1-report |
+| T2 | Stem alignment (ear) | blocked | | |
+| T3 | Ducking | blocked | | |
+| T4 | Route switching | blocked | | |
+| T5 | Phone call | blocked | | |
+| T6 | Other app audio | blocked | | |
+| T7 | Lock-screen controls | blocked | | |
+| T8 | Memory &lt; 150 MB | blocked | | |
+| T9 | Battery (informational) | blocked | | |
 
-**Verdict:** _Pending_
+**Verdict:** _Pending_ (Android protocol blocked; Status unchanged)
 
 ## Findings so far
 (Status remains **Proposed**. Full T1–T9 protocol and iPhone testing are postponed.)
@@ -48,6 +48,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 - **Spike ≠ product ambience params.** The spike’s one-shot interval is a **fixed 8 s** and its gain is a **fixed −12 dB** (simplifications). M4 shared ambience logic must use the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC).
 - **Outstanding:** the T1–T9 device protocol on Pixel, and the iPhone build and test.
 - **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start. Growing positive gap ⇒ dropouts / audio-clock starvation; slight negative drift ⇒ clock-rate difference, not a failure by itself.
+- **Android protocol (B·S1, 2026-11-23):** Wireless debugging and fixture generate succeeded; debug APK installed on Pixel 11 (Android 17). Opening `intell://dev/audio-spike` crashed on `require(…narration_90s.wav)` (`TypeError: undefined is not a function` in `assets.ts`). T1–T9 not run. No product code changed. Details in `docs/briefs/BS1-report.md`.
 
 ## Consequences
 - UI never imports `react-native-audio-api` (ESLint `no-restricted-imports`).
