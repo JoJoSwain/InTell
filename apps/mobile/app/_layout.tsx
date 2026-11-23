@@ -1,10 +1,17 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import { dataLayer } from "../src/runtime/dataLayer";
 
 /**
  * M0 shell. Map is home; Journal / Grow / Settings are modal stacks (TECH_SPEC §2).
  */
 export default function RootLayout() {
+  useEffect(() => {
+    void dataLayer().catch(() => {
+      console.info("data layer failed to start");
+    });
+  }, []);
   return (
     <>
       <StatusBar style="dark" />
@@ -19,6 +26,7 @@ export default function RootLayout() {
           name="dev/audio-spike"
           options={{ title: "Audio spike", headerShown: true }}
         />
+        <Stack.Screen name="dev/data" options={{ title: "Data layer", headerShown: true }} />
         <Stack.Screen name="+not-found" />
       </Stack>
     </>

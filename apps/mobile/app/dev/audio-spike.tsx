@@ -18,7 +18,10 @@ import {
 } from "@intell/shared";
 import { RNAudioApiEngine } from "../../src/audio/engine";
 import { SPIKE_ASSET_MODULES } from "../../src/audio/spike/assets";
-import { FIXTURES_MISSING_MESSAGE } from "../../src/audio/spike/fixturesReady";
+import {
+  FIXTURES_MISSING_MESSAGE,
+  spikeAssetModulesReady,
+} from "../../src/audio/spike/fixturesReady";
 import {
   appendDiagnostics,
   appendDiagnosticsIfDue,
@@ -124,6 +127,11 @@ function AudioSpikeBody() {
 
     (async () => {
       try {
+        if (!spikeAssetModulesReady(SPIKE_ASSET_MODULES)) {
+          setError(FIXTURES_MISSING_MESSAGE);
+          setStatus("error");
+          return;
+        }
         await engine.init({ mixWithOthers: false });
         const loads: [string, number][] = [
           ["narration", SPIKE_ASSET_MODULES.narration],
