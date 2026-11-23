@@ -284,10 +284,19 @@ describe.sequential("M3a pack integration", () => {
     await waitForPublishedSeed();
   }, 240_000);
 
-  it("demo grove pack validates (schema 3) with opening/journeys/homeGroveId", async () => {
+  it("demo grove pack validates (schema 4) with opening/journeys/homeGroveId", async () => {
     const { pack } = await fetchLiveGrovePack();
     const parsed = GrovePack.parse(pack);
-    expect(parsed.schema).toBe(3);
+    expect(parsed.schema).toBe(4);
+    expect(parsed.grove.boundary.type).toBe("MultiPolygon");
+    expect(
+      parsed.crossGroveLinks.some(
+        (link) =>
+          link.direction === "unlocks" &&
+          link.fragmentId === DEMO.frag1Id &&
+          link.otherFragmentId === DEMO.bridgeFragmentId,
+      ),
+    ).toBe(true);
     expect(parsed.grove.openingFragmentId).toBe(DEMO.frag1Id);
     expect(parsed.grove.journeys.walk?.en).toMatch(/TEST walk/i);
     expect(parsed.grove.journeys.bike?.en).toMatch(/TEST bike/i);
@@ -375,6 +384,16 @@ describe.sequential("M3a pack integration", () => {
   it("second grove lists cross-grove externalPrerequisites for Farmington frag1", async () => {
     const { pack } = await fetchLiveGrovePack(DEMO.secondGroveId);
     const parsed = GrovePack.parse(pack);
+    expect(parsed.schema).toBe(4);
+    expect(
+      parsed.crossGroveLinks.some(
+        (link) =>
+          link.direction === "requires" &&
+          link.fragmentId === DEMO.bridgeFragmentId &&
+          link.otherFragmentId === DEMO.frag1Id &&
+          link.otherGroveId === DEMO.groveId,
+      ),
+    ).toBe(true);
     const ext = parsed.externalPrerequisites.find((e) => e.fragmentId === DEMO.frag1Id);
     expect(ext).toBeDefined();
     expect(ext?.groveId).toBe(DEMO.groveId);

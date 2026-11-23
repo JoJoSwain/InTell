@@ -161,7 +161,7 @@ describe("markerState", () => {
     const frag = fragment();
     expect(
       markerState({ ...base, fragment: frag, fragments: [frag], completions: [] }),
-    ).toEqual({ opacity: 1, playableNow: true, pulse: false, hidden: false });
+    ).toEqual({ opacity: 1, playableNow: true, pulse: "tier", hidden: false });
   });
 
   it("is 35% when locked or out of window", () => {
@@ -195,26 +195,35 @@ describe("markerState", () => {
         fragments: [frag],
         completions: [completion("frag-a", 1)],
       }),
-    ).toEqual({ opacity: 1, playableNow: false, pulse: false, hidden: false });
+    ).toEqual({ opacity: 1, playableNow: false, pulse: "none", hidden: false });
   });
 
-  it("pulses for an unheard contingency, including out of window", () => {
-    const frag = fragment({
-      contingencyRevisionNo: 3,
-      versions: [{ lang: "en", timeWindow: "day" }],
-    });
+  it("pulses changed only while playable, and tier while unexplored", () => {
+    const frag = fragment({ contingencyRevisionNo: 3 });
     expect(
       markerState({
         ...base,
         fragment: frag,
         fragments: [frag],
         completions: [completion("frag-a", 1)],
+      }),
+    ).toMatchObject({ opacity: 1, playableNow: true, pulse: "changed" });
+    const dayOnly = fragment({
+      contingencyRevisionNo: 3,
+      versions: [{ lang: "en", timeWindow: "day" }],
+    });
+    expect(
+      markerState({
+        ...base,
+        fragment: dayOnly,
+        fragments: [dayOnly],
+        completions: [completion("frag-a", 1)],
         timeWindow: "night",
       }),
-    ).toMatchObject({ opacity: 0.35, playableNow: false, pulse: true });
+    ).toMatchObject({ opacity: 0.35, playableNow: false, pulse: "none" });
   });
 
-  it("does not pulse a fragment the listener has never completed", () => {
+  it("does not pulse a locked fragment", () => {
     const locked = fragment({ requires: [["missing"]] });
     expect(
       markerState({
@@ -223,14 +232,14 @@ describe("markerState", () => {
         fragments: [locked],
         completions: [],
       }).pulse,
-    ).toBe(false);
+    ).toBe("none");
   });
 
   it("hides a retired fragment", () => {
     const frag = fragment({ retired: true });
     expect(
       markerState({ ...base, fragment: frag, fragments: [frag], completions: [] }),
-    ).toEqual({ opacity: 0, playableNow: false, pulse: false, hidden: true });
+    ).toEqual({ opacity: 0, playableNow: false, pulse: "none", hidden: true });
   });
 
   it("uses the language fallback when deciding there is a version", () => {

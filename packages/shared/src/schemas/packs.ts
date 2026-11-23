@@ -22,6 +22,11 @@ const GeoJsonPolygon = z.object({
   coordinates: z.array(z.array(z.tuple([z.number(), z.number()]))),
 });
 
+const GeoJsonMultiPolygon = z.object({
+  type: z.literal("MultiPolygon"),
+  coordinates: z.array(z.array(z.array(z.tuple([z.number(), z.number()])))),
+});
+
 const PackStem = z
   .object({
     assetSha: Sha256,
@@ -92,7 +97,7 @@ export const GrovePackFragment = z
 
 export const GrovePack = z
   .object({
-    schema: z.literal(3),
+    schema: z.literal(4),
     groveId: Uuid,
     regionId: Uuid,
     packVersion: z.number().int().nonnegative(),
@@ -104,7 +109,7 @@ export const GrovePack = z
         premise: L10n,
         websiteUrl: z.string().nullable().optional(),
         gatheringsUrl: z.string().nullable().optional(),
-        boundary: GeoJsonPolygon,
+        boundary: GeoJsonMultiPolygon,
         allowsSpeakerWildlifeSounds: z.boolean(),
         growthCueAssetSha: Sha256.optional(),
         openingFragmentId: Uuid,
@@ -130,6 +135,22 @@ export const GrovePack = z
         .strict(),
     ),
     fragments: z.array(GrovePackFragment),
+    crossGroveLinks: z.array(
+      z
+        .object({
+          fragmentId: Uuid,
+          otherFragmentId: Uuid,
+          otherGroveId: Uuid,
+          direction: z.enum(["requires", "unlocks"]),
+          tip: z
+            .object({
+              lat: z.number(),
+              lng: z.number(),
+            })
+            .strict(),
+        })
+        .strict(),
+    ),
     externalPrerequisites: z.array(
       z
         .object({

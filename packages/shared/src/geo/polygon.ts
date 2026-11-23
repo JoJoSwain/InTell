@@ -17,6 +17,19 @@ export type GeoJsonPolygon = {
   coordinates: number[][][];
 };
 
+export type GeoJsonMultiPolygon = {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+};
+
+export type GeoJsonArea = GeoJsonPolygon | GeoJsonMultiPolygon;
+
+/** One polygon becomes a MultiPolygon with a single piece. */
+export function toMultiPolygon(geometry: GeoJsonArea): GeoJsonMultiPolygon {
+  if (geometry.type === "MultiPolygon") return geometry;
+  return { type: "MultiPolygon", coordinates: [geometry.coordinates] };
+}
+
 function toRad(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }
@@ -61,10 +74,15 @@ function pointInRing(point: LatLng, ring: readonly number[][]): boolean {
   return inside;
 }
 
-export function pointInPolygon(point: LatLng, polygon: GeoJsonPolygon): boolean {
-  const [exterior, ...holes] = polygon.coordinates;
+function pointInPiece(point: LatLng, piece: readonly number[][][]): boolean {
+  const [exterior, ...holes] = piece;
   if (!exterior || !pointInRing(point, exterior)) return false;
   return !holes.some((hole) => pointInRing(point, hole));
+}
+
+export function pointInPolygon(point: LatLng, geometry: GeoJsonArea): boolean {
+  const multi = toMultiPolygon(geometry);
+  return multi.coordinates.some((piece) => pointInPiece(point, piece));
 }
 
 function distanceToSegmentMeters(point: LatLng, a: RingPoint, b: RingPoint): number {
@@ -93,15 +111,25 @@ function distanceToRingMeters(point: LatLng, ring: readonly number[][]): number 
   return best;
 }
 
-/**
- * Metres from an interior point to the nearest ring (exterior or hole).
- * A point outside the polygon, including inside a hole, returns 0.
- */
-export function distanceInsideMeters(point: LatLng, polygon: GeoJsonPolygon): number {
-  if (!pointInPolygon(point, polygon)) return 0;
+function distanceInsidePieceMeters(point: LatLng, piece: readonly number[][][]): number {
+  if (!pointInPiece(point, piece)) return 0;
   let best = Number.POSITIVE_INFINITY;
-  for (const ring of polygon.coordinates) {
+  for (const ring of piece) {
     best = Math.min(best, distanceToRingMeters(point, ring));
   }
   return Number.isFinite(best) ? best : 0;
+}
+
+/**
+ * Metres from an interior point to the nearest ring of the piece that
+ * contains it. A point outside every piece, including inside a hole, returns 0.
+ */
+export function distanceInsideMeters(point: LatLng, geometry: GeoJsonArea): number {
+  const multi = toMultiPolygon(geometry);
+  let best = 0;
+  for (const piece of multi.coordinates) {
+    const distance = distanceInsidePieceMeters(point, piece);
+    if (distance > 0) best = best === 0 ? distance : Math.min(best, distance);
+  }
+  return best;
 }

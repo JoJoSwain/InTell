@@ -210,6 +210,30 @@ describe("selectMusicCue", () => {
     ).toBe("current");
   });
 
+  it("fades from the edge of a second piece", () => {
+    const east = {
+      type: "Polygon" as const,
+      coordinates: [
+        square.coordinates[0]!.map(([lng, lat]) => [lng! + 0.002, lat!] as [number, number]),
+      ],
+    };
+    const selected = selectMusicCue({
+      cues: [
+        cue({
+          boundary: { type: "MultiPolygon", coordinates: [square.coordinates, east.coordinates] },
+          edgeFadeM: GROVE_MUSIC_EDGE_FADE_M,
+        }),
+      ],
+      point: { lat: 40.9805, lng: -111.8975 },
+      story: story(),
+      current: null,
+      now,
+    });
+    expect(selected.cue).not.toBeNull();
+    expect(selected.edgeGain).toBeGreaterThan(0);
+    expect(selected.edgeGain).toBeLessThanOrEqual(1);
+  });
+
   it("is fully faded in deep inside the zone", () => {
     const selected = selectMusicCue({
       cues: [cue({ edgeFadeM: 10 })],

@@ -9,14 +9,16 @@ import {
 } from "./syncDiff";
 
 const boundary = {
-  type: "Polygon" as const,
+  type: "MultiPolygon" as const,
   coordinates: [
     [
-      [-111.93, 40.96],
-      [-111.92, 40.96],
-      [-111.92, 40.97],
-      [-111.93, 40.97],
-      [-111.93, 40.96],
+      [
+        [-111.93, 40.96],
+        [-111.92, 40.96],
+        [-111.92, 40.97],
+        [-111.93, 40.97],
+        [-111.93, 40.96],
+      ],
     ],
   ],
 };
@@ -31,7 +33,7 @@ const markerHash = sha(900);
 
 function groveFixture(): GrovePack {
   return GrovePack.parse({
-    schema: 3,
+    schema: 4,
     groveId: homeGroveId,
     regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
     packVersion: 1,
@@ -74,6 +76,7 @@ function groveFixture(): GrovePack {
         characters: [],
       },
     ],
+    crossGroveLinks: [],
     externalPrerequisites: [],
     revisions: [
       {
