@@ -78,9 +78,21 @@ Jordan’s Pixel look + ADR 0006 / standards §4.3, §5.1–§5.3. Brief: `docs/
 
 **D1.** `MAX_PULSING_ON_SCREEN = 40`: above that, every pulsing marker uses the still (Reduce Motion) frame until the count drops. All-or-nothing.
 
-**D2. gfxinfo** — **not run yet.** The Pixel sat on the PIN lock screen for the screenshot pass; unlock and a short follow-up will collect the three 10s pans (demo, stress capped/zoomed out, stress ~30 markers).
+**D2. gfxinfo** (Pixel 11, `dumpsys gfxinfo org.replaceplace.intell`, 10 s pan each; Stay awake on):
 
-**Screenshots** — `day.png` / `night.png` below are still the **pre–design-update** set (with halo). Fresh design-update shots need the unlocked device.
+| Scene | Frames | Janky | 50th | 90th | 95th | 99th |
+|---|---:|---:|---:|---:|---:|---:|
+| Demo grove | 521 | 4 (**0.77%**) | 5 ms | 8 ms | 12 ms | 14 ms |
+| Stress zoomed out (cap on, 300 pulsing → still) | 621 | 4 (**0.64%**) | 5 ms | 7 ms | 9 ms | 13 ms |
+| Stress ~40 markers (uncapped; brief asked ~30) | 542 | 4 (**0.74%**) | 5 ms | 6 ms | 8 ms | 11 ms |
+
+**Screenshots** (design update) under `docs/briefs/M5b-screens/`:
+
+| File | What it shows |
+|---|---|
+| `day.png` | Demo grove, day style: solid white centers, brick pulses, dashed outline (no halo) |
+| `night.png` | Same grove, Follow my phone + night: solid `#163447` centers, white rings, brick pulse |
+| `reduce-motion.png` | Still brick / changed rings at start size; outline steady (no pulse animation) |
 
 **D3. Checks after these edits**
 
