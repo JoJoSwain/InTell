@@ -8,11 +8,15 @@ import {
   isActiveStaff,
   loadStaff,
 } from "@/lib/staff";
-import { coordsFromGeo, geoJsonString, l10nEn } from "@/lib/geo";
+import { coordsFromGeo, l10nEn } from "@/lib/geo";
 import {
   ChecklistBadges,
   type ChecklistFailure,
 } from "@/components/checklist-badges";
+import {
+  derivedGroveShapeJson,
+  farPieceFailures,
+} from "@/lib/grove-shape-preview";
 import {
   releaseBadgeKind,
   UnreleasedBadge,
@@ -46,7 +50,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: grove } = await supabase
     .from("groves")
     .select(
-      "id, region_id, slug, name, premise, website_url, gatherings_url, allows_speaker_wildlife_sounds, boundary_geojson, status",
+      "id, region_id, slug, name, premise, website_url, gatherings_url, allows_speaker_wildlife_sounds, status",
     )
     .eq("id", id)
     .maybeSingle();
@@ -71,10 +75,19 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: fragments } = await supabase
     .from("fragments")
     .select(
-      "id, grove_id, title, teaser, tier, visibility, location_geojson, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body",
+      "id, grove_id, title, teaser, tier, visibility, location_geojson, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body, status",
     )
     .eq("grove_id", id)
     .order("story_order");
+
+  const shapeFragments = (fragments ?? []) as {
+    id: string;
+    tier: string;
+    status: string;
+    location_geojson: { coordinates?: number[] } | null;
+  }[];
+  const derivedShapeJson = derivedGroveShapeJson(shapeFragments);
+  const farWarnings = farPieceFailures(id, shapeFragments);
 
   const { data: allFrags } = await supabase
     .from("fragments")
@@ -145,6 +158,7 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
       ?.failures;
     if (Array.isArray(failures)) checklist = failures;
   }
+  checklist = [...checklist, ...farWarnings];
 
   const canEdit = canEditStory(staff.role);
   const canNotes = canWriteStoryNotes(staff.role);
@@ -235,6 +249,8 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
           <GroveForm
             regions={(regions ?? []) as { id: string; name: string }[]}
             canEdit={canEdit}
+            derivedShapeJson={derivedShapeJson}
+            farPieceWarning={farWarnings[0]?.message ?? null}
             initial={{
               id: grove.id,
               region_id: grove.region_id,
@@ -245,7 +261,6 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
               gatherings_url: grove.gatherings_url ?? "",
               allows_speaker_wildlife_sounds:
                 grove.allows_speaker_wildlife_sounds,
-              boundaryJson: geoJsonString(grove.boundary_geojson),
             }}
           />
         </div>

@@ -9,20 +9,6 @@ const SEED_REGION = "aaaaaaaa-bbbb-4ccc-8ddd-000000000001";
 const SEED_FRAG_BEGINNING = "aaaaaaaa-bbbb-4ccc-8ddd-000000000030";
 const SHOTS = join(__dirname, "screenshots");
 
-/** Small polygon around Farmington sun reference (~41.1, -111.9). No Maps API. */
-const BOUNDARY = JSON.stringify({
-  type: "Polygon",
-  coordinates: [
-    [
-      [-111.905, 41.095],
-      [-111.895, 41.095],
-      [-111.895, 41.105],
-      [-111.905, 41.105],
-      [-111.905, 41.095],
-    ],
-  ],
-});
-
 async function fillFirstRevisionDayOnly(
   page: import("@playwright/test").Page,
   transcript: string,
@@ -102,14 +88,13 @@ test.describe("M3d publish from scratch", () => {
 
     await signIn(page, editor.email, editor.password);
 
-    // --- New grove (GeoJSON boundary; no Maps) ---
+    // --- New grove (outline derived from fragments; no Maps) ---
     await page.getByRole("link", { name: "Groves" }).click();
     await page.getByRole("link", { name: "New grove" }).click();
     const stamp = Date.now();
     const groveName = `M3d Grove ${stamp}`;
     await page.getByLabel("Grove name").fill(groveName);
     await page.getByLabel("Premise").fill("M3d from-scratch premise");
-    await page.getByLabel("Boundary GeoJSON").fill(BOUNDARY);
     await page.getByLabel("Region").selectOption(SEED_REGION);
     await page.getByRole("button", { name: "Create grove" }).click();
     await page.waitForURL(/\/story\/groves\/[0-9a-f-]{36}/, { timeout: 20_000 });

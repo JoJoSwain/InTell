@@ -32,7 +32,7 @@ select is(
 
 -- Non-live build is invisible
 insert into public.pack_builds (
-  scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total, live
+  scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total, live, bbox
 ) values (
   'grove',
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
@@ -41,7 +41,8 @@ insert into public.pack_builds (
   repeat('a', 64),
   '{}',
   1,
-  false
+  false,
+  array[-111.93, 40.96, -111.91, 40.97]::double precision[]
 );
 
 select is(
@@ -53,7 +54,7 @@ select is(
 -- Live grove build included when grove snapshot is published
 insert into public.pack_builds (
   scope, scope_id, version, manifest_path, manifest_sha256, asset_hashes, bytes_total,
-  live, release_id
+  live, release_id, bbox
 ) values (
   'grove',
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
@@ -63,7 +64,8 @@ insert into public.pack_builds (
   '{}',
   2,
   true,
-  'aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0'
+  'aaaaaaaa-bbbb-4ccc-8ddd-0000000000e0',
+  array[-111.93, 40.96, -111.91, 40.97]::double precision[]
 );
 
 select ok(

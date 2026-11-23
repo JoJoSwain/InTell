@@ -10,10 +10,7 @@ select throws_ok(
      'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
      'leaf',
      '{"en":"no code"}'::jsonb,
-     (
-       select extensions.ST_Centroid(boundary)::extensions.geography
-       from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'
-     ),
+     extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
      'physical',
      10.67,
      null,

@@ -22,6 +22,8 @@ export type PackPersistInput = {
   releaseId?: string | null;
   /** Grove opening root coords (M3e); omitted for region / missing opening. */
   opening?: { lat: number; lng: number } | null;
+  /** Grove pack bbox [west, south, east, north] from the derived shape. */
+  bbox?: [number, number, number, number] | null;
 };
 
 export type PackPersistResult =
@@ -143,6 +145,11 @@ export async function persistPackIfChanged(
         }
       : { opening_lat: null, opening_lng: null };
 
+  const bbox =
+    input.scope === "grove" && input.bbox
+      ? { bbox: input.bbox }
+      : { bbox: null };
+
   const { error: insErr } = await client.from("pack_builds").insert({
     scope: input.scope,
     scope_id: input.scopeId,
@@ -156,6 +163,7 @@ export async function persistPackIfChanged(
     release_id: releaseId,
     live,
     ...opening,
+    ...bbox,
   });
   if (insErr) throw new Error(`pack_builds insert: ${insErr.message}`);
 

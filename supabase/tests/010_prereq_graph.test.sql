@@ -23,8 +23,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0',
   'leaf',
   '{"en":"cross-grove lab"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-0000000000c0'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92538673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 899, 'draft'
 );
 
@@ -58,8 +57,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"cycle A"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 901, 'draft'
 ),
 (
@@ -67,8 +65,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"cycle B"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 902, 'draft'
 );
 
@@ -97,8 +94,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"cycle3 A"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 911, 'draft'
 ),
 (
@@ -106,8 +102,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"cycle3 B"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 912, 'draft'
 ),
 (
@@ -115,8 +110,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"cycle3 C"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard', 10.67, 913, 'draft'
 );
 
@@ -147,8 +141,7 @@ select throws_ok(
      'leaf',
      true,
      '{"en":"ending leaf"}'::jsonb,
-     (select extensions.ST_Centroid(boundary)::extensions.geography
-        from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+     extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
      'standard',
      10.67,
      920,
@@ -168,8 +161,7 @@ insert into public.fragments (
   'aaaaaaaa-bbbb-4ccc-8ddd-000000000010',
   'leaf',
   '{"en":"leaf needs leaf"}'::jsonb,
-  (select extensions.ST_Centroid(boundary)::extensions.geography
-     from public.groves where id = 'aaaaaaaa-bbbb-4ccc-8ddd-000000000010'),
+  extensions.ST_SetSRID(extensions.ST_MakePoint(-111.92895673, 40.9612169), 4326)::extensions.geography,
   'standard',
   10.67,
   930,

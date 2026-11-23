@@ -22,7 +22,7 @@ export default async function NewGrovePage() {
     <main className="px-8 py-10">
       <h1 className="font-serif text-3xl font-semibold">New grove</h1>
       <p className="mt-2 text-textMuted">
-        Boundary via GeoJSON (map when Maps key + Map ID are set).
+        The outline is derived from fragments after you place them.
       </p>
       <div className="mt-8 max-w-xl">
         <GroveForm

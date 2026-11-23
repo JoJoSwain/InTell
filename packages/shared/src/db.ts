@@ -1,4 +1,4 @@
-
+﻿
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -491,14 +491,14 @@ isOneToOne: false
                   ]
                 },"groves": {
                   Row: {
-                    "allows_speaker_wildlife_sounds": boolean,"boundary": unknown,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null,"boundary_geojson": Json | null
+                    "allows_speaker_wildlife_sounds": boolean,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null
                   }
-                  ComputedFields: "boundary_geojson"
+                  ComputedFields: never
                   Insert: {
-                    "allows_speaker_wildlife_sounds"?: boolean,"boundary": unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
                   Update: {
-                    "allows_speaker_wildlife_sounds"?: boolean,"boundary"?: unknown,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
                   Relationships: [
                     {
@@ -727,14 +727,14 @@ isOneToOne: false
                   ]
                 },"pack_builds": {
                   Row: {
-                    "asset_hashes": (string)[],"built_at": string,"bytes_total": number,"content_sha256": string | null,"id": number,"live": boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat": number | null,"opening_lng": number | null,"reason": string | null,"release_id": string | null,"scope": string,"scope_id": string,"version": number
+                    "asset_hashes": (string)[],"bbox": (number)[] | null,"built_at": string,"bytes_total": number,"content_sha256": string | null,"id": number,"live": boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat": number | null,"opening_lng": number | null,"reason": string | null,"release_id": string | null,"scope": string,"scope_id": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "asset_hashes": (string)[],"built_at"?: string,"bytes_total": number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope": string,"scope_id": string,"version": number
+                    "asset_hashes": (string)[],"bbox"?: (number)[] | null,"built_at"?: string,"bytes_total": number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path": string,"manifest_sha256": string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope": string,"scope_id": string,"version": number
                   }
                   Update: {
-                    "asset_hashes"?: (string)[],"built_at"?: string,"bytes_total"?: number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path"?: string,"manifest_sha256"?: string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope"?: string,"scope_id"?: string,"version"?: number
+                    "asset_hashes"?: (string)[],"bbox"?: (number)[] | null,"built_at"?: string,"bytes_total"?: number,"content_sha256"?: string | null,"id"?: never,"live"?: boolean,"manifest_path"?: string,"manifest_sha256"?: string,"opening_lat"?: number | null,"opening_lng"?: number | null,"reason"?: string | null,"release_id"?: string | null,"scope"?: string,"scope_id"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -951,10 +951,7 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "boundary_geojson":
-{ Args: { "g": Omit<Database["public"]['Tables']["groves"]['Row'], Database["public"]['Tables']["groves"]['ComputedFields']> }; Returns: Json
-                           },
-"fn_admin_upsert_region":
+            "fn_admin_upsert_region":
 { Args: { "p_bounds_geojson": string,"p_id": string,"p_name": string,"p_slug": string,"p_sun_wkt": string,"p_timezone": string }; Returns: string
                            },
 "fn_audio_bitrate_target":
@@ -1053,6 +1050,9 @@ isOneToOne: false
 "fn_release_go_live":
 { Args: { "p_release_id": string }; Returns: Json
                            },
+"fn_release_linked_groves":
+{ Args: { "p_release_id": string }; Returns: (string)[]
+                           },
 "fn_require_editor_or_service":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -1061,9 +1061,6 @@ isOneToOne: false
                            },
 "fn_set_fragment_location":
 { Args: { "p_fragment_id": string,"p_lat": number,"p_lng": number }; Returns: undefined
-                           },
-"fn_set_grove_boundary":
-{ Args: { "p_geojson": string,"p_grove_id": string }; Returns: undefined
                            },
 "fn_snapshot_projection":
 { Args: { "p_entity": string,"p_entity_id": string }; Returns: Json
