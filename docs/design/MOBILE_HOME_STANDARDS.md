@@ -138,7 +138,7 @@ This style follows planning and landscape-architecture drawings:
   | Two Roots | 500 ft |
 
   Farther apart, the grove forms islands (allowed; see below).
-- **This shape is the grove's real boundary (decided).** It's calculated when a release publishes, from the grove's published fragments, so staff no longer draw grove polygons. It decides when a session starts, where grove-boundary music cues play, and Embark arrival.
+- **This shape is the grove's real boundary (decided).** It's calculated when a release publishes, from the grove's published fragments, so staff no longer draw grove polygons. It decides when a session starts and where grove-boundary music cues play. Embark still arrives at the opening root (ADR 0006).
 - **Locked fragments count (decided):** they're part of the grove as unexplored territory, so every listener sees the same grove. Retired fragments don't count.
 - **Islands are allowed (decided):** a grove can be several separate pieces. They're still one grove: the grove's soundtrack, name and session cover every piece.
 - **Needs a write-up:** an ADR plus DATA_MODEL and pack changes, since the boundary becomes derived data (Lane A).
@@ -187,7 +187,7 @@ This style follows planning and landscape-architecture drawings:
 | State | Ring | Pulse |
 |---|---|---|
 | **Unexplored** (unlocked, in window, not completed for the current contingency) | Full strength | Tier color |
-| **Changed** (unheard Story Contingency) | Full strength | **Forest green** (`accent`), at its tier's size |
+| **Changed** (unheard Story Contingency, playable now) | Full strength | **Forest green** (`accent`), at its tier's size |
 | **Completed** | Full strength | None (still) |
 | **Locked** (prerequisites not met) | 35% opacity | None (still) |
 
