@@ -57,7 +57,15 @@ Dashes in metres on iOS, points on Android. Styles and dashes not checked on an 
 
 ## `git log --oneline origin/master..HEAD`
 
-Filled in after the review-fix commit.
+```
+9213603 Fix M5b review items and wire A2 map home fields.
+d1a299d Merge origin/master for A2 Part 1 (schema 4, groveShape, story web).
+33ddce1 docs: M5b first-pass review (R1 pulse re-renders, R2 story window, R3 live puck, R4 labels)
+2f79efe Record the M5b branch log in the implementation report.
+35e9379 Add the M5b map home, stopping before the A2 pack fields.
+7a449aa docs: M5b plan review (R1 POI labels only, R2 48 pt marker canvas, R3 halo after A2)
+57a6ff6 docs: plan the M5b map home
+```
 
 ## Deviations
 
