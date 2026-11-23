@@ -181,6 +181,7 @@ export function HomeMap(props: Props) {
       initialRegion={initialTarget ?? WORLD}
       showsUserLocation={showUser}
       showsMyLocationButton={false}
+      showsBuildings={false}
       toolbarEnabled={false}
       showsCompass={false}
       zoomControlEnabled={false}
@@ -222,7 +223,7 @@ export function HomeMap(props: Props) {
       {groves.flatMap((grove) =>
         grove.pieces.map((piece, index) => (
           <Polygon
-            key={`${grove.id}-fill-${index}`}
+            key={`${grove.id}-fill-${themeName}-${index}`}
             coordinates={piece.outer}
             holes={piece.holes}
             fillColor={theme.groveFill}

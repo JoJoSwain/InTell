@@ -104,3 +104,24 @@ Jordan’s Pixel look + ADR 0006 / standards §4.3, §5.1–§5.3. Brief: `docs/
 | `CI=1 expo export --platform android --clear` | passed → `%TEMP%\m5b-design-export` |
 
 PNGs regenerated with `scripts/generate-marker-pngs.ts` (108 names / 216 files including `@3x` and locked).
+
+## Final fixes
+
+Merged `origin/master` (A2 Part 2). `pnpm install` — lockfile unchanged.
+
+**R1.** Fill `Polygon` keys now include the theme name (`${grove.id}-fill-${themeName}-${index}`) so a live day→night switch remounts them. Retook `night.png` after Follow my phone + `cmd uimode night yes` **without a reload**: grove fill is the night blue wash (not day white 50%).
+
+**R2.** `showsBuildings={false}` on `MapView`. Night shot shows flat footprints only.
+
+**One-way arrows.** Added `road` → `labels.icon` → `visibility: off` to both day and night styles. **They still show** on the live night screenshot (Main / State). Style rule does not hide them; they stay.
+
+**Dev-only:** Grove fly and the `dev` wordmark remain behind `__DEV__`.
+
+**Checks after R1–R2**
+
+| Check | Result |
+|---|---|
+| `pnpm --filter @intell/mobile test` | 13 suites, 45 tests, passed |
+| `pnpm --filter @intell/mobile typecheck` | passed |
+| `pnpm --filter @intell/mobile lint` | passed |
+| `CI=1 expo export --platform android --clear` | passed → `%TEMP%\m5b-final-export` |

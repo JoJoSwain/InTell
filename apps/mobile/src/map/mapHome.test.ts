@@ -295,6 +295,16 @@ describe("map styles", () => {
     );
     expect(dayStyle.some((rule) => rule.elementType === "labels.text.stroke")).toBe(true);
     expect(nightStyle.some((rule) => rule.elementType === "labels.text.stroke")).toBe(true);
+    for (const style of styles) {
+      expect(
+        style.some(
+          (rule) =>
+            rule.featureType === "road" &&
+            rule.elementType === "labels.icon" &&
+            rule.stylers.some((item) => item.visibility === "off"),
+        ),
+      ).toBe(true);
+    }
   });
 });
 
