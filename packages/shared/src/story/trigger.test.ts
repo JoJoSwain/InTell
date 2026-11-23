@@ -46,7 +46,12 @@ function fix(atMs: number, metersNorth: number, accuracyM = 5): LocationFix {
 function candidates(
   fragments: FragmentInput[],
   fixes: LocationFix[],
-  extra: { accessible?: boolean; completed?: string[]; unlocked?: string[] } = {},
+  extra: {
+    accessible?: boolean;
+    completed?: string[];
+    unlocked?: string[];
+    playingFragmentId?: string | null;
+  } = {},
 ) {
   const unlocked = new Set(extra.unlocked ?? fragments.map((item) => item.id));
   return proximityCandidates({
@@ -58,6 +63,7 @@ function candidates(
     timeWindow: "day",
     lang: "en",
     accessible: extra.accessible ?? false,
+    playingFragmentId: extra.playingFragmentId ?? null,
   });
 }
 
@@ -134,6 +140,7 @@ describe("proximityCandidates", () => {
       timeWindow: "day",
       lang: "es",
       accessible: false,
+      playingFragmentId: null,
     });
     expect(found).toHaveLength(1);
   });
@@ -194,6 +201,7 @@ describe("queueAfterTrigger", () => {
     via: "proximity",
   };
   const now = new Date(10_000);
+  const eligible = () => true;
 
   it("starts immediately when nothing is playing", () => {
     expect(
@@ -204,6 +212,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: null,
         now,
         stillInRange: () => true,
+        isEligible: eligible,
       }),
     ).toEqual({ startNow: "next", queued: null });
   });
@@ -214,9 +223,10 @@ describe("queueAfterTrigger", () => {
       playingFragmentId: "current",
       queued: null,
       afterglowEndsAt: null,
-      now,
-      stillInRange: () => true,
-    });
+        now,
+        stillInRange: () => true,
+        isEligible: eligible,
+      });
     expect(waiting).toEqual({
       startNow: null,
       queued: { fragmentId: "next", via: "proximity" },
@@ -229,6 +239,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: new Date(now.getTime() + 1),
         now,
         stillInRange: () => true,
+        isEligible: eligible,
       }).startNow,
     ).toBeNull();
   });
@@ -243,6 +254,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: after,
         now,
         stillInRange: () => false,
+        isEligible: eligible,
       }),
     ).toEqual({ startNow: null, queued: null });
     expect(
@@ -253,6 +265,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: after,
         now,
         stillInRange: () => false,
+        isEligible: eligible,
       }),
     ).toEqual({ startNow: "scanned", queued: null });
   });
@@ -266,6 +279,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: null,
         now,
         stillInRange: (id) => id !== "old",
+        isEligible: eligible,
       }).queued,
     ).toEqual({ fragmentId: "next", via: "proximity" });
     expect(
@@ -276,6 +290,7 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: null,
         now,
         stillInRange: () => true,
+        isEligible: eligible,
       }).queued,
     ).toEqual({ fragmentId: "scanned", via: "scan" });
   });
@@ -289,7 +304,122 @@ describe("queueAfterTrigger", () => {
         afterglowEndsAt: null,
         now,
         stillInRange: () => true,
+        isEligible: eligible,
       }).queued?.fragmentId,
     ).toBe("old");
+  });
+
+  it("does not queue the playing Root, so nothing starts when it ends", () => {
+    const root = fragment({ id: "root-x", tier: "root" });
+    const fixes = [fix(0, 0), fix(1_000, 0)];
+    expect(
+      candidates([root], fixes, { playingFragmentId: "root-x" }),
+    ).toEqual([]);
+    const whilePlaying = queueAfterTrigger({
+      chosen: {
+        fragment: root,
+        distanceM: 0,
+        via: "proximity",
+      },
+      playingFragmentId: "root-x",
+      queued: null,
+      afterglowEndsAt: null,
+      now,
+      stillInRange: () => true,
+      isEligible: eligible,
+    });
+    expect(whilePlaying).toEqual({ startNow: null, queued: null });
+    expect(
+      queueAfterTrigger({
+        chosen: { fragmentId: "root-x", via: "scan" },
+        playingFragmentId: "root-x",
+        queued: null,
+        afterglowEndsAt: null,
+        now,
+        stillInRange: () => true,
+        isEligible: eligible,
+      }),
+    ).toEqual({ startNow: null, queued: null });
+    expect(
+      queueAfterTrigger({
+        chosen: null,
+        playingFragmentId: null,
+        queued: whilePlaying.queued,
+        afterglowEndsAt: new Date(now.getTime() - 1),
+        now,
+        stillInRange: () => true,
+        isEligible: eligible,
+      }),
+    ).toEqual({ startNow: null, queued: null });
+  });
+
+  it("queues a Leaf entered while a Root plays, and starts it after the afterglow", () => {
+    const root = fragment({ id: "root-x", tier: "root" });
+    const leaf = fragment({ id: "leaf-y", tier: "leaf" });
+    const found = candidates([root, leaf], [fix(0, 0), fix(1_000, 0)], {
+      playingFragmentId: "root-x",
+    });
+    expect(found.map((item) => item.fragment.id)).toEqual(["leaf-y"]);
+    const waiting = queueAfterTrigger({
+      chosen: chooseTrigger(found),
+      playingFragmentId: "root-x",
+      queued: null,
+      afterglowEndsAt: null,
+      now,
+      stillInRange: () => true,
+      isEligible: eligible,
+    });
+    expect(waiting).toEqual({
+      startNow: null,
+      queued: { fragmentId: "leaf-y", via: "proximity" },
+    });
+    expect(
+      queueAfterTrigger({
+        chosen: null,
+        playingFragmentId: null,
+        queued: waiting.queued,
+        afterglowEndsAt: new Date(now.getTime() + 1),
+        now,
+        stillInRange: () => true,
+        isEligible: eligible,
+      }).startNow,
+    ).toBeNull();
+    expect(
+      queueAfterTrigger({
+        chosen: null,
+        playingFragmentId: null,
+        queued: waiting.queued,
+        afterglowEndsAt: new Date(now.getTime() - 1),
+        now,
+        stillInRange: () => true,
+        isEligible: eligible,
+      }),
+    ).toEqual({ startNow: "leaf-y", queued: null });
+  });
+
+  it("clears a queued fragment that is no longer eligible, including a scan", () => {
+    const after = new Date(now.getTime() - 1);
+    expect(
+      queueAfterTrigger({
+        chosen: null,
+        playingFragmentId: null,
+        queued: { fragmentId: "day-only", via: "proximity" },
+        afterglowEndsAt: after,
+        now,
+        stillInRange: () => true,
+        isEligible: () => false,
+      }),
+    ).toEqual({ startNow: null, queued: null });
+    expect(
+      queueAfterTrigger({
+        chosen: null,
+        playingFragmentId: null,
+        queued: { fragmentId: "scanned", via: "scan" },
+        afterglowEndsAt: after,
+        now,
+        stillInRange: () => true,
+        isEligible: () => false,
+      }),
+    ).toEqual({ startNow: null, queued: null });
   });
 });
