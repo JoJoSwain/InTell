@@ -56,8 +56,24 @@ jobs:
           # In-network URL for pg_net from the DB container (verify empirically)
           RUN_JOBS_URL: http://host.docker.internal:54321/functions/v1/run-jobs
         run: pnpm db:setup-local
+      - name: Start Routes API stub (embark)
+        run: node tools/routes-stub.mjs &
+      - name: Wait for Routes stub
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8791/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "routes stub not ready"; exit 1
       - name: Serve edge functions (per-function verify_jwt from config.toml)
-        run: pnpm exec supabase functions serve &
+        run: |
+          # Generated env file only — never commit (A3 plan review N3).
+          # Stub listens on the host; edge runtime reaches it via Docker DNS.
+          cat > /tmp/embark-functions.env <<'EOF'
+          GOOGLE_ROUTES_BASE_URL=http://host.docker.internal:8791
+          GOOGLE_ROUTES_API_KEY=test-not-a-real-key
+          EOF
+          pnpm exec supabase functions serve --env-file /tmp/embark-functions.env &
       - name: Wait for functions
         run: |
           eval "$(pnpm exec supabase status -o env)"

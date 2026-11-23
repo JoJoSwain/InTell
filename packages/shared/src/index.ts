@@ -17,6 +17,13 @@ export {
   UiLanguage,
 } from "./schemas/device";
 export {
+  EmbarkMode,
+  EmbarkRequest,
+  EmbarkResponse,
+  EmbarkStep,
+  EmbarkTransitLine,
+} from "./schemas/embark";
+export {
   GrovePack,
   GrovePackFragment,
   PreviewManifest,
