@@ -46,7 +46,16 @@ Dashes are converted to metres on iOS (`metersPerPoint` at the settled zoom) and
 
 ## `git log --oneline origin/master..HEAD`
 
-Recorded after the implementation commit. The report commit is the tip after this list.
+Through the implementation commit. The commit that records this list is the tip after it.
+
+```
+35e9379 Add the M5b map home, stopping before the A2 pack fields.
+7a449aa docs: M5b plan review (R1 POI labels only, R2 48 pt marker canvas, R3 halo after A2)
+57a6ff6 docs: plan the M5b map home
+8e25861 docs: ADR 0006 (map home), A2 and M5b briefs, roadmap
+a84f986 docs: roadmap status at the end of 2026-11-22
+8eff2c3 docs: mobile home-screen design standards from the 2026-11-22 session
+```
 
 ## Deviations
 
