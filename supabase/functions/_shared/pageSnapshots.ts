@@ -22,6 +22,8 @@ type SnapshotClient = {
 /**
  * Page through published_snapshots for one entity.
  * PostgREST caps a single response at max_rows (1000 in config.toml).
+ * Keep requesting until a page is empty so a lowered max_rows cannot
+ * silently truncate when pageSize still asks for more than the server returns.
  */
 export async function pagePublishedSnapshots(
   supabase: SnapshotClient,
@@ -42,9 +44,11 @@ export async function pagePublishedSnapshots(
       .range(from, to);
     if (error) throw new Error(`page ${entity} snapshots: ${error.message}`);
     const rows = data ?? [];
+    if (rows.length === 0) break;
     out.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
+    // Advance by what we actually received so a server cap below pageSize
+    // cannot skip rows between pages.
+    from += rows.length;
   }
   return out;
 }
