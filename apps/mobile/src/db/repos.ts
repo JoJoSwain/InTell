@@ -107,6 +107,21 @@ export async function insertCompletionIgnore(db: SqlDriver, row: CompletionRow):
   );
 }
 
+export async function listCompletions(db: SqlDriver): Promise<CompletionRow[]> {
+  return db.getAll<CompletionRow>(
+    `SELECT fragment_id, revision_no, time_window, completed_at, on_site, trigger, session_id
+     FROM completions`,
+  );
+}
+
+export async function listUnlocks(
+  db: SqlDriver,
+): Promise<{ fragment_id: string; unlocked_at: string }[]> {
+  return db.getAll<{ fragment_id: string; unlocked_at: string }>(
+    "SELECT fragment_id, unlocked_at FROM unlocks",
+  );
+}
+
 export async function getCompletion(
   db: SqlDriver,
   fragmentId: string,
