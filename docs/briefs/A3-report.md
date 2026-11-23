@@ -90,7 +90,7 @@ Local database was **not** reset for this milestone (existing stack + seed used 
 ## `git log --oneline origin/master..HEAD`
 
 ```
-68ba63a feat: embark relay with Routes stub, R1–R2 and optional lang.
+a372ae4 feat: embark relay with Routes stub, R1–R2 and optional lang.
 399eec1 docs: A3 plan review (R1 optional transit details, R2 no request details in errors or logs); TECH_SPEC embark response
 2dff64d docs: A3 Embark relay plan for plan review.
 ddb1d94 docs: specs follow ADR 0006 and A2; A3 (Embark relay) and B-S1 (audio protocol) briefs; roadmap
