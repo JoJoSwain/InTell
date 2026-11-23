@@ -81,23 +81,23 @@
 
 ---
 
-## 6. Tentative lane roadmap (refined at the regroup)
+## 6. Lane roadmap (updated 2026-11-22)
 
 Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering the shared logic and server pieces Lane B will need, and works on admin and analytics in between.
 
 **Lane A (Platform)**
-0. **A1, the M5a enablers (S0B review D3–D4):** the `register-device` edge function, a pure sync-diff helper in `packages/shared`, and scoping the root React override so mobile gets the version its Expo SDK expects.
-1. **M4a:** the shared time, unlock, trigger, ambience, music and Hush logic in `packages/shared`, with AUDIO_SPEC §9 tests. M5 uses `unlock.ts` and `timeWindow.ts`, so this goes first.
-2. **M4b:** admin sound design and the Listening Simulator. It carries M3c N3 (the loudness Web Worker), M3e F2 (a typed pack-build error) and M3f K1–K3 (the key cleanups).
-3. **Server pieces for M5:** the `embark` relay (Routes API key, `embark_usage` cap, origin never stored or logged), plus any pack or device endpoints M5 needs.
+0. ✅ **A1, the M5a enablers** (PR #21): `register-device`, the shared sync-diff helper, React unified at 19.3.0.
+1. **M4a:** the shared logic in `packages/shared`, built in two halves. ✅ The story half (geo, unlock, time-window tests, trigger) merged in PRs #22 and #23. ▶ Next is the sound half (music, ambience, Hush) on `a/m4a-sound`.
+2. **Server pieces for M5**, moved ahead of M4b so they're ready when Lane B reaches Embark: the `embark` relay (Routes API key, `embark_usage` cap, origin never stored or logged), plus the CI `expo export` job (A1 review F1).
+3. **M4b:** admin sound design and the Listening Simulator. It carries the region-pack extension for the sound fields (M4a plan review A1; a pack schema bump, which the phone already tolerates per M5a R4), M3c N3 (the loudness Web Worker), M3e F2 (a typed pack-build error), M3h V1/V2 and M3f K1–K3.
 4. **M11:** analytics ingest, dashboard, delete-device-data and export. These can be built from TECH_SPEC §8–9 with fixtures.
 5. **Pure logic ahead of Lane B:** the session state machine (M6), AudioDirector rules (M7) and Chronicle selectors (M8), all in `packages/shared` with tests.
 6. **M9 server and admin parts,** after the Journal spec and counsel.
 7. **M12 server hardening:** Sentry scrubbing and the data-deletion checks.
 
 **Lane B (Mobile)**
-1. **M5a:** the device database (where the OS backup includes it), pack index, download and sync with mandatory deletion, device registration, and staff preview mode. None of it waits on design.
-2. **M5b:** the UI, after the DESIGN mobile rewrite with Ashley: tokens, map home, markers at day and night opacity, the Embark card and route drawing, and the pulsing changed-fragment marker.
+1. ✅ **M5a** (PR #20): the device database (where the OS backup includes it), pack index, download and sync with mandatory deletion, device registration, and staff preview mode.
+2. **M5b:** the UI, after the DESIGN mobile rewrite with Ashley (her and Jordan's worksheet picks, then the brief): tokens, map home, markers at day and night opacity, the Embark card and route drawing, and the pulsing changed-fragment marker.
 3. **M6, then M7, then M8** (after CHRONICLE_SPEC), **then M9 mobile** (after the Journal spec and counsel), **then M12 mobile and the field tests.**
 
 **Docs Claude must have ready ahead of Lane B:** the DESIGN mobile sections (with Ashley) before M5b, CHRONICLE_SPEC before M8, and the Journal spec (with counsel on children's privacy) before M9.
@@ -106,7 +106,9 @@ Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering 
 
 ## 7. Guardrails
 
-- Nothing reaches `master` without Claude's verification and green CI. Jordan merges; agents never merge.
+- Nothing reaches `master` without Claude's verification and green CI. Jordan merges; agents never merge. **Jordan merges a PR only after Claude writes "ready to merge" for it.**
+- After any merge, the other lane's open PR shows "out-of-date". Use **Update branch** (as a merge commit), wait for green checks, then merge. That's routine.
+- When a merge adds migrations or edge functions, Claude lists the staging steps. They run from `C:\dev\intell` on an up-to-date `master` with `pnpm exec supabase …`, because the CLI is a project dependency, not a global command.
 - Keys and passwords never go in prompts, chat or the repo. Cloud agents aren't used for now: Claude can't push to GitHub, so its review commits need a local agent to carry them.
 - Only Lane A touches `supabase/`, so migration timestamps never conflict. Hosted pushes happen only from the main folder on `master`.
 - A brief that would make both lanes touch the same files gets split before either lane starts.

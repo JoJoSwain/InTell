@@ -29,3 +29,9 @@ Test: a queued fragment that loses its window at sunset doesn't start, and the s
 
 ### Then
 PR #22 merged before this review, so the fixes go on a **new branch** `a/m4a-story-fixes` with this review commit. Fix R1 and R2, run `git fetch origin` and `git merge --no-edit origin/master` (that brings in PR #22 and, once it merges, PR #20 for M5a), then run lint, typecheck and tests. Nothing calls `trigger.ts` yet (the session comes in M6), so the bug on master affects no one in the meantime. Add an "R1–R2" section to the report under Story half, push with `git push -u origin a/m4a-story-fixes`, open the PR "M4a: trigger fixes (R1–R2)" and stop.
+
+### Trigger fixes verified (`f2ff1f4`, PR #23)
+R1: `proximityCandidates` skips `playingFragmentId`, and `queueAfterTrigger` ignores a `chosen` that is the playing fragment. Tests cover the playing Root that never re-queues and the Leaf that takes the slot during a Root. R2: `isEligible` is checked before any start, scan included, and the sunset case is tested. The N1 and N2 comments are in. **Approved. Merged as PR #23 (`104b257`).**
+
+## Sound half
+On branch `a/m4a-sound`, from master `104b257`. Build plan steps 5–7 under the plan review. Review notes go here.
