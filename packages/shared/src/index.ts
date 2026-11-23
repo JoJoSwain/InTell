@@ -173,6 +173,47 @@ export {
 export { createSeededRng, hashSeed, type SeededRng } from "./audio/seededRng";
 
 export {
+  GROVE_MUSIC_EDGE_FADE_M,
+  musicConditionMatches,
+  selectMusicCue,
+  stemGainDb,
+  type MusicCueInput,
+  type MusicStemInput,
+  type MusicStoryState,
+  type StoryState,
+} from "./audio/music";
+
+export {
+  activeProfiles,
+  eligibleLayers,
+  landcoverClass,
+  nextOneShot,
+  pickBed,
+  scaleGainDb,
+  type ActiveProfile,
+  type AmbienceLayerInput,
+  type AmbienceProfileInput,
+  type AmbienceZoneInput,
+  type OneShotEvent,
+  type OneShotState,
+} from "./audio/ambience";
+
+export {
+  HUSH_CUE_DELAY_MS,
+  HUSH_CUE_GAIN_DB,
+  HUSH_FADE_IN_MS,
+  HUSH_FADE_OUT_MS,
+  HUSH_HOLD_MAX_S,
+  HUSH_HOLD_MIN_S,
+  HUSH_TRIGGER_FADE_MS,
+  hushStep,
+  initialHushState,
+  type HushPhase,
+  type HushState,
+  type HushStep,
+} from "./audio/hush";
+
+export {
   DEFAULT_ONESHOT_SHAS,
   ONESHOT_HORIZON_SEC,
   ONESHOT_MEAN_INTERVAL_SEC,

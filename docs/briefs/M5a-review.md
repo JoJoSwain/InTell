@@ -96,3 +96,10 @@ M4b will extend the region pack and the grove-pack cue zones, which means a pack
 The 403 with an empty body came from using the **anon** key. `requirePublishableCaller` wants the **Publishable** key from `supabase status`, and the function's own 403 has a JSON body, so the empty body suggests the gateway rejected the request before it reached the function. Run it again against `127.0.0.1:54321` with the Publishable key in `apikey`. Expect 200 and a body that parses as `RegisterDeviceResponse`. Record the status and the body's keys, but **not** the device id or the key. If it isn't 200, record the status and body and stop. Don't start, stop or reset the stack.
 
 Report: add a short "R3–R5" section to the M5a report, then commit, push, wait for CI, and stop. **After that, PR #20 is ready to merge.**
+
+### R3–R5 verified (`d1a94b3`, `13ead63`)
+- **R3:** `startRegistration` runs after boot without awaiting, and `httpRegistrar` aborts after 10 s with no kv write. Tests cover both.
+- **R4:** an unparseable stored manifest counts as version 0 and is reinstalled at the next sync. Its assets are kept through the raw `assets[].sha`, and `regionIds` reads the raw `regionId`. Tested.
+- **R5:** `register-device` on the local stack with the Publishable key returned 200 with `ok` and `firstSeenAt`.
+
+**M5a approved. Merged as PR #20 (`ab64314`).**
