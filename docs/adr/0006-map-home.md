@@ -3,6 +3,8 @@
 ## Status
 **Accepted**, 2026-11-23. Decided by the product owner (Jordan "JoJo" Swain) and the Creative Director (Ashley Schaugaard), with the architect (Claude), in the 2026-11-22 design session; written up the next morning. Amends ADR 0004 (markers), ADR 0005 §3 (the changed-fragment pulse), PRODUCT_SPEC (FR-1, the Home: Map row, the session start), DATA_MODEL (groves, the fragment guard, the snapshot and the grove pack), TECH_SPEC (the map row) and DESIGN.md §1–§4. Where those docs still disagree, **this ADR wins** until they're updated.
 
+**Amended 2026-11-23** (decision 2's pulse color), after Jordan's first look on a phone.
+
 Every visual value (colors, sizes, line weights, timing) lives in `docs/design/MOBILE_HOME_STANDARDS.md`. This ADR records only the decisions that change data, shared logic or the pack format.
 
 ## Context
@@ -47,17 +49,18 @@ The design session settled the look of the home map. Three of its decisions reac
   - the 60 m grove-edge music fade
   - Embark arrival is unchanged: it's the opening root.
 
-### 2. Marker pulses: unexplored in the tier color, changed in green
+### 2. Marker pulses: unexplored in brick red, changed in green
 - `markerState` gains a **pulse kind**:
   - **`"changed"`:** the fragment is playable now and has an unheard Story Contingency (ADR 0005 §3).
   - **`"tier"`:** the fragment is playable now, not completed at its current contingency, and not changed.
   - **`"none"`:** everything else.
+- **Color (amended 2026-11-23):** every unexplored pulse uses the Root brick, whatever the tier. Tiers differ by size. The pulse kind keeps its code name, `"tier"`.
 - **Only markers that are playable now pulse.** A changed fragment outside its Day/Night window waits, faded and still, like any other. This narrows ADR 0005 §3, which didn't consider windows.
 - **Completed:** a still ring.
 - **Locked, or outside its Day/Night window:** 35% and still. A look that tells these two apart is still open (worksheet 3.3).
 - **Reduce Motion:** a still ring in the pulse color, at the pulse's starting size.
 - **This supersedes:**
-  - ADR 0004 and DESIGN's "tier colors with glyphs": markers are now hollow ink rings, with the tier shown by size and pulse color.
+  - ADR 0004 and DESIGN's "tier colors with glyphs": markers are now ink rings with solid centers, with the tier shown by size.
   - ADR 0005 §3's "slow pulse": the changed pulse is now once a second, in the accent green.
 
 ### 3. The story web
