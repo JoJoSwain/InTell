@@ -279,6 +279,8 @@ export {
   initialMixLevelState,
   mixLevelFor,
   shedLayers,
+  type MixLevelState,
+  type MixSignals,
 } from "./audio/mixHealth";
 export { allocateVoices } from "./audio/voices";
 
@@ -291,11 +293,39 @@ export {
   HUSH_HOLD_MIN_S,
   HUSH_TRIGGER_FADE_MS,
   hushStep,
+  hushStepMs,
   initialHushState,
+  initialHushStateMs,
   type HushPhase,
   type HushState,
+  type HushStateMs,
   type HushStep,
+  type HushStepMs,
 } from "./audio/hush";
+
+export {
+  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
+  DIRECTOR_ACCENT_MAX_PENDING,
+  DIRECTOR_HEARTBEAT_SEC,
+  directorStep,
+  diffMix,
+  emptyTargetMix,
+  initialDirectorState,
+  parseDirectorState,
+  serializeDirectorState,
+  defaultDirectorSettings,
+  emptyStory,
+  type DirectorCommand,
+  type DirectorFragment,
+  type DirectorInput,
+  type DirectorMusicCue,
+  type DirectorSessionEffect,
+  type DirectorSettings,
+  type DirectorState,
+  type DirectorWorld,
+  type PendingAccent,
+  type TargetMix,
+} from "./audio/director";
 
 export {
   DEFAULT_ONESHOT_SHAS,
