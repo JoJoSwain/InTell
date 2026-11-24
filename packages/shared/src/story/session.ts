@@ -1080,5 +1080,7 @@ export function storyStateOf(
     heard,
     timeWindow: world.timeWindow,
     narrationPlaying: state.playing !== null,
+    // depthM / buffers filled by the AudioDirector from the latest fix (A5)
+    insideTierBuffers: [],
   };
 }

@@ -185,6 +185,12 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         kind: asset.kind,
       });
+      const breathPoints = Array.isArray(v.breath_points_ms)
+        ? (v.breath_points_ms as number[])
+        : [];
+      const swellCues = Array.isArray(v.swell_cues_ms)
+        ? (v.swell_cues_ms as number[])
+        : [];
       const versionEntry: Record<string, unknown> = {
         lang: v.language,
         timeWindow: v.time_window,
@@ -193,6 +199,8 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         transcript: v.transcript,
         ...(v.vtt ? { vtt: v.vtt } : {}),
+        ...(breathPoints.length > 0 ? { breathPointsMs: breathPoints } : {}),
+        ...(swellCues.length > 0 ? { swellCuesMs: swellCues } : {}),
       };
       if (!isL10nBlank(v.other_time_hint)) {
         versionEntry.otherTimeHint = v.other_time_hint;
@@ -373,6 +381,33 @@ export async function buildGrovePackObject(
       } else if (f.data.triggerRadiusM != null) {
         entry.radiusM = f.data.triggerRadiusM;
       }
+      if (f.data.beaconAssetSha) {
+        entry.beaconAssetSha = f.data.beaconAssetSha;
+        assetMap.set(f.data.beaconAssetSha, {
+          sha: f.data.beaconAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "beacon",
+        });
+      }
+      if (f.data.resolveAssetSha) {
+        entry.resolveAssetSha = f.data.resolveAssetSha;
+        assetMap.set(f.data.resolveAssetSha, {
+          sha: f.data.resolveAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "music_moment",
+        });
+      }
+      if (f.data.teaserLockedAssetSha) {
+        entry.teaserLockedAssetSha = f.data.teaserLockedAssetSha;
+        assetMap.set(f.data.teaserLockedAssetSha, {
+          sha: f.data.teaserLockedAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "voice_cue",
+        });
+      }
       return entry;
     });
 
@@ -398,7 +433,7 @@ export async function buildGrovePackObject(
         kind: "music_stem",
       });
     }
-    musicCues.push({
+    const cueEntry: Record<string, unknown> = {
       id: cue.id,
       useGroveBoundary: !!cue.groveId && !cue.musicZoneId,
       timeWindow: cue.timeWindow,
@@ -417,7 +452,35 @@ export async function buildGrovePackObject(
         loopStartMs: s.loopStartMs ?? null,
         loopEndMs: s.loopEndMs ?? null,
       })),
-    });
+    };
+    if (cue.resolveRootAssetSha) {
+      cueEntry.resolveRootAssetSha = cue.resolveRootAssetSha;
+      assetMap.set(cue.resolveRootAssetSha, {
+        sha: cue.resolveRootAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    if (cue.resolveBranchAssetSha) {
+      cueEntry.resolveBranchAssetSha = cue.resolveBranchAssetSha;
+      assetMap.set(cue.resolveBranchAssetSha, {
+        sha: cue.resolveBranchAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    if (cue.resolveLeafAssetSha) {
+      cueEntry.resolveLeafAssetSha = cue.resolveLeafAssetSha;
+      assetMap.set(cue.resolveLeafAssetSha, {
+        sha: cue.resolveLeafAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    musicCues.push(cueEntry);
   }
 
   // Ambience zones with published snapshots in same region
@@ -455,6 +518,29 @@ export async function buildGrovePackObject(
       });
     }
   }
+
+  // Grove-level sound cues (beacons + threshold motifs); omit when empty
+  const { data: soundCueRows } = await supabase
+    .from("grove_sound_cues")
+    .select("kind, asset_id")
+    .eq("grove_id", groveId);
+  const soundCues: { kind: string; assetSha: string }[] = [];
+  for (const row of soundCueRows ?? []) {
+    const { data: a } = await supabase
+      .from("audio_assets")
+      .select("sha256, ext, bytes, kind")
+      .eq("id", row.asset_id)
+      .maybeSingle();
+    if (!a) continue;
+    assetMap.set(a.sha256, {
+      sha: a.sha256,
+      ext: a.ext,
+      bytes: a.bytes,
+      kind: a.kind,
+    });
+    soundCues.push({ kind: String(row.kind), assetSha: a.sha256 });
+  }
+  soundCues.sort((a, b) => a.kind.localeCompare(b.kind));
 
   // Fill audio ext/bytes for stems from DB
   for (const [sha, meta] of assetMap) {
@@ -633,6 +719,11 @@ export async function buildGrovePackObject(
       ...(groveSnap.growthCueAssetSha
         ? { growthCueAssetSha: groveSnap.growthCueAssetSha }
         : {}),
+      // Omit default 15 so pre-A5 strict device parsers stay valid (sequencing).
+      ...(groveSnap.depthBloomTextureM != null &&
+      groveSnap.depthBloomTextureM !== 15
+        ? { depthBloomTextureM: groveSnap.depthBloomTextureM }
+        : {}),
       openingFragmentId: openingFrag.data.id,
       journeys,
     },
@@ -649,6 +740,7 @@ export async function buildGrovePackObject(
     music: {
       cues: musicCues.sort((a, b) => String(a.id).localeCompare(String(b.id))),
     },
+    ...(soundCues.length > 0 ? { soundCues } : {}),
     ambienceZones: ambienceZones.sort((a, b) =>
       String(a.id).localeCompare(String(b.id)),
     ),

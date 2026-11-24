@@ -25,11 +25,14 @@ export {
 } from "./schemas/embark";
 export {
   GrovePack,
+  GrovePackDevice,
   GrovePackFragment,
   PreviewManifest,
   RegionPack,
+  RegionPackDevice,
   PackIndexEntry,
 } from "./schemas/packs";
+export { DeviceAudioSettings } from "./schemas/settings";
 export {
   assetsToDelete,
   assetsToFetch,
@@ -226,6 +229,7 @@ export {
   GROVE_MUSIC_EDGE_FADE_M,
   musicConditionMatches,
   selectMusicCue,
+  selectMusicCueDeferred,
   stemGainDb,
   type MusicCueInput,
   type MusicStemInput,
@@ -247,6 +251,36 @@ export {
   type OneShotEvent,
   type OneShotState,
 } from "./audio/ambience";
+
+export * from "./audio/soundFeatures";
+export {
+  depthConditionLatched,
+  insideTierBuffersLatched,
+} from "./audio/depthBloom";
+export { pickResolve } from "./audio/resolve";
+export {
+  initialThresholdMotifState,
+  thresholdMotifStep,
+  type ThresholdMotifState,
+} from "./audio/thresholdMotif";
+export { beaconMix, chooseBeacon } from "./audio/beacon";
+export {
+  accentAllowed,
+  backSkipMs,
+  resumePointMs,
+  suggestBreathPoints,
+} from "./audio/breath";
+export {
+  initialLockedTeaserState,
+  localDayKey,
+  lockedTeaserStep,
+} from "./audio/lockedTeaser";
+export {
+  initialMixLevelState,
+  mixLevelFor,
+  shedLayers,
+} from "./audio/mixHealth";
+export { allocateVoices } from "./audio/voices";
 
 export {
   HUSH_CUE_DELAY_MS,

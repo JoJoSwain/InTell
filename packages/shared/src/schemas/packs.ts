@@ -12,6 +12,8 @@ const AssetKind = z.enum([
   "sfx_oneshot",
   "sfx_bed",
   "music_stem",
+  "music_moment",
+  "beacon",
   "voice_cue",
   "growth_cue",
   "image",
@@ -83,6 +85,9 @@ export const GrovePackFragment = z
         })
         .strict(),
     ),
+    beaconAssetSha: Sha256.optional(),
+    resolveAssetSha: Sha256.optional(),
+    teaserLockedAssetSha: Sha256.optional(),
   })
   .strict()
   .superRefine((frag, ctx) => {
@@ -112,6 +117,7 @@ export const GrovePack = z
         boundary: GeoJsonMultiPolygon,
         allowsSpeakerWildlifeSounds: z.boolean(),
         growthCueAssetSha: Sha256.optional(),
+        depthBloomTextureM: z.number().positive().optional(),
         openingFragmentId: Uuid,
         journeys: z
           .object({
@@ -180,6 +186,8 @@ export const GrovePack = z
                 transcript: z.string().min(1),
                 vtt: z.string().optional(),
                 otherTimeHint: L10n.optional(),
+                breathPointsMs: z.array(z.number().int().nonnegative()).optional(),
+                swellCuesMs: z.array(z.number().int().nonnegative()).optional(),
               })
               .strict(),
           ),
@@ -207,12 +215,16 @@ export const GrovePack = z
               id: Uuid,
               zone: GeoJsonPolygon.optional(),
               useGroveBoundary: z.boolean(),
+              edgeFadeM: z.number().optional(),
               timeWindow: TimeWindow,
               priority: z.number().int(),
               conditions: MusicCondition,
               minDwellS: z.number(),
               crossfadeMs: z.number().int(),
-              stems: z.array(PackStem),
+              resolveRootAssetSha: Sha256.optional(),
+              resolveBranchAssetSha: Sha256.optional(),
+              resolveLeafAssetSha: Sha256.optional(),
+              stems: z.array(PackStem).max(4),
             })
             .strict()
             .superRefine((cue, ctx) => {
@@ -226,6 +238,22 @@ export const GrovePack = z
         ),
       })
       .strict(),
+    soundCues: z
+      .array(
+        z
+          .object({
+            kind: z.enum([
+              "beacon_root",
+              "beacon_branch",
+              "beacon_leaf",
+              "threshold_motif_day",
+              "threshold_motif_night",
+            ]),
+            assetSha: Sha256,
+          })
+          .strict(),
+      )
+      .optional(),
     ambienceZones: z.array(AmbienceZone),
     gatherings: z.array(
       z
@@ -241,6 +269,14 @@ export const GrovePack = z
   .strict();
 
 export type GrovePack = z.infer<typeof GrovePack>;
+
+/**
+ * Device parser (DATA_MODEL §12.4 / A5): strips unknown keys so older builds
+ * keep working when packs gain optional fields. Builder tests use GrovePack
+ * (strict). Lane B should import these in apps/mobile (M6 checklist).
+ */
+export const GrovePackDevice = GrovePack.strip();
+export type GrovePackDevice = z.infer<typeof GrovePackDevice>;
 
 /** Staff preview manifest (DATA_MODEL §12.5 / M3d D3). */
 export const PreviewManifest = z
@@ -294,9 +330,24 @@ export const RegionPack = z
                 wildlifeCall: z.boolean(),
                 speakerSafe: z.boolean(),
                 assetShas: z.array(Sha256),
+                months: z.array(z.number().int()).optional(),
+                nestingMuteMonths: z.array(z.number().int()).optional(),
+                gainDbMin: z.number().optional(),
+                gainDbMax: z.number().optional(),
+                panMin: z.number().optional(),
+                panMax: z.number().optional(),
+                pitchCentsMin: z.number().int().optional(),
+                pitchCentsMax: z.number().int().optional(),
+                meanIntervalS: z.number().optional(),
+                minIntervalS: z.number().optional(),
+                maxConcurrent: z.number().int().optional(),
+                noRepeatLast: z.number().int().optional(),
+                crossfadeMs: z.number().int().optional(),
+                assetWeights: z.array(z.number()).optional(),
               })
               .strict(),
           ),
+          density: z.number().optional(),
         })
         .strict(),
     ),
@@ -353,6 +404,10 @@ export const RegionPack = z
   .strict();
 
 export type RegionPack = z.infer<typeof RegionPack>;
+
+/** Device parser — strips unknown keys (DATA_MODEL §12.4 / A5). */
+export const RegionPackDevice = RegionPack.strip();
+export type RegionPackDevice = z.infer<typeof RegionPackDevice>;
 
 export const PackIndexEntry = z
   .object({

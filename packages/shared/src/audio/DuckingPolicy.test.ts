@@ -27,11 +27,12 @@ describe("DuckingPolicy", () => {
       route: "headphones",
     });
     expect(busDb).toEqual(BUS_DEFAULT_DB);
+    expect(busDb.moment).toBe(-8);
     expect(attackMs).toBe(800);
     expect(releaseMs).toBe(2500);
   });
 
-  it("ducks music and surroundings under narration", () => {
+  it("ducks music, surroundings, and moment under narration", () => {
     const { busDb } = computeDuckingLevels({
       narrationActive: true,
       route: "headphones",
@@ -43,7 +44,25 @@ describe("DuckingPolicy", () => {
     expect(busDb.surroundings).toBe(
       BUS_DEFAULT_DB.surroundings + (DUCK_AMOUNT_DB.surroundings ?? 0),
     );
+    expect(busDb.moment).toBe(
+      BUS_DEFAULT_DB.moment + (DUCK_AMOUNT_DB.moment ?? 0),
+    );
     expect(busDb.ui).toBe(BUS_DEFAULT_DB.ui);
+  });
+
+  it("afterglow holds music/surroundings but not moment", () => {
+    const { busDb } = computeDuckingLevels({
+      narrationActive: false,
+      afterglowActive: true,
+      route: "headphones",
+    });
+    expect(busDb.music).toBe(
+      BUS_DEFAULT_DB.music + (DUCK_AMOUNT_DB.music ?? 0),
+    );
+    expect(busDb.surroundings).toBe(
+      BUS_DEFAULT_DB.surroundings + (DUCK_AMOUNT_DB.surroundings ?? 0),
+    );
+    expect(busDb.moment).toBe(BUS_DEFAULT_DB.moment);
   });
 
   it("applies speaker surroundings extra attenuation", () => {
