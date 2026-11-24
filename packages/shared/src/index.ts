@@ -101,6 +101,9 @@ export {
 
 export {
   chronicleReplay,
+  completedEpoch,
+  heardOlderEpoch,
+  isPlayableNow,
   isUnlocked,
   markerState,
   memberSatisfied,
@@ -127,6 +130,24 @@ export {
   type TriggerCandidate,
   type TriggerVia,
 } from "./story/trigger";
+
+export {
+  computedPlayedMs,
+  initialSessionState,
+  LOCATION_HIGH_WITHIN_M,
+  OUTSIDE_END_MS,
+  parseSessionState,
+  SESSION_MAX_MS,
+  SESSION_STATE_VERSION,
+  sessionStep,
+  storyStateOf,
+  type PlayingRef,
+  type SessionEffect,
+  type SessionEvent,
+  type SessionFragmentMeta,
+  type SessionState,
+  type SessionWorld,
+} from "./story/session";
 
 export {
   currentTimeWindow,
