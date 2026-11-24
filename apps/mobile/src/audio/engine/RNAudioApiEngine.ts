@@ -16,30 +16,20 @@ import {
 import {
   AudioContext,
   AudioManager,
-  PlaybackNotificationManager,
   decodeAudioData,
   type AudioBuffer,
   type AudioBufferSourceNode,
-  type AudioEventSubscription,
   type GainNode,
   type StereoPannerNode,
 } from "react-native-audio-api";
-import { AppState, type AppStateStatus, Platform } from "react-native";
+import { AppState, type AppStateStatus } from "react-native";
 import { BufferLruCache } from "./lruCache";
-import { classifyRoute, isSpeakerLike } from "./routeMap";
 import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
-
-type RouteChangeEvent = {
-  reason:
-    | "Unknown"
-    | "Override"
-    | "CategoryChange"
-    | "WakeFromSleep"
-    | "NewDeviceAvailable"
-    | "OldDeviceUnavailable"
-    | "ConfigurationChange"
-    | "NoSuitableRouteForCategory";
-};
+import {
+  AudioSessionController,
+  type FocusEffect,
+  type SessionBusyState,
+} from "../session";
 
 type Unsubscribe = () => void;
 
@@ -96,18 +86,9 @@ function enforceMinFade(fadeMs: number): number {
   return Math.max(fadeMs, MIN_AUDIBLE_FADE_MS);
 }
 
-type AudioManagerExtras = typeof AudioManager & {
-  activelyReclaimSession?: (enabled: boolean) => void;
-};
-
-function requestAudioFocus(): void {
-  AudioManager.observeAudioInterruptions("gain");
-  const mgr = AudioManager as AudioManagerExtras;
-  mgr.activelyReclaimSession?.(true);
-}
-
 /**
- * Mobile AudioEngine backed by react-native-audio-api (M1 spike, B·S2 stability).
+ * Mobile AudioEngine backed by react-native-audio-api (M1 spike, B·S2/B·S3).
+ * Platform session owned by `audio-session` (not the library).
  * UI code must import this only through the AudioEngine interface (plus spike helpers).
  */
 export class RNAudioApiEngine implements AudioEngine {
@@ -119,6 +100,7 @@ export class RNAudioApiEngine implements AudioEngine {
   private loops = new Map<string, LoopGroupState>();
   private buffers = new Map<string, InternalBuffer>();
   private readonly ledger = new VoiceLedger();
+  private readonly session = new AudioSessionController();
 
   private route: AudioRoute = "unknown";
   private appState: AppStateStatus =
@@ -129,6 +111,10 @@ export class RNAudioApiEngine implements AudioEngine {
   private mixContextStartSec: number | null = null;
   private initWallMs = 0;
   private mixActive = false;
+  /** Linear master multiplier while ducked (1 = unducked). */
+  private duckFactor = 1;
+  private unduckedMasterLinear = 1;
+  private sessionBusy: SessionBusyState = "ok";
 
   private routeSubs = new Set<(r: AudioRoute) => void>();
   private interruptionSubs = new Set<(e: "began" | "ended") => void>();
@@ -140,6 +126,7 @@ export class RNAudioApiEngine implements AudioEngine {
   >();
   private appStateSubs = new Set<(state: AppStateStatus) => void>();
   private notificationSubs = new Set<(visible: boolean) => void>();
+  private busySubs = new Set<(state: SessionBusyState) => void>();
   private voiceEndedSubs = new Set<
     (e: {
       voiceId: string;
@@ -150,8 +137,6 @@ export class RNAudioApiEngine implements AudioEngine {
   >();
   private tickSubs = new Set<(ctxTimeSec: number) => void>();
 
-  private systemSubs: AudioEventSubscription[] = [];
-  private notifSubs: AudioEventSubscription[] = [];
   private appStateSub: { remove: () => void } | null = null;
   private disposed = false;
 
@@ -161,7 +146,6 @@ export class RNAudioApiEngine implements AudioEngine {
   private oneshotDropped = 0;
   private focusHeld = false;
 
-  private interruptionBegan = false;
   private suspendPending = false;
   /** After Stop all: emit one settled diag once only heartbeats remain. */
   private settledPending = false;
@@ -191,18 +175,13 @@ export class RNAudioApiEngine implements AudioEngine {
     void opts;
     if (this.context) return;
 
+    // B·S3: library no longer owns focus / notification / routes.
+    AudioManager.disableSessionManagement();
+    console.log("[audio-spike] sessionOwner=audio-session");
+
     AudioManager.setSystemOptions({
       ios: { category: "playback", mode: "default" },
     });
-    requestAudioFocus();
-
-    if (Platform.OS === "android") {
-      try {
-        await AudioManager.requestNotificationPermissions();
-      } catch {
-        // permission prompt may fail on older APIs; continue
-      }
-    }
 
     const context = new AudioContext({ latencyHint: "playback" });
     await context.resume();
@@ -233,37 +212,50 @@ export class RNAudioApiEngine implements AudioEngine {
     this.silentBuffer = silent;
     this.initWallMs = Date.now();
     this.disposed = false;
+    this.route = "unknown";
 
-    await this.refreshRoute({ logRaw: true });
-
-    this.systemSubs.push(
-      AudioManager.addSystemEventListener("routeChange", (e) => {
-        void this.onRouteChangeEvent(e);
-      })!,
-    );
-    this.systemSubs.push(
-      AudioManager.addSystemEventListener("interruption", (e) => {
-        void this.onInterruptionEvent(e);
-      })!,
-    );
-    // Library gap (1.0.1): AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK (-3) is logged
-    // natively but never emitted as a JS `duck` event. The subsequent GAIN
-    // often arrives as interruption `ended` with shouldResume=false and no
-    // matching `began` — we treat that unpaired ended as a no-op (below).
-    this.systemSubs.push(
-      AudioManager.addSystemEventListener("duck", (e) => {
-        console.log("[audio-spike] duck", e);
-        this.tick();
-      })!,
-    );
-
-    this.wireRemoteCommands();
+    this.wireSessionController();
 
     this.appStateSub = AppState.addEventListener("change", (next) => {
       this.appState = next;
       for (const cb of this.appStateSubs) cb(next);
       this.tick();
     });
+  }
+
+  /** Expose session for spike Start (notification permission + start). */
+  getSession(): AudioSessionController {
+    return this.session;
+  }
+
+  getSessionBusy(): SessionBusyState {
+    return this.sessionBusy;
+  }
+
+  onSessionBusy(cb: (state: SessionBusyState) => void): Unsubscribe {
+    this.busySubs.add(cb);
+    return () => this.busySubs.delete(cb);
+  }
+
+  /**
+   * Ask notification permission (from Start), then start the MediaSession.
+   * Returns false if focus was denied ("audio busy").
+   */
+  async beginMixSession(meta: {
+    title: string;
+    artist: string;
+  }): Promise<boolean> {
+    await this.session.requestNotificationPermission();
+    const ok = await this.session.start(meta);
+    this.focusHeld = ok;
+    this.setNotificationVisible(ok || this.session.isStarted());
+    return ok;
+  }
+
+  async endMixSession(): Promise<void> {
+    await this.session.stop();
+    this.focusHeld = false;
+    this.setNotificationVisible(false);
   }
 
   /**
@@ -345,8 +337,39 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   requestFocus(): void {
-    requestAudioFocus();
-    this.focusHeld = true;
+    void this.session.requestFocus().then((ok) => {
+      this.focusHeld = ok;
+    });
+  }
+
+  /**
+   * Skip narration back by `ms`. No-op when no narration is active (never seeks beds).
+   */
+  skipNarrationBack(ms = 10_000): void {
+    const narration = [...this.voices.values()].find(
+      (v) => v.kind === "narration",
+    );
+    if (!narration?.meta) {
+      console.log("[audio-spike] skipBack no-op (no narration)");
+      return;
+    }
+    const ctx = this.context;
+    if (!ctx) return;
+    const currentSec = narration.paused
+      ? narration.pauseOffsetSec
+      : narration.offsetSec +
+        (ctx.currentTime - narration.startedAtContextTime);
+    const nextMs = Math.max(0, currentSec * 1000 - ms);
+    const meta = narration.meta;
+    const sha = [...this.buffers.entries()].find(
+      ([, b]) => b.buffer === narration.buffer,
+    )?.[0];
+    if (!sha) return;
+    this.playNarration(
+      { sha, durationMs: narration.durationMs },
+      meta,
+      nextMs,
+    );
   }
 
   async stopAllMix(fadeMs = 500): Promise<void> {
@@ -369,6 +392,7 @@ export class RNAudioApiEngine implements AudioEngine {
     // once only heartbeats remain, then suspend.
     this.ensureHeartbeats();
     await this.fadeMasterAndSuspend(fade, "stop-all");
+    await this.endMixSession();
   }
 
   onSettled(
@@ -1080,15 +1104,7 @@ export class RNAudioApiEngine implements AudioEngine {
     this.mixActive = false;
     this.appStateSub?.remove();
     this.appStateSub = null;
-    for (const sub of this.systemSubs) sub.remove();
-    this.systemSubs = [];
-    for (const sub of this.notifSubs) sub.remove();
-    this.notifSubs = [];
-    try {
-      await PlaybackNotificationManager.hide();
-    } catch {
-      // ignore
-    }
+    await this.endMixSession();
     this.setNotificationVisible(false);
 
     for (const voiceId of [...this.voices.keys()]) {
@@ -1264,6 +1280,7 @@ export class RNAudioApiEngine implements AudioEngine {
 
   /**
    * Idempotent voice teardown: disconnect nodes, ledger release, single voiceEnded.
+   * M6: delay disconnect until onEnded, or ≥1 quantum after stop.
    */
   private releaseVoice(
     voiceId: string,
@@ -1290,28 +1307,36 @@ export class RNAudioApiEngine implements AudioEngine {
     } catch {
       // already stopped / never started
     }
-    try {
-      voice.source.disconnect();
-    } catch {
-      // ignore
-    }
-    try {
-      voice.gain.disconnect();
-    } catch {
-      // ignore
-    }
-    if (voice.panner) {
-      try {
-        voice.panner.disconnect();
-      } catch {
-        // ignore
-      }
-    }
 
     this.voices.delete(voiceId);
     if (voice.kind === "heartbeat") {
       this.heartbeatIds.delete(voiceId);
     }
+
+    const sampleRate = this.context?.sampleRate ?? 48_000;
+    const quantumMs = Math.max(5, Math.ceil((1000 * 128) / sampleRate));
+    const delayMs = reason === "ended" ? 0 : quantumMs;
+    const disconnect = () => {
+      try {
+        voice.source.disconnect();
+      } catch {
+        // ignore
+      }
+      try {
+        voice.gain.disconnect();
+      } catch {
+        // ignore
+      }
+      if (voice.panner) {
+        try {
+          voice.panner.disconnect();
+        } catch {
+          // ignore
+        }
+      }
+    };
+    if (delayMs <= 0) disconnect();
+    else setTimeout(disconnect, delayMs);
 
     const emitReason = reason === "cancelled" ? "cancelled" : "ended";
     const payload = {
@@ -1394,69 +1419,80 @@ export class RNAudioApiEngine implements AudioEngine {
     }
   }
 
-  private async refreshRoute(opts: { logRaw: boolean }): Promise<AudioRoute> {
-    try {
-      const info = await AudioManager.getDevicesInfo();
-      this.lastDevicesInfo = info;
-      if (opts.logRaw) {
-        console.log("[audio-spike] getDevicesInfo", JSON.stringify(info));
-      }
-      this.route = classifyRoute(info);
-    } catch (err) {
-      console.warn("[audio-spike] getDevicesInfo failed", err);
-      this.route = "unknown";
-    }
-    return this.route;
-  }
-
-  private async onRouteChangeEvent(e: RouteChangeEvent): Promise<void> {
-    const prev = this.route;
-    const next = await this.refreshRoute({ logRaw: true });
-    console.log("[audio-spike] routeChange", {
-      reason: e.reason,
-      prev,
-      next,
-      raw: this.lastDevicesInfo,
+  private wireSessionController(): void {
+    this.session.setEffectHandler((effect) => {
+      void this.applyFocusEffect(effect);
     });
+    // Play/pause audio work is done by the focus effect from userPlay/userPause.
+    this.session.setRemoteHandler(async (command) => {
+      if (command === "play") {
+        for (const cb of this.remoteSubs) cb("play");
+        return;
+      }
+      if (command === "pause") {
+        for (const cb of this.remoteSubs) cb("pause");
+        return;
+      }
+      if (command === "skipBack") {
+        this.skipNarrationBack(10_000);
+        for (const cb of this.remoteSubs) cb("skipBackward");
+      }
+    });
+    this.session.setBusyHandler((state) => {
+      this.sessionBusy = state;
+      for (const cb of this.busySubs) cb(state);
+    });
+    this.session.setRouteHandler((e) => {
+      const next = (e.route === "headphones" ||
+      e.route === "bluetooth" ||
+      e.route === "speaker"
+        ? e.route
+        : "unknown") as AudioRoute;
+      this.route = next;
+      this.lastDevicesInfo = e;
+      console.log("[audio-spike] route", e);
+      this.applyDucking(300);
+      for (const cb of this.routeSubs) cb(next);
+      this.tick();
+    });
+  }
 
-    const lostExternal =
-      e.reason === "OldDeviceUnavailable" ||
-      (prev !== "speaker" &&
-        prev !== "unknown" &&
-        isSpeakerLike(next));
-    if (lostExternal && (next === "speaker" || next === "unknown")) {
-      await this.fadeMasterAndSuspend(250, "route-unplug");
+  private async applyFocusEffect(effect: FocusEffect): Promise<void> {
+    console.log("[audio-spike] focusEffect", effect, {
+      mode: this.session.getMode(),
+    });
+    switch (effect.type) {
+      case "fadeSuspend":
+        for (const cb of this.interruptionSubs) cb("began");
+        await this.fadeMasterAndSuspend(250, "focus-suspend");
+        break;
+      case "resumeFadeIn":
+        for (const cb of this.interruptionSubs) cb("ended");
+        await this.resumeAfterFade(effect.ms, "focus-gain");
+        break;
+      case "duck":
+        this.applyMasterDuck(effect.db);
+        break;
+      case "unduck":
+        this.applyMasterDuck(0);
+        break;
+      case "denyPlay":
+        this.sessionBusy = "audioBusy";
+        for (const cb of this.busySubs) cb("audioBusy");
+        break;
+      case "noop":
+        break;
     }
-
-    this.applyDucking(300);
-    for (const cb of this.routeSubs) cb(next);
     this.tick();
   }
 
-  private async onInterruptionEvent(e: {
-    type: "began" | "ended";
-    shouldResume: boolean;
-  }): Promise<void> {
-    console.log("[audio-spike] interruption", e);
-    for (const cb of this.interruptionSubs) cb(e.type);
-    if (e.type === "began") {
-      this.interruptionBegan = true;
-      await this.fadeMasterAndSuspend(250, "interruption");
-      this.tick();
-      return;
-    }
-    if (e.shouldResume) {
-      if (this.interruptionBegan) {
-        this.interruptionBegan = false;
-        await this.resumeAfterFade(1000, "interruption-ended");
-      } else {
-        // Includes GAIN after a silent CAN_DUCK (-3) that never emitted `duck`.
-        console.warn("[audio-spike] interruptionUnpaired", e);
-      }
-    } else if (!this.interruptionBegan) {
-      console.warn("[audio-spike] interruptionUnpaired", e);
-    }
-    this.tick();
+  private applyMasterDuck(db: number): void {
+    const master = this.master;
+    const ctx = this.context;
+    if (!master || !ctx) return;
+    this.duckFactor = db === 0 ? 1 : dbToGain(db);
+    const target = Math.max(0.0001, this.unduckedMasterLinear * this.duckFactor);
+    rampGainHeld(master.gain, ctx.currentTime, target, 80);
   }
 
   private async fadeMasterAndSuspend(
@@ -1544,6 +1580,16 @@ export class RNAudioApiEngine implements AudioEngine {
     if (!ctx || !master) return;
 
     console.log("[audio-spike] resumeAfterFade", { reason, fadeMs });
+    const focused = await this.session.requestFocus();
+    if (!focused) {
+      this.focusHeld = false;
+      this.sessionBusy = "audioBusy";
+      for (const cb of this.busySubs) cb("audioBusy");
+      console.warn("[audio-spike] resume denied — audio busy");
+      return;
+    }
+    this.focusHeld = true;
+
     try {
       await ctx.resume();
     } catch (err) {
@@ -1551,9 +1597,9 @@ export class RNAudioApiEngine implements AudioEngine {
     }
 
     const now = ctx.currentTime;
+    this.unduckedMasterLinear = 1;
+    this.duckFactor = 1;
     rampGainHeld(master.gain, now, 0.0001, 0);
-    requestAudioFocus();
-    this.focusHeld = true;
 
     const fade = enforceMinFade(fadeMs);
     rampGainHeld(master.gain, now, 1, fade);
@@ -1572,58 +1618,27 @@ export class RNAudioApiEngine implements AudioEngine {
       (narration?.pauseOffsetSec ?? 0) * 1000,
       narration?.durationMs ?? 0,
     );
-    this.requestFocus();
     this.tick();
-  }
-
-  private wireRemoteCommands(): void {
-    const entries: {
-      event:
-        | "playbackNotificationPlay"
-        | "playbackNotificationPause"
-        | "playbackNotificationSkipForward"
-        | "playbackNotificationSkipBackward"
-        | "playbackNotificationNextTrack";
-      cmd: "play" | "pause" | "skipForward" | "skipBackward" | "next";
-    }[] = [
-      { event: "playbackNotificationPlay", cmd: "play" },
-      { event: "playbackNotificationPause", cmd: "pause" },
-      { event: "playbackNotificationSkipForward", cmd: "skipForward" },
-      { event: "playbackNotificationSkipBackward", cmd: "skipBackward" },
-      { event: "playbackNotificationNextTrack", cmd: "next" },
-    ];
-
-    for (const { event, cmd } of entries) {
-      const sub = PlaybackNotificationManager.addEventListener(event, () => {
-        if (cmd === "play") void this.resumeAfterFade(300, "remote");
-        if (cmd === "pause") void this.fadeMasterAndSuspend(250, "remote");
-        for (const cb of this.remoteSubs) cb(cmd);
-        this.tick();
-      });
-      this.notifSubs.push(sub);
-    }
   }
 
   private async showNotification(
     meta: NowPlayingMeta,
     state: "playing" | "paused",
-    elapsedMs: number,
-    durationMs: number,
+    _elapsedMs: number,
+    _durationMs: number,
   ): Promise<void> {
     try {
-      await PlaybackNotificationManager.show({
-        title: meta.title,
-        artist: meta.artist,
-        artwork: meta.artworkUri,
-        duration: durationMs / 1000,
-        elapsedTime: elapsedMs / 1000,
+      if (!this.session.isStarted()) {
+        // Session not yet started (pre-mix); nothing to update.
+        return;
+      }
+      await this.session.update(
+        { title: meta.title, artist: meta.artist },
         state,
-        skipInterval: 10,
-      });
+      );
       this.setNotificationVisible(true);
     } catch (err) {
-      console.warn("[audio-spike] notification show failed", err);
-      this.setNotificationVisible(false);
+      console.warn("[audio-spike] session update failed", err);
     }
   }
 
@@ -1638,12 +1653,6 @@ export class RNAudioApiEngine implements AudioEngine {
       cb({
         positionMs: d.narrationPositionMs,
         durationMs: narration.durationMs,
-      });
-    }
-    if (this.notificationVisible && narration.meta) {
-      void PlaybackNotificationManager.show({
-        elapsedTime: d.narrationPositionMs / 1000,
-        state: this.context?.state === "running" ? "playing" : "paused",
       });
     }
   }
