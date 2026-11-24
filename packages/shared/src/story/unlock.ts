@@ -142,7 +142,7 @@ export function unlocksToWrite(
     .map((fragment) => fragment.id);
 }
 
-function completedEpoch(
+export function completedEpoch(
   fragment: FragmentInput,
   completions: readonly CompletionRow[],
 ): boolean {
@@ -153,7 +153,7 @@ function completedEpoch(
   );
 }
 
-function heardOlderEpoch(
+export function heardOlderEpoch(
   fragment: FragmentInput,
   completions: readonly CompletionRow[],
 ): boolean {
@@ -194,6 +194,30 @@ export function markerState(input: {
   const pulse: PulseKind = !playableNow ? "none" : changed ? "changed" : "tier";
 
   return { opacity, playableNow, pulse, hidden: false };
+}
+
+/**
+ * Unlocked, has a version for the window, and not completed for the current
+ * contingency epoch. Used by the session queue and play paths.
+ */
+export function isPlayableNow(
+  fragment: FragmentInput,
+  fragments: readonly FragmentInput[],
+  external: readonly ExternalPrerequisite[],
+  completions: readonly CompletionRow[],
+  unlocks: readonly UnlockRow[],
+  timeWindow: TimeWindow,
+  lang: string,
+): boolean {
+  return markerState({
+    fragment,
+    fragments,
+    external,
+    completions,
+    unlocks,
+    timeWindow,
+    lang,
+  }).playableNow;
 }
 
 /** On-site completion of this window at or after the current contingency epoch. */

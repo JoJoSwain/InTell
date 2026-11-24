@@ -91,17 +91,24 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
 
 ### 3.2 Session state machine
-A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` and carries out the effects. Hush belongs to the AudioDirector (`hush.ts`), which reads `storyStateOf(...)`, not to the session machine.
+A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each event as epoch ms (`at`).
 ```
 idle
- ├─ fixInsideGrove | scan(code) → exploring
-exploring { groveIds, playing?, queued?, afterglowEndsAt?, lastInsideGroveAt, startedAt }
- ├─ arrived(fragmentId)       → pick version for current window → (growthMoment?) → play if nothing is playing, else queue(1)
- │                              (exactly one narration voice ever; a queued fragment never interrupts)
- ├─ scan(locked or no version for now) → teaser pop-up
- ├─ narrationEnded(natural)   → record completion (revision, window, on site) → unlock dependents → met characters → events
- ├─ narrationEnded            → afterglow 8 s → play queued if still in range (or if it came from a scan)
- ├─ stop | 15 min outside | 3 h → idle (write the visit record)
+ ├─ fix (inside a grove piece) | scan → exploring  (needs sessionId on the event)
+exploring { groveIds, currentGroveId, playing?, queued?, afterglowEndsAt?, lastInsideGroveAt, startedAt }
+ ├─ fix → proximityCandidates → chooseTrigger → queueAfterTrigger
+ │         → play { fragmentId, revisionNo, version, via }  (or queue of one)
+ │         (exactly one narration voice ever; a queued fragment never interrupts)
+ ├─ scan → scanDecision; locked → showTeaser{reason:"locked"}; no version → showTeaser{reason:"wrongTime"};
+ │         else play (physical only; scan replaces the queue)
+ ├─ narrationPaused / narrationResumed → playing stays set; pausedTotalMs accumulates; queue waits
+ ├─ narrationEnded(natural) → recordCompletion → writeUnlocks → metCharacters → analytics
+ │                            → startAfterglow{endsAt,fragmentId,tier}  (growthMoment is an M9 hook)
+ ├─ afterglowElapsed (8 s) → play queued if still in range (or if it came from a scan)
+ ├─ narrationEnded(stopped|interrupted) → recordProgress (no completion); stopped clears the queue;
+ │                                        interrupted keeps a queued scan only
+ ├─ groveEntered { groveId } the first time each grove becomes currentGroveId
+ ├─ stop | 15 min outside | 3 h → idle (writeVisit per grove; stopNarration + computed playedMs if playing)
 ```
 
 ### 3.3 Location
