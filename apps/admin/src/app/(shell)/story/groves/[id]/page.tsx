@@ -241,6 +241,13 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
           >
             Sound cues
           </Link>
+          <Link
+            href={`/simulate/${id}`}
+            className="text-sm text-primary underline"
+            aria-label="Listening Simulator"
+          >
+            Simulator
+          </Link>
           <UnreleasedBadge
             kind={releaseBadgeKind(grove.id, unreleasedIds, publishedIds)}
           />

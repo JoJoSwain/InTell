@@ -661,14 +661,14 @@ isOneToOne: false
                   ]
                 },"landcover_grids": {
                   Row: {
-                    "file_path": string,"generated_at": string,"h3_resolution": number,"region_id": string,"source": string,"version": number
+                    "file_path": string,"generated_at": string,"h3_resolution": number,"region_id": string,"sha": string | null,"source": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "file_path": string,"generated_at": string,"h3_resolution"?: number,"region_id": string,"source": string,"version": number
+                    "file_path": string,"generated_at": string,"h3_resolution"?: number,"region_id": string,"sha"?: string | null,"source": string,"version": number
                   }
                   Update: {
-                    "file_path"?: string,"generated_at"?: string,"h3_resolution"?: number,"region_id"?: string,"source"?: string,"version"?: number
+                    "file_path"?: string,"generated_at"?: string,"h3_resolution"?: number,"region_id"?: string,"sha"?: string | null,"source"?: string,"version"?: number
                   }
                   Relationships: [
                     {

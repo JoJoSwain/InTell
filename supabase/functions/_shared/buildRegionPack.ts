@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
+import { copyLandcoverGridToPublic } from "./storage.ts";
 
 function maxTs(values: (string | null | undefined)[]): string {
   let best = "1970-01-01T00:00:00.000Z";
@@ -12,12 +13,18 @@ function maxTs(values: (string | null | undefined)[]): string {
   return best;
 }
 
-export async function buildRegionPack(
+export type AssembledRegionPack = {
+  pack: Record<string, unknown>;
+  assetShas: string[];
+  bytesTotal: number;
+};
+
+/** Assemble a region pack body without persisting (Simulator / preview). */
+export async function assembleRegionPackObject(
   client: SupabaseClient,
   regionId: string,
-  reason?: string,
-  releaseId?: string,
-): Promise<PackPersistResult> {
+  opts: { copyLandcover?: boolean } = {},
+): Promise<AssembledRegionPack> {
   const watermarks: string[] = [];
   const assetMap = new Map<
     string,
@@ -228,10 +235,23 @@ export async function buildRegionPack(
 
   let landcoverOut: Record<string, unknown> | null = null;
   if (landcover) {
-    // Prefer a real content sha when present; M2 seed stored a path, not a sha256.
     const rawSha = String(landcover.sha ?? "");
     const gridSha = /^[0-9a-f]{64}$/i.test(rawSha) ? rawSha.toLowerCase() : null;
     if (gridSha) {
+      if (opts.copyLandcover !== false) {
+        try {
+          await copyLandcoverGridToPublic(
+            client,
+            gridSha,
+            String(landcover.file_path),
+          );
+        } catch (err) {
+          // Pack still carries gridSha; phones fetch landcover/{sha}.* when present.
+          console.warn(
+            `landcover copy skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
       const classes = [];
       for (const c of landcoverClasses ?? []) {
         const { data: prof } = c.profile_id
@@ -277,12 +297,28 @@ export async function buildRegionPack(
     })),
   };
 
+  return {
+    pack,
+    assetShas: assets.map((a) => a.sha.toLowerCase()),
+    bytesTotal: assets.reduce((n, a) => n + a.bytes, 0),
+  };
+}
+
+export async function buildRegionPack(
+  client: SupabaseClient,
+  regionId: string,
+  reason?: string,
+  releaseId?: string,
+): Promise<PackPersistResult> {
+  const assembled = await assembleRegionPackObject(client, regionId, {
+    copyLandcover: true,
+  });
   return persistPackIfChanged(client, {
     scope: "region",
     scopeId: regionId,
-    body: pack,
-    assetShas: assets.map((a) => a.sha.toLowerCase()),
-    bytesTotal: assets.reduce((n, a) => n + a.bytes, 0),
+    body: assembled.pack,
+    assetShas: assembled.assetShas,
+    bytesTotal: assembled.bytesTotal,
     reason,
     releaseId,
   });

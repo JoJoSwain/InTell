@@ -131,12 +131,16 @@ function VersionFields({
             ? stagingByAssetId[initial.narration_asset_id]
             : null
         }
+        showWaveform={!readOnly}
+        kind="breath"
       />
       <BreathPointsField
         name={`${window}_swell_cues_ms`}
         label={`${label} swell cues (ms, comma-separated)`}
         defaultValue={initial?.swell_cues_ms ?? []}
         disabled={readOnly}
+        showWaveform={!readOnly}
+        kind="swell"
       />
     </fieldset>
   );

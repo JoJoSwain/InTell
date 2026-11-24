@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canViewSound, isActiveStaff, loadStaff } from "@/lib/staff";
 import { l10nEn } from "@/lib/geo";
+import { LandcoverUpload } from "@/components/sound/landcover-upload";
 
 export default async function LandcoverPage() {
   const supabase = await createClient();
@@ -32,6 +33,14 @@ export default async function LandcoverPage() {
     ),
   );
 
+  const regionOpts = (
+    (regions ?? []) as { id: string; name: unknown; slug: string }[]
+  ).map((r) => ({
+    id: r.id,
+    name: l10nEn(r.name) || r.slug,
+    slug: r.slug,
+  }));
+
   const { data: profiles } = await supabase
     .from("ambience_profiles")
     .select("id, slug");
@@ -46,9 +55,15 @@ export default async function LandcoverPage() {
     <main className="px-8 py-10">
       <h1 className="font-serif text-3xl font-semibold">Landcover</h1>
       <p className="mt-2 text-sm text-textMuted">
-        Grids and NLCD class → ambience profile mapping. Build grids with{" "}
-        <code className="text-xs">tools/landcover</code> (H3 overlay).
+        Grids and NLCD class → ambience profile mapping. Upload a JSON H3 grid
+        below, or build binaries with{" "}
+        <code className="text-xs">tools/landcover</code>.
       </p>
+
+      <LandcoverUpload
+        regions={regionOpts}
+        defaultRegionId={regionOpts[0]?.id}
+      />
 
       <section className="mt-10" aria-labelledby="grids-heading">
         <h2 id="grids-heading" className="font-serif text-xl font-semibold">

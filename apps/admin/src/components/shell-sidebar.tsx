@@ -80,6 +80,11 @@ export function ShellSidebar({
     { href: "/sound/zones", label: "Zones", show: canViewSound(role) },
     { href: "/sound/landcover", label: "Landcover", show: canViewSound(role) },
     { href: "/sound/music", label: "Music", show: canViewSound(role) },
+    {
+      href: "/simulate/aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
+      label: "Simulator",
+      show: canViewSound(role),
+    },
   ];
   const ops: NavItem[] = [
     { href: "/regions", label: "Regions", show: true },

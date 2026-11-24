@@ -549,3 +549,57 @@ export async function saveGroveSoundCues(
   revalidatePath(`/sound/groves/${groveId}/cues`);
   return { ok: true, href: saveHref(`/sound/groves/${groveId}/cues`) };
 }
+
+/** Register an uploaded H3 landcover grid (P2b). Upserts landcover_grids by region. */
+export async function registerLandcoverGrid(
+  formData: FormData,
+): Promise<ServerActionResult> {
+  const auth = await requireSoundEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
+  const regionId = String(formData.get("region_id") ?? "");
+  const filePath = String(formData.get("file_path") ?? "").trim();
+  const source = String(formData.get("source") ?? "upload").trim() || "upload";
+  const sha = String(formData.get("sha") ?? "").trim();
+  const h3Resolution = Number(formData.get("h3_resolution") ?? 9);
+  if (!regionId || !filePath) {
+    return serverActionError("region and file path required");
+  }
+  if (!Number.isFinite(h3Resolution) || h3Resolution < 0 || h3Resolution > 15) {
+    return serverActionError("h3_resolution must be 0–15");
+  }
+
+  const { data: existing } = await supabase
+    .from("landcover_grids")
+    .select("version")
+    .eq("region_id", regionId)
+    .maybeSingle();
+  const version = (existing?.version ?? 0) + 1;
+  const sourceLabel = sha ? `${source} sha:${sha.slice(0, 12)}` : source;
+
+  const row: {
+    region_id: string;
+    h3_resolution: number;
+    source: string;
+    file_path: string;
+    version: number;
+    generated_at: string;
+    sha?: string;
+  } = {
+    region_id: regionId,
+    h3_resolution: h3Resolution,
+    source: sourceLabel,
+    file_path: filePath,
+    version,
+    generated_at: new Date().toISOString(),
+  };
+  if (/^[0-9a-f]{64}$/i.test(sha)) {
+    row.sha = sha.toLowerCase();
+  }
+  const { error } = await supabase
+    .from("landcover_grids")
+    .upsert(row, { onConflict: "region_id" });
+  if (error) return serverActionError(error.message);
+  revalidatePath("/sound/landcover");
+  return { ok: true, href: saveHref("/sound/landcover") };
+}

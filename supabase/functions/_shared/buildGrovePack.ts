@@ -421,20 +421,41 @@ export async function buildGrovePackObject(
       return entry;
     });
 
-  // Music cues with published snapshots for this grove
+  // Music cues: published snapshots, plus overlay projections in preview
+  const cueById = new Map<string, { data: ReturnType<typeof parseSnapshot<"music_cue">>; published_at: string }>();
   const { data: cueRows } = await supabase
     .from("published_snapshots")
     .select("data, published_at")
     .eq("entity", "music_cue");
-  const musicCues = [];
   for (const row of cueRows ?? []) {
     const cue = parseSnapshot("music_cue", row.data);
-    if (cue.status !== "published") continue;
+    cueById.set(cue.id, { data: cue, published_at: row.published_at });
+  }
+  if (overlay) {
+    for (const key of overlay.items) {
+      if (!key.startsWith("music_cue:")) continue;
+      const cid = key.slice("music_cue:".length);
+      try {
+        const dataRaw = await projectEntity(supabase, "music_cue", cid);
+        const cue = parseSnapshot("music_cue", dataRaw);
+        cueById.set(cid, {
+          data: cue,
+          published_at: new Date().toISOString(),
+        });
+      } catch {
+        /* skip broken projection */
+      }
+    }
+  }
+  const musicCues = [];
+  for (const { data: cue, published_at } of cueById.values()) {
+    if (!preview && cue.status !== "published") continue;
+    if (preview && cue.status === "unpublished") continue;
     if (cue.groveId !== groveId && !cue.musicZoneId) continue;
     // grove-bound cues, or zone cues included via region (zone cues go in grove pack when intersecting — seed uses grove cues)
     if (cue.groveId && cue.groveId !== groveId) continue;
     if (!cue.groveId) continue; // zone-only cues stay in region pack for M3a simplicity unless grove-linked
-    watermarks.push(row.published_at);
+    watermarks.push(published_at);
     for (const s of cue.stems) {
       assetMap.set(s.assetSha, {
         sha: s.assetSha,
@@ -493,17 +514,41 @@ export async function buildGrovePackObject(
     musicCues.push(cueEntry);
   }
 
-  // Ambience zones with published snapshots in same region
+  // Ambience zones: published + overlay projections in preview
+  const zoneById = new Map<
+    string,
+    { data: ReturnType<typeof parseSnapshot<"ambience_zone">>; published_at: string }
+  >();
   const { data: zoneRows } = await supabase
     .from("published_snapshots")
     .select("data, published_at")
     .eq("entity", "ambience_zone");
-  const ambienceZones = [];
   for (const row of zoneRows ?? []) {
     const z = parseSnapshot("ambience_zone", row.data);
-    if (z.status !== "published") continue;
+    zoneById.set(z.id, { data: z, published_at: row.published_at });
+  }
+  if (overlay) {
+    for (const key of overlay.items) {
+      if (!key.startsWith("ambience_zone:")) continue;
+      const zid = key.slice("ambience_zone:".length);
+      try {
+        const dataRaw = await projectEntity(supabase, "ambience_zone", zid);
+        const z = parseSnapshot("ambience_zone", dataRaw);
+        zoneById.set(zid, {
+          data: z,
+          published_at: new Date().toISOString(),
+        });
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  const ambienceZones = [];
+  for (const { data: z, published_at } of zoneById.values()) {
+    if (!preview && z.status !== "published") continue;
+    if (preview && z.status === "unpublished") continue;
     if (z.regionId !== groveSnap.regionId) continue;
-    watermarks.push(row.published_at);
+    watermarks.push(published_at);
     ambienceZones.push({
       id: z.id,
       boundary: z.boundary,
