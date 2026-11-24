@@ -87,11 +87,11 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 ```
 - **PackStore:** installed manifests, asset cache, `completions`, `unlocks`, `visits` and so on (DATA_MODEL §14).
 - **SessionStore** (Zustand, persisted to `kv`): the session state machine (§3.2) and `StoryState` (AUDIO_SPEC §4.1).
-- **AudioDirector:** ticks every 1 s plus on state changes. Calls `ambience.evaluate`, `music.select`, `hush.step` and applies their outputs to the engine with ramps. It owns ducking.
+- **AudioDirector:** pure `directorStep` in `packages/shared` (A6). Wakes on a **5 s audio-clock heartbeat** plus state changes (location, session effects, engine events). Composes ambience, music, hush, ducking and the A5 rules into a target mix, then diffs to engine commands.
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
 
 ### 3.2 Session state machine
-A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each event as epoch ms (`at`).
+A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`directorStep` / `hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each session event as epoch ms (`at`). The AudioDirector’s periodic wake is the **5 s audio-clock heartbeat** (not a 1 s wall timer); wall-clock ms still ride on every director input for hush, afterglow and mix recovery.
 ```
 idle
  ├─ fix (inside a grove piece) | scan → exploring  (needs sessionId on the event)

@@ -28,11 +28,13 @@ interface InternalBuffer extends BufferHandle {
 
 interface VoiceState {
   id: string;
-  kind: "narration" | "oneshot" | "bed";
+  kind: "narration" | "oneshot" | "bed" | "beacon";
   bus: BusId;
   source: AudioBufferSourceNode;
   gain: GainNode;
   pan: StereoPannerNode;
+  /** Admin-only lowpass for beacons (A6 G11). */
+  filter?: BiquadFilterNode;
   startedAtContextTime: number;
   offsetSec: number;
   durationMs: number;
@@ -679,7 +681,13 @@ export class WebAudioEngine implements AudioEngine {
     gainDb: number,
     pan: number,
     rate: number,
-  ): { source: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode } {
+    lowpassHz?: number,
+  ): {
+    source: AudioBufferSourceNode;
+    gain: GainNode;
+    pan: StereoPannerNode;
+    filter?: BiquadFilterNode;
+  } {
     const ctx = this.requireContext();
     const busGain = this.buses[bus];
     if (!busGain) throw new Error(`unknown bus ${bus}`);
@@ -692,8 +700,103 @@ export class WebAudioEngine implements AudioEngine {
     panNode.pan.value = Math.max(-1, Math.min(1, pan));
     source.connect(gain);
     gain.connect(panNode);
-    panNode.connect(busGain);
-    return { source, gain, pan: panNode };
+    let filter: BiquadFilterNode | undefined;
+    if (lowpassHz != null && Number.isFinite(lowpassHz)) {
+      filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = Math.max(200, lowpassHz);
+      panNode.connect(filter);
+      filter.connect(busGain);
+    } else {
+      panNode.connect(busGain);
+    }
+    return { source, gain, pan: panNode, filter };
+  }
+
+  /**
+   * Admin-only beacon voice with a BiquadFilter lowpass (A6). Not on the
+   * shared AudioEngine interface — phone adds this in M7.
+   */
+  startBeacon(
+    h: BufferHandle,
+    p: { gainDb: number; pan: number; lowpassHz: number; id?: string },
+  ): VoiceHandle {
+    const ctx = this.requireContext();
+    const buf = this.requireBuffer(h.sha);
+    const id = p.id ?? makeId("beacon");
+    const { source, gain, pan, filter } = this.connectVoice(
+      buf.buffer,
+      "surroundings",
+      p.gainDb,
+      p.pan,
+      1,
+      p.lowpassHz,
+    );
+    source.loop = true;
+    source.start(ctx.currentTime);
+    const voice: VoiceState = {
+      id,
+      kind: "beacon",
+      bus: "surroundings",
+      source,
+      gain,
+      pan,
+      filter,
+      startedAtContextTime: ctx.currentTime,
+      offsetSec: 0,
+      durationMs: buf.durationMs,
+      paused: false,
+      pauseOffsetSec: 0,
+      buffer: buf.buffer,
+      loopStartSec: 0,
+      loopEndSec: buf.durationMs,
+      looping: true,
+      ended: false,
+    };
+    source.onended = () => this.onVoiceEnded(voice);
+    this.voices.set(id, voice);
+    return { id };
+  }
+
+  updateBeacon(
+    id: string,
+    p: { gainDb: number; pan: number; lowpassHz: number },
+  ): void {
+    const ctx = this.context;
+    const voice = this.voices.get(id);
+    if (!ctx || !voice || voice.kind !== "beacon" || voice.ended) return;
+    rampGain(voice.gain.gain, ctx, dbToGain(p.gainDb), 200);
+    voice.pan.pan.setValueAtTime(
+      Math.max(-1, Math.min(1, p.pan)),
+      ctx.currentTime,
+    );
+    if (voice.filter) {
+      voice.filter.frequency.setTargetAtTime(
+        Math.max(200, p.lowpassHz),
+        ctx.currentTime,
+        0.05,
+      );
+    }
+  }
+
+  stopBeacon(id: string, fadeMs: number): void {
+    this.scheduleStop({ id }, fadeMs, undefined);
+  }
+
+  /** Host-interpreted suspend (A6); not on shared AudioEngine yet. */
+  suspendHost(): void {
+    const ctx = this.context;
+    if (ctx && ctx.state === "running") {
+      void ctx.suspend().catch(() => undefined);
+    }
+  }
+
+  /** Host-interpreted resume (A6). */
+  resumeHost(): void {
+    const ctx = this.context;
+    if (ctx && ctx.state === "suspended") {
+      void ctx.resume().catch(() => undefined);
+    }
   }
 
   private disconnectVoice(v: VoiceState): void {
@@ -701,6 +804,7 @@ export class WebAudioEngine implements AudioEngine {
       v.source.disconnect();
       v.gain.disconnect();
       v.pan.disconnect();
+      v.filter?.disconnect();
     } catch {
       /* */
     }

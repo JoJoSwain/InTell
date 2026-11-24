@@ -1,54 +1,36 @@
 /**
- * Listening Simulator pure harness — same shared functions the phone will use.
- * No Web Audio required; the UI may attach a WebAudioEngine separately.
+ * Listening Simulator harness — drives shared `directorStep` (A6).
+ * Same public surface as A5 so harness tests and the UI stay stable.
  */
 import {
   AFTERGLOW_MS,
+  ONESHOT_CONCURRENT_GLOBAL_MAX,
   accentAllowed,
   activeProfiles,
   allocateVoices,
-  beaconMix,
-  chooseBeacon,
-  createSeededRng,
-  depthConditionLatched,
+  directorStep,
+  distanceMeters,
   eligibleLayers,
-  hushStep,
-  initialHushState,
-  initialLockedTeaserState,
-  initialMixLevelState,
-  initialThresholdMotifState,
-  insideTierBuffersLatched,
+  initialDirectorState,
   localDayKey,
-  lockedTeaserStep,
-  mixLevelFor,
   musicConditionMatches,
-  ONESHOT_CONCURRENT_GLOBAL_MAX,
-  pickResolve,
   selectMusicCue,
-  selectMusicCueDeferred,
   shedLayers,
   stemGainDb,
-  thresholdMotifStep,
   type AmbienceLayerInput,
   type AmbienceProfileInput,
   type AmbienceZoneInput,
   type AudioRoute,
+  type DirectorCommand,
+  type DirectorState,
+  type DirectorWorld,
   type GeoJsonArea,
-  type HushState,
+  type MixLevelState,
   type MusicCondition,
-  type MusicCueInput,
   type MusicStemInput,
   type StoryState,
-  type ThresholdMotifState,
   type TimeWindow,
-  distanceMeters,
-  pointInPolygon,
 } from "@intell/shared";
-
-/** Local mirrors of shared types not yet re-exported from the package barrel. */
-type LockedTeaserState = ReturnType<typeof initialLockedTeaserState>;
-type MixLevelState = ReturnType<typeof initialMixLevelState>;
-type VoiceRequest = { kind: "narration" | "teaser" | "stem" | "bed" | "accent" | "beacon" | "moment"; id: string };
 
 export type SimFragment = {
   id: string;
@@ -63,8 +45,17 @@ export type SimFragment = {
   resolveAssetSha?: string | null;
 };
 
-export type SimMusicCue = MusicCueInput & {
+export type SimMusicCue = {
+  id: string;
   name: string;
+  timeWindow: TimeWindow;
+  priority: number;
+  conditions: MusicCondition;
+  minDwellS: number;
+  crossfadeMs: number;
+  boundary: GeoJsonArea;
+  edgeFadeM: number;
+  stems: MusicStemInput[];
   resolveRootSha?: string;
   resolveBranchSha?: string;
   resolveLeafSha?: string;
@@ -88,38 +79,8 @@ export type SimEvent =
   | { type: "mix_level"; shed: string[]; shedIndex: number }
   | { type: "accent_blocked_breath" }
   | { type: "voice_budget"; granted: string[]; denied: string[] }
-  | { type: "gpx_tick"; tMs: number; lat: number; lng: number; speed: 1 | 4 };
-
-export type SimulatorHarnessState = {
-  lat: number;
-  lng: number;
-  atMs: number;
-  month: number;
-  /** Forced window for the rail Day/Night toggle; null = sun-derived. */
-  forcedWindow: TimeWindow | null;
-  route: AudioRoute;
-  beaconsEnabled: boolean;
-  completed: Set<string>;
-  depthM: number;
-  narrationPlaying: boolean;
-  narrationPositionMs: number;
-  breathPointsMs: number[];
-  afterglowEndsAt: number | null;
-  pendingGrowthCueId: string | null;
-  hush: HushState;
-  motif: ThresholdMotifState;
-  teaser: LockedTeaserState;
-  mix: ReturnType<typeof initialMixLevelState>;
-  activeOneshots: number;
-  currentCueId: string | null;
-  cueStartedAt: number | null;
-  depthBloomInside: boolean;
-  bufferTiers: ("root" | "branch" | "leaf")[];
-  currentBeaconId: string | null;
-  lastBeaconPan: number;
-  timeZone: string;
-  events: SimEvent[];
-};
+  | { type: "gpx_tick"; tMs: number; lat: number; lng: number; speed: 1 | 4 }
+  | { type: "director_commands"; commands: DirectorCommand[] };
 
 export type SimulatorWorld = {
   groveId: string;
@@ -136,44 +97,43 @@ export type SimulatorWorld = {
   hushIntervalMin: number;
 };
 
-export function createHarnessState(
-  origin: { lat: number; lng: number },
-  atMs: number,
-  opts?: { timeZone?: string; dayKey?: string },
-): SimulatorHarnessState {
-  const timeZone = opts?.timeZone ?? "America/Denver";
-  const dayKey =
-    opts?.dayKey ?? localDayKey(new Date(atMs), timeZone);
-  return {
-    lat: origin.lat,
-    lng: origin.lng,
-    atMs,
-    month: 6,
-    forcedWindow: "day",
-    route: "headphones",
-    beaconsEnabled: true,
-    completed: new Set(),
-    depthM: 0,
-    narrationPlaying: false,
-    narrationPositionMs: 0,
-    breathPointsMs: [],
-    afterglowEndsAt: null,
-    pendingGrowthCueId: null,
-    hush: initialHushState(),
-    motif: initialThresholdMotifState(),
-    teaser: initialLockedTeaserState(dayKey),
-    mix: initialMixLevelState(),
-    activeOneshots: 0,
-    currentCueId: null,
-    cueStartedAt: null,
-    depthBloomInside: false,
-    bufferTiers: [],
-    currentBeaconId: null,
-    lastBeaconPan: 0,
-    timeZone,
-    events: [],
+export type SimulatorHarnessState = {
+  lat: number;
+  lng: number;
+  atMs: number;
+  month: number;
+  forcedWindow: TimeWindow | null;
+  route: AudioRoute;
+  beaconsEnabled: boolean;
+  completed: Set<string>;
+  depthM: number;
+  narrationPlaying: boolean;
+  narrationPositionMs: number;
+  breathPointsMs: number[];
+  afterglowEndsAt: number | null;
+  pendingGrowthCueId: string | null;
+  hush: {
+    phase: string;
+    phaseStartedAt: Date | null;
+    nextHushAt: Date | null;
+    holdEndsAt: Date | null;
+    fadeInMs: number;
   };
-}
+  motif: DirectorState["motif"];
+  teaser: DirectorState["teaser"];
+  mix: MixLevelState;
+  activeOneshots: number;
+  currentCueId: string | null;
+  cueStartedAt: number | null;
+  depthBloomInside: boolean;
+  bufferTiers: ("root" | "branch" | "leaf")[];
+  currentBeaconId: string | null;
+  lastBeaconPan: number;
+  timeZone: string;
+  events: SimEvent[];
+  director: DirectorState;
+  lastCommands: DirectorCommand[];
+};
 
 export type SimulatorTickPatch = Partial<{
   lat: number;
@@ -202,24 +162,160 @@ export type SimulatorTickPatch = Partial<{
   gpx: { tMs: number; speed: 1 | 4 };
 }>;
 
-function storyOf(
-  state: SimulatorHarnessState,
-  window: TimeWindow,
-): StoryState {
-  const last = [...state.completed].at(-1);
+function toDirectorWorld(world: SimulatorWorld): DirectorWorld {
   return {
-    groveId: undefined,
-    playingFragmentId: undefined,
-    playingTier: undefined,
+    groveId: world.groveId,
+    timeZone: "America/Denver",
+    allowsSpeakerWildlife: world.allowsSpeakerWildlife,
+    hushIntervalMin: world.hushIntervalMin,
+    depthBloomTextureM: world.depthBloomTextureM,
+    fragments: world.fragments.map((f) => ({
+      id: f.id,
+      lat: f.lat,
+      lng: f.lng,
+      radiusM: f.radiusM,
+      tier: f.tier,
+      visibility: f.visibility,
+      title: f.title,
+      beaconSha: f.beaconAssetSha,
+      teaserLockedSha: f.teaserLockedSha,
+      resolveSha: f.resolveAssetSha,
+    })),
+    musicCues: world.cues.map((c) => ({
+      id: c.id,
+      timeWindow: c.timeWindow,
+      priority: c.priority,
+      conditions: c.conditions,
+      minDwellS: c.minDwellS,
+      crossfadeMs: c.crossfadeMs,
+      boundary: c.boundary,
+      edgeFadeM: c.edgeFadeM,
+      stems: c.stems,
+      resolveRootSha: c.resolveRootSha,
+      resolveBranchSha: c.resolveBranchSha,
+      resolveLeafSha: c.resolveLeafSha,
+    })),
+    ambienceZones: world.ambienceZones,
+    ambienceProfiles: world.profiles,
+    classToProfile: world.classToProfile,
+    landcoverCells: world.landcoverCells,
+    motifDaySha: world.motifDaySha,
+    motifNightSha: world.motifNightSha,
+    groveBeaconByTier: {},
+    hushListenSha: "hush-listen-sha",
+    engineCaps: {
+      canStreamBeds: false,
+      narrationDecodeHz: 24_000,
+    },
+  };
+}
+
+function mirrorFromDirector(
+  harness: SimulatorHarnessState,
+  d: DirectorState,
+  commands: DirectorCommand[],
+  events: SimEvent[],
+): SimulatorHarnessState {
+  return {
+    ...harness,
+    director: d,
+    lastCommands: commands,
+    atMs: d.wallAtMs,
+    lat: d.point.lat,
+    lng: d.point.lng,
+    depthM: d.depthM ?? harness.depthM,
+    month: d.month,
+    route: d.settings.route,
+    beaconsEnabled: d.settings.beaconsEnabled,
+    narrationPlaying: d.narration.playing,
+    narrationPositionMs: d.narration.positionMs,
+    breathPointsMs: [...d.narration.breathPointsMs],
+    afterglowEndsAt: d.afterglowEndsAtMs,
+    pendingGrowthCueId: d.pendingGrowthCueId,
+    hush: {
+      phase: d.hush.phase,
+      phaseStartedAt:
+        d.hush.phaseStartedAt != null ? new Date(d.hush.phaseStartedAt) : null,
+      nextHushAt: d.hush.nextHushAt != null ? new Date(d.hush.nextHushAt) : null,
+      holdEndsAt: d.hush.holdEndsAt != null ? new Date(d.hush.holdEndsAt) : null,
+      fadeInMs: d.hush.fadeInMs,
+    },
+    motif: d.motif,
+    teaser: d.teaser,
+    mix: d.mix,
+    currentCueId: d.currentCueId,
+    cueStartedAt: d.cueStartedAtMs,
+    depthBloomInside: d.depthBloomInside,
+    bufferTiers: [...d.bufferTiers],
+    currentBeaconId: d.currentBeaconId,
+    lastBeaconPan: d.lastBeaconPan,
+    completed: new Set(d.story.heard),
+    activeOneshots: d.pendingAccents.length,
+    events,
+  };
+}
+
+function storyHeard(completed: Set<string>, window: TimeWindow): StoryState {
+  return {
     playingThreadIds: [],
-    lastFragmentId: last,
-    lastTier: undefined,
     lastThreadIds: [],
-    heard: state.completed,
+    heard: completed,
     timeWindow: window,
-    narrationPlaying: state.narrationPlaying,
-    depthM: state.depthM,
-    insideTierBuffers: state.bufferTiers,
+    narrationPlaying: false,
+    insideTierBuffers: [],
+  };
+}
+
+export function createHarnessState(
+  origin: { lat: number; lng: number },
+  atMs: number,
+  opts?: { timeZone?: string; dayKey?: string; seed?: number },
+): SimulatorHarnessState {
+  const timeZone = opts?.timeZone ?? "America/Denver";
+  const dayKey = opts?.dayKey ?? localDayKey(new Date(atMs), timeZone);
+  const director = initialDirectorState({
+    seed: opts?.seed ?? 42,
+    wallAtMs: atMs,
+    dayKey,
+    point: origin,
+    settings: { route: "headphones", beaconsEnabled: true, hushOn: true },
+  });
+  return {
+    lat: origin.lat,
+    lng: origin.lng,
+    atMs,
+    month: 6,
+    forcedWindow: "day",
+    route: "headphones",
+    beaconsEnabled: true,
+    completed: new Set(),
+    depthM: 0,
+    narrationPlaying: false,
+    narrationPositionMs: 0,
+    breathPointsMs: [],
+    afterglowEndsAt: null,
+    pendingGrowthCueId: null,
+    hush: {
+      phase: "idle",
+      phaseStartedAt: null,
+      nextHushAt: null,
+      holdEndsAt: null,
+      fadeInMs: director.hush.fadeInMs,
+    },
+    motif: director.motif,
+    teaser: director.teaser,
+    mix: director.mix,
+    activeOneshots: 0,
+    currentCueId: null,
+    cueStartedAt: null,
+    depthBloomInside: false,
+    bufferTiers: [],
+    currentBeaconId: null,
+    lastBeaconPan: 0,
+    timeZone,
+    events: [],
+    director,
+    lastCommands: [],
   };
 }
 
@@ -228,63 +324,334 @@ export function simulatorTick(
   world: SimulatorWorld,
   patch: SimulatorTickPatch = {},
 ): SimulatorHarnessState {
-  const next: SimulatorHarnessState = {
-    ...state,
-    completed: new Set(state.completed),
-    events: [...state.events],
-    hush: { ...state.hush },
-    motif: { ...state.motif },
-    teaser: {
-      ...state.teaser,
-      playedFragmentIds: [...state.teaser.playedFragmentIds],
-    },
-    mix: { ...state.mix },
-    bufferTiers: [...state.bufferTiers],
-  };
+  const dWorld = toDirectorWorld(world);
+  let director = state.director;
+  const events: SimEvent[] = [...state.events];
+  let allCommands: DirectorCommand[] = [];
 
-  if (patch.lat != null) next.lat = patch.lat;
-  if (patch.lng != null) next.lng = patch.lng;
-  if (patch.atMs != null) next.atMs = patch.atMs;
-  if (patch.month != null) next.month = patch.month;
-  if (patch.forcedWindow !== undefined) next.forcedWindow = patch.forcedWindow;
-  if (patch.route != null) next.route = patch.route;
-  if (patch.beaconsEnabled != null) next.beaconsEnabled = patch.beaconsEnabled;
-  if (patch.depthM != null) next.depthM = patch.depthM;
-  if (patch.narrationPlaying != null) next.narrationPlaying = patch.narrationPlaying;
-  if (patch.narrationPositionMs != null) {
-    next.narrationPositionMs = patch.narrationPositionMs;
+  const atMs = patch.atMs ?? state.atMs;
+  const audioClockSec =
+    state.director.audioClockSec + Math.max(0, (atMs - state.atMs) / 1000);
+
+  const lat = patch.lat ?? state.lat;
+  const lng = patch.lng ?? state.lng;
+  const month = patch.month ?? state.month;
+  const forcedWindow =
+    patch.forcedWindow !== undefined ? patch.forcedWindow : state.forcedWindow;
+  const window: TimeWindow = forcedWindow ?? "day";
+  const route = patch.route ?? state.route;
+  const beaconsEnabled = patch.beaconsEnabled ?? state.beaconsEnabled;
+  const depthM = patch.depthM ?? state.depthM;
+
+  const completed = new Set(state.completed);
+  // When ending narration with a completion, apply afterglow before the new
+  // heard id reaches music select — otherwise growth skips deferral.
+  const deferCompletionForAfterglow =
+    patch.endNarration === true && patch.completeFragmentId != null;
+  if (patch.completeFragmentId && !deferCompletionForAfterglow) {
+    completed.add(patch.completeFragmentId);
   }
-  if (patch.breathPointsMs) next.breathPointsMs = [...patch.breathPointsMs];
-  if (patch.completeFragmentId) next.completed.add(patch.completeFragmentId);
 
   if (patch.gpx) {
-    next.events.push({
+    events.push({
       type: "gpx_tick",
       tMs: patch.gpx.tMs,
-      lat: next.lat,
-      lng: next.lng,
+      lat,
+      lng,
       speed: patch.gpx.speed,
     });
   }
 
-  const at = new Date(next.atMs);
-  const window: TimeWindow = next.forcedWindow ?? "day";
-  next.events.push({ type: "time_window", window });
+  const clocks = { audioSec: audioClockSec, wallAtMs: atMs };
 
-  const point = { lat: next.lat, lng: next.lng };
+  // Settings
+  {
+    const r = directorStep(
+      director,
+      {
+        type: "settings",
+        settings: {
+          route,
+          beaconsEnabled,
+          batterySaver: patch.batterySaver === true,
+          thermal: patch.thermal === true,
+        },
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
 
-  // Zone / landcover profile blend
+  // Story (heard set) — completed toggles are the Simulator's source of truth
+  {
+    const story = storyHeard(completed, window);
+    story.depthM = depthM;
+    story.narrationPlaying =
+      patch.narrationPlaying ?? state.narrationPlaying;
+    story.insideTierBuffers = [...director.bufferTiers];
+    if (completed.size > 0) {
+      const last = [...completed].at(-1)!;
+      const frag = world.fragments.find((f) => f.id === last);
+      story.lastFragmentId = last;
+      if (frag) story.lastTier = frag.tier;
+    }
+    const r = directorStep(
+      director,
+      { type: "story", story, ...clocks },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
+
+  // Location
+  {
+    const insideGrove = world.fragments.some(
+      (f) => distanceMeters({ lat, lng }, f) <= 200,
+    );
+    const r = directorStep(
+      director,
+      {
+        type: "location",
+        point: { lat, lng },
+        courseDeg: 0,
+        depthM,
+        month,
+        timeWindow: window,
+        insideGrove,
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
+
+  // Session effects from patches
+  if (patch.enterGrove) {
+    const r = directorStep(
+      director,
+      {
+        type: "sessionEffect",
+        effect: { type: "groveEntered", groveId: world.groveId },
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+    const motifCmd = r.commands.find((c) => c.type === "playMoment");
+    if (motifCmd && motifCmd.type === "playMoment") {
+      events.push({ type: "motif", playSha: motifCmd.sha });
+    } else if (director.motifPlay) {
+      events.push({ type: "motif", playSha: director.motifPlay.sha });
+    } else {
+      events.push({ type: "motif" });
+    }
+  }
+
+  if (patch.startNarration || patch.narrationPlaying === true) {
+    const r = directorStep(
+      director,
+      {
+        type: "sessionEffect",
+        effect: {
+          type: "play",
+          fragmentId: "sim-narration",
+          revisionNo: 1,
+          breathPointsMs: patch.breathPointsMs ?? state.breathPointsMs,
+          startAtMs: patch.narrationPositionMs ?? state.narrationPositionMs,
+        },
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
+
+  if (patch.narrationPositionMs != null || patch.breathPointsMs) {
+    director = {
+      ...director,
+      narration: {
+        ...director.narration,
+        positionMs: patch.narrationPositionMs ?? director.narration.positionMs,
+        breathPointsMs: patch.breathPointsMs
+          ? [...patch.breathPointsMs]
+          : director.narration.breathPointsMs,
+      },
+    };
+  }
+
+  if (patch.endNarration) {
+    const completedId =
+      patch.completeFragmentId ?? [...completed].at(-1) ?? "unknown";
+    if (patch.completeFragmentId) completed.add(patch.completeFragmentId);
+    const frag = world.fragments.find((f) => f.id === completedId);
+    const tier = frag?.tier ?? "root";
+    const r = directorStep(
+      director,
+      {
+        type: "sessionEffect",
+        effect: {
+          type: "startAfterglow",
+          endsAt: atMs + AFTERGLOW_MS,
+          fragmentId: completedId,
+          tier,
+        },
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+
+    const resolveCmd = r.commands.find((c) => c.type === "playMoment");
+    if (resolveCmd && resolveCmd.type === "playMoment") {
+      events.push({
+        type: "resolve",
+        kind: "asset",
+        detail: resolveCmd.sha,
+      });
+    } else if (director.resolvePlay) {
+      events.push({
+        type: "resolve",
+        kind: "asset",
+        detail: director.resolvePlay.sha,
+      });
+    } else {
+      events.push({
+        type: "resolve",
+        kind: "pause",
+        detail: `pause:${AFTERGLOW_MS}`,
+      });
+    }
+
+    const motifCmd = r.commands.find(
+      (c) =>
+        c.type === "playMoment" &&
+        resolveCmd &&
+        c.type === "playMoment" &&
+        c.id !== resolveCmd.id,
+    );
+    void motifCmd;
+  }
+
+  if (patch.lockedTeaserTap) {
+    const r = directorStep(
+      director,
+      {
+        type: "sessionEffect",
+        effect: {
+          type: "showTeaser",
+          fragmentId: patch.lockedTeaserTap.fragmentId,
+          reason:
+            world.fragments.find((f) => f.id === patch.lockedTeaserTap!.fragmentId)
+              ?.visibility === "locked"
+              ? "locked"
+              : "wrongTime",
+        },
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+    const teaser = r.commands.find(
+      (c) => c.type === "playOneShot" && c.bus === "story",
+    );
+    events.push({
+      type: "locked_teaser",
+      playSha:
+        teaser && teaser.type === "playOneShot" ? teaser.sha : undefined,
+    });
+  }
+
+  if (
+    patch.clockStarving != null ||
+    patch.batterySaver != null ||
+    patch.thermal != null
+  ) {
+    const r = directorStep(
+      director,
+      {
+        type: "health",
+        clockStarving: patch.clockStarving === true,
+        ...clocks,
+      },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  } else if (director.clockStarving) {
+    // Keep shedding windows accumulating across ticks that omit the flag
+    // only when previously starving — clear when patch explicitly false.
+  }
+
+  if (patch.clockStarving === false) {
+    const r = directorStep(
+      director,
+      { type: "health", clockStarving: false, ...clocks },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
+
+  // Heartbeat evaluate
+  {
+    const r = directorStep(
+      director,
+      { type: "heartbeat", ...clocks },
+      dWorld,
+    );
+    director = r.state;
+    allCommands = allCommands.concat(r.commands);
+  }
+
+  // Crossfading patch
+  if (patch.crossfading != null) {
+    director = { ...director, crossfading: patch.crossfading };
+  }
+
+  // Oneshot cap bookkeeping for rail (patch-driven, matches A5 tests)
+  let activeOneshots = state.activeOneshots;
+  let oneshotDenied = false;
+  if (patch.oneshotEnded && activeOneshots > 0) activeOneshots -= 1;
+  if (patch.oneshotRequest) {
+    if (activeOneshots >= ONESHOT_CONCURRENT_GLOBAL_MAX) oneshotDenied = true;
+    else activeOneshots += 1;
+  }
+
+  // Accent breath check (explicit patch)
+  if (patch.checkAccent && (patch.narrationPlaying ?? director.narration.playing)) {
+    const pos = patch.narrationPositionMs ?? director.narration.positionMs;
+    const breaths = patch.breathPointsMs ?? director.narration.breathPointsMs;
+    if (!accentAllowed(pos, breaths)) {
+      events.push({ type: "accent_blocked_breath" });
+    }
+  }
+
+  // Emit rail events from director state
+  events.push({ type: "time_window", window });
+
+  // Profile weights / layers — rail readout (same rules the director used)
   const weights = activeProfiles({
     zones: world.ambienceZones,
-    point,
+    point: { lat, lng },
     landcoverCells: world.landcoverCells,
     classToProfile: world.classToProfile,
   });
-  next.events.push({ type: "profile_weights", weights });
+  events.push({ type: "profile_weights", weights });
 
-  // Eligible layers (Day/Night + wildlife / speaker)
   const routeForLayers: "speaker" | "headphones" =
-    next.route === "speaker" ? "speaker" : "headphones";
+    route === "speaker" ? "speaker" : "headphones";
+  const hushActive =
+    director.hush.phase === "fadingOut" ||
+    director.hush.phase === "cue" ||
+    director.hush.phase === "holding";
   const layerIds: string[] = [];
   let wildlifeSilenced = false;
   for (const w of weights) {
@@ -293,354 +660,134 @@ export function simulatorTick(
     const layers = eligibleLayers({
       profile,
       timeWindow: window,
-      month: next.month,
+      month,
       route: routeForLayers,
       muteAllSurroundingsOnSpeaker: !world.allowsSpeakerWildlife,
-      hushActive: next.hush.phase !== "idle" && next.hush.phase !== "fadingIn",
+      hushActive,
     });
     for (const layer of layers) layerIds.push(layer.id);
-    if (
-      routeForLayers === "speaker" &&
-      profile.layers.some((l) => l.wildlifeCall || !l.speakerSafe)
-    ) {
-      wildlifeSilenced = true;
-    }
   }
   if (routeForLayers === "speaker" && !world.allowsSpeakerWildlife) {
     wildlifeSilenced = true;
   }
-  next.events.push({ type: "eligible_layers", layerIds });
-  next.events.push({ type: "wildlife_silenced", silenced: wildlifeSilenced });
+  if (
+    routeForLayers === "speaker" &&
+    world.profiles.some((p) =>
+      p.layers.some((l) => l.wildlifeCall || !l.speakerSafe),
+    )
+  ) {
+    wildlifeSilenced = true;
+  }
+  events.push({ type: "eligible_layers", layerIds });
+  events.push({ type: "wildlife_silenced", silenced: wildlifeSilenced });
 
-  // Depth bloom + buffers
-  next.depthBloomInside = depthConditionLatched(
-    next.depthBloomInside,
-    next.depthM,
-    world.depthBloomTextureM,
-  );
-  next.events.push({
+  events.push({
     type: "depth_bloom",
-    inside: next.depthBloomInside,
-    depthM: next.depthM,
+    inside: director.depthBloomInside,
+    depthM: director.depthM ?? depthM,
   });
-  next.bufferTiers = insideTierBuffersLatched(
-    next.bufferTiers,
-    point,
-    world.fragments.map((f) => ({
-      tier: f.tier,
-      lat: f.lat,
-      lng: f.lng,
-    })),
-  );
-  next.events.push({ type: "buffer", tiers: [...next.bufferTiers] });
-
-  // Oneshot global cap
-  let oneshotDenied = false;
-  if (patch.oneshotEnded && next.activeOneshots > 0) {
-    next.activeOneshots -= 1;
-  }
-  if (patch.oneshotRequest) {
-    if (next.activeOneshots >= ONESHOT_CONCURRENT_GLOBAL_MAX) {
-      oneshotDenied = true;
-    } else {
-      next.activeOneshots += 1;
-    }
-  }
-  next.events.push({
+  events.push({ type: "buffer", tiers: [...director.bufferTiers] });
+  events.push({
     type: "oneshot_cap",
-    active: next.activeOneshots,
+    active: activeOneshots,
     denied: oneshotDenied,
   });
 
-  // Accent vs breath
-  if (patch.checkAccent && next.narrationPlaying) {
-    if (!accentAllowed(next.narrationPositionMs, next.breathPointsMs)) {
-      next.events.push({ type: "accent_blocked_breath" });
-    }
-  }
-
-  // Beacon
-  const headphones =
-    next.route === "headphones" || next.route === "bluetooth";
-  const playableUnexplored = world.fragments
-    .filter(
-      (f) =>
-        f.visibility !== "physical" &&
-        f.visibility !== "locked" &&
-        !next.completed.has(f.id),
-    )
-    .map((f) => ({
-      id: f.id,
-      tier: f.tier,
-      lat: f.lat,
-      lng: f.lng,
-    }));
-  const beaconId = chooseBeacon({
-    listener: point,
-    playableUnexplored,
-    currentId: next.currentBeaconId,
-    narrationPlaying: next.narrationPlaying,
-    beaconsEnabled: next.beaconsEnabled,
-    headphones,
-  });
-  next.currentBeaconId = beaconId;
-  if (beaconId) {
-    const target = world.fragments.find((f) => f.id === beaconId)!;
-    const mix = beaconMix(point, 0, { lat: target.lat, lng: target.lng }, next.lastBeaconPan);
-    next.lastBeaconPan = mix.pan;
-    next.events.push({
-      type: "beacon",
-      fragmentId: beaconId,
-      pan: mix.pan,
-      gainDb: mix.gainDb,
-    });
-  } else {
-    next.events.push({
-      type: "beacon",
-      fragmentId: null,
-      pan: next.lastBeaconPan,
-      gainDb: Number.NEGATIVE_INFINITY,
-    });
-  }
-
-  // Motif
-  if (patch.enterGrove) {
-    const motif = thresholdMotifStep(next.motif, {
-      type: "groveEntered",
-      at: next.atMs,
-      depthM: next.depthM,
-      timeWindow: window,
-      motifDaySha: world.motifDaySha ?? undefined,
-      motifNightSha: world.motifNightSha ?? undefined,
-    });
-    next.motif = motif.state;
-    next.events.push({ type: "motif", playSha: motif.playSha });
-  } else {
-    const motif = thresholdMotifStep(next.motif, {
-      type: "tick",
-      at: next.atMs,
-      narrationPlaying: next.narrationPlaying,
-      depthM: next.depthM,
-    });
-    next.motif = motif.state;
-    if (motif.playSha) next.events.push({ type: "motif", playSha: motif.playSha });
-  }
-
-  if (patch.startNarration) {
-    next.narrationPlaying = true;
-    const motif = thresholdMotifStep(next.motif, {
-      type: "narrationStarted",
-      at: next.atMs,
-    });
-    next.motif = motif.state;
-  }
-
-  // Afterglow resolve + pending growth-step cue (before music select)
-  if (patch.endNarration) {
-    next.narrationPlaying = false;
-    next.afterglowEndsAt = next.atMs + AFTERGLOW_MS;
-    const completedId = [...next.completed].at(-1);
-    const frag = world.fragments.find((f) => f.id === completedId);
-    const tier = frag?.tier ?? "root";
-    const cue = world.cues.find((c) => c.id === next.currentCueId);
-    const pick = pickResolve({
-      tier,
-      cue: {
-        resolveRootSha: cue?.resolveRootSha,
-        resolveBranchSha: cue?.resolveBranchSha,
-        resolveLeafSha: cue?.resolveLeafSha,
-      },
-      fragmentResolveSha: frag?.resolveAssetSha ?? undefined,
-    });
-    next.events.push({
-      type: "resolve",
-      kind: pick.kind,
-      detail:
-        pick.kind === "asset" ? pick.assetSha : `pause:${pick.ms}`,
-    });
-    const storyAfter = storyOf(next, window);
-    if (completedId) {
-      const f = world.fragments.find((x) => x.id === completedId);
-      if (f) storyAfter.lastTier = f.tier;
-    }
-    const would = selectMusicCue({
-      cues: world.cues,
-      point,
-      story: storyAfter,
-      current: null,
-      now: at,
-    });
-    if (
-      would.cue &&
-      would.cue.id !== next.currentCueId &&
-      would.cue.priority > (cue?.priority ?? -1)
-    ) {
-      next.pendingGrowthCueId = would.cue.id;
-    }
-    const motif = thresholdMotifStep(next.motif, {
-      type: "narrationEnded",
-      at: next.atMs,
-    });
-    next.motif = motif.state;
-    if (motif.playSha) next.events.push({ type: "motif", playSha: motif.playSha });
-  }
-
-  // After afterglow ends, allow the deferred growth cue on this tick
   const afterglowActive =
-    next.pendingGrowthCueId != null &&
-    next.afterglowEndsAt != null &&
-    next.atMs < next.afterglowEndsAt;
-  if (
-    next.pendingGrowthCueId &&
-    next.afterglowEndsAt != null &&
-    next.atMs >= next.afterglowEndsAt
-  ) {
-    next.pendingGrowthCueId = null;
-    next.afterglowEndsAt = null;
-  }
+    director.pendingGrowthCueId != null &&
+    director.afterglowEndsAtMs != null &&
+    atMs < director.afterglowEndsAtMs;
 
-  // Music cue + stem gains (after afterglow / growth bookkeeping)
-  const story = storyOf(next, window);
-  if (story.lastFragmentId) {
-    const frag = world.fragments.find((f) => f.id === story.lastFragmentId);
-    if (frag) story.lastTier = frag.tier;
-  }
-
-  const cueResult = selectMusicCueDeferred({
-    cues: world.cues,
-    point,
-    story,
-    current:
-      next.currentCueId && next.cueStartedAt != null
-        ? { cueId: next.currentCueId, startedAt: new Date(next.cueStartedAt) }
-        : null,
-    now: at,
-    pendingGrowthCueId: afterglowActive ? next.pendingGrowthCueId : null,
-    afterglowEndsAt: afterglowActive ? next.afterglowEndsAt : null,
-    at: next.atMs,
+  events.push({
+    type: "music_cue",
+    cueId: director.currentCueId,
+    deferred: afterglowActive,
   });
 
-  if (cueResult.cue) {
-    if (cueResult.cue.id !== next.currentCueId) {
-      next.currentCueId = cueResult.cue.id;
-      next.cueStartedAt = next.atMs;
-    }
-    next.events.push({
-      type: "music_cue",
-      cueId: cueResult.cue.id,
-      deferred: afterglowActive,
-    });
-    cueResult.cue.stems.forEach((stem, i) => {
-      next.events.push({
+  const cue = world.cues.find((c) => c.id === director.currentCueId);
+  if (cue) {
+    cue.stems.forEach((stem, i) => {
+      const story: StoryState = {
+        ...director.story,
+        heard: completed,
+        timeWindow: window,
+        narrationPlaying: director.narration.playing,
+        depthM: director.depthM,
+        insideTierBuffers: director.bufferTiers,
+      };
+      events.push({
         type: "stem_gain",
         stemIndex: i,
         gainDb: stemGainDb(stem, story),
       });
     });
+  }
+
+  const beacon = director.lastEmitted.beacon;
+  if (beacon) {
+    events.push({
+      type: "beacon",
+      fragmentId: beacon.fragmentId,
+      pan: beacon.pan,
+      gainDb: beacon.gainDb,
+    });
   } else {
-    next.currentCueId = null;
-    next.cueStartedAt = null;
-    next.events.push({
-      type: "music_cue",
-      cueId: null,
-      deferred: afterglowActive,
+    events.push({
+      type: "beacon",
+      fragmentId: null,
+      pan: director.lastBeaconPan,
+      gainDb: Number.NEGATIVE_INFINITY,
     });
   }
 
-  // Locked teaser
-  if (patch.lockedTeaserTap) {
-    const frag = world.fragments.find(
-      (f) => f.id === patch.lockedTeaserTap!.fragmentId,
+  // Motif without enterGrove already handled; emit empty motif tick for enterGrove path only
+  if (!patch.enterGrove && director.motifPlay) {
+    const already = events.some(
+      (e) => e.type === "motif" && e.playSha === director.motifPlay?.sha,
     );
-    const dayKey = localDayKey(at, next.timeZone);
-    const teaser = lockedTeaserStep(next.teaser, {
-      at: next.atMs,
-      dayKey,
-      reason: frag?.visibility === "locked" ? "locked" : "wrongTime",
-      fragmentId: patch.lockedTeaserTap.fragmentId,
-      teaserSha: frag?.teaserLockedSha ?? undefined,
-      narrationPlaying: next.narrationPlaying,
-    });
-    next.teaser = teaser.state;
-    next.events.push({ type: "locked_teaser", playSha: teaser.playSha });
+    if (!already) {
+      events.push({ type: "motif", playSha: director.motifPlay.sha });
+    }
   }
 
-  // Hush
-  const insideGrove = world.fragments.some((f) =>
-    pointInPolygon(point, {
-      type: "Polygon",
-      coordinates: [
-        // crude: use point-in fragment radius as "inside" proxy for hush
-        // Real grove shape is MultiPolygon; harness uses distance to any fragment
-        [
-          [f.lng - 0.01, f.lat - 0.01],
-          [f.lng + 0.01, f.lat - 0.01],
-          [f.lng + 0.01, f.lat + 0.01],
-          [f.lng - 0.01, f.lat + 0.01],
-          [f.lng - 0.01, f.lat - 0.01],
-        ],
-      ],
-    }),
-  );
-  // Prefer distance-based inside check
-  const nearFragment = world.fragments.some(
-    (f) => distanceMeters(point, f) <= 200,
-  );
-  const hush = hushStep({
-    state: next.hush,
-    settingOn: true,
-    insideGrove: insideGrove || nearFragment,
-    narrationPlaying: next.narrationPlaying,
-    queuedFragment: false,
-    lastNarrationEndedAt: null,
-    now: at,
-    intervalMin: world.hushIntervalMin,
-    rng: createSeededRng(42),
-    triggerArrived: false,
-  });
-  next.hush = {
-    phase: hush.phase,
-    phaseStartedAt: hush.phaseStartedAt,
-    nextHushAt: hush.nextHushAt,
-    holdEndsAt: hush.holdEndsAt,
-    fadeInMs: hush.fadeInMs,
-  };
-  next.events.push({ type: "hush", phase: hush.phase });
+  events.push({ type: "hush", phase: director.hush.phase });
 
-  // Mix ladder
-  next.mix = mixLevelFor(
-    {
-      clockStarving: patch.clockStarving === true,
-      batterySaver: patch.batterySaver === true,
-      thermal: patch.thermal === true,
-    },
-    next.mix,
-    next.atMs,
-  );
-  next.events.push({
+  events.push({
     type: "mix_level",
-    shed: [...shedLayers(next.mix)],
-    shedIndex: next.mix.shedIndex,
+    shed: [...shedLayers(director.mix)],
+    shedIndex: director.mix.shedIndex,
   });
 
-  // Voice budget sample
-  const requests: VoiceRequest[] = [
-    { kind: "narration", id: "n1" },
-    { kind: "stem", id: "s1" },
-    { kind: "stem", id: "s2" },
-    { kind: "bed", id: "b1" },
-    { kind: "accent", id: "a1" },
-    { kind: "beacon", id: "be1" },
-    { kind: "moment", id: "m1" },
+  const requests = [
+    { kind: "narration" as const, id: "n1" },
+    { kind: "stem" as const, id: "s1" },
+    { kind: "stem" as const, id: "s2" },
+    { kind: "bed" as const, id: "b1" },
+    { kind: "accent" as const, id: "a1" },
+    { kind: "beacon" as const, id: "be1" },
+    { kind: "moment" as const, id: "m1" },
   ];
   const alloc = allocateVoices(requests, patch.crossfading === true);
-  next.events.push({
+  events.push({
     type: "voice_budget",
     granted: alloc.granted,
     denied: alloc.denied,
   });
 
-  return next;
+  events.push({ type: "director_commands", commands: allCommands });
+
+  const mirrored = mirrorFromDirector(
+    {
+      ...state,
+      forcedWindow,
+      activeOneshots,
+      completed,
+    },
+    director,
+    allCommands,
+    events,
+  );
+  return mirrored;
 }
 
 export function lastEvent<T extends SimEvent["type"]>(
@@ -658,7 +805,9 @@ export function eventsOfType<T extends SimEvent["type"]>(
   state: SimulatorHarnessState,
   type: T,
 ): Extract<SimEvent, { type: T }>[] {
-  return state.events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
+  return state.events.filter(
+    (e): e is Extract<SimEvent, { type: T }> => e.type === type,
+  );
 }
 
 export {
@@ -679,5 +828,3 @@ export type {
   StoryState,
   TimeWindow,
 };
-
-// SimulatorWorld already exported above as type
