@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { sanitizeNext } from "@/lib/auth-redirect";
 import type { ServerActionResult } from "@/lib/server-action-result";
 
 type ServerAction = (formData: FormData) => Promise<ServerActionResult>;
@@ -60,10 +61,16 @@ export function ServerActionForm({
     startTransition(async () => {
       try {
         const result = await action(formData);
-        if (!result?.ok || !result.href) {
-          throw new Error("Save succeeded without a redirect href");
+        if (result && result.ok === false) {
+          setError(result.error || "Save failed");
+          return;
         }
-        window.location.assign(result.href);
+        if (!result?.ok || !result.href) {
+          setError("Save succeeded without a redirect href");
+          return;
+        }
+        // V1: only same-origin relative hrefs
+        window.location.assign(sanitizeNext(result.href, "/"));
       } catch (err) {
         const message =
           err instanceof Error
