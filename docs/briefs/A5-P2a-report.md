@@ -64,11 +64,11 @@ Lane A did not edit `apps/mobile`.
 
 ### 1. DB CI failure (run 45429496797)
 
-**Root cause:** migration `20261124103000_a5_admin_zone_boundary.sql` correctly grants `EXECUTE` on security-definer `fn_admin_set_zone_boundary` to `authenticated` (staff call it from admin), but `supabase/tests/110_definer_grants.test.sql` still used the pre-A5 allowlist. pgTAP compared grant sets and failed:
+**Root causes (two):**
 
-`have` included `fn_admin_set_zone_boundary(...)`; `want` did not.
+1. Migration `20261124103000_a5_admin_zone_boundary.sql` grants `EXECUTE` on security-definer `fn_admin_set_zone_boundary` to `authenticated`, but `110_definer_grants.test.sql` still used the pre-A5 allowlist (`have` included the new fn; `want` did not). **Fix:** add that signature to the allowlist (same pattern as `fn_admin_upsert_region`).
 
-**Fix:** add that signature to the allowlist (same pattern as `fn_admin_upsert_region`). No change to the migration grants.
+2. After the allowlist fix, pack-integration still failed: `build-pack staff JWT: expected 401 to be 403`. Under K1, service functions read **apikey only**; a staff Bearer JWT with no apikey is treated as a missing service key → **401**, not a wrong-key **403**. **Fix:** update `packs.integration.test.ts` to expect 401 for staff-JWT-only.
 
 ### 2. Sound action tests
 

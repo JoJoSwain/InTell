@@ -494,10 +494,12 @@ describe.sequential("M3a pack integration", () => {
       });
       expect(publishable.status, `${name} publishable`).toBe(403);
 
+      // K1: service callers use apikey only — a staff JWT without apikey is
+      // the same as a missing service key (401), not a wrong-key 403.
       const staff = await invokeRaw(name, body, {
         Authorization: `Bearer ${editorJwt}`,
       });
-      expect(staff.status, `${name} staff JWT`).toBe(403);
+      expect(staff.status, `${name} staff JWT`).toBe(401);
 
       const okApi = await invokeRaw(name, body, { apikey: serviceKey! });
       expect(okApi.status, `${name} secret apikey`).toBe(200);
