@@ -81,12 +81,11 @@ jobs:
       - name: Wait for functions
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          KEY="${SECRET_KEY:-$SERVICE_ROLE_KEY}"
+          KEY="${SECRET_KEY}"
           export KEY
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:54321/functions/v1/run-jobs" \
               -H "apikey: ${KEY}" \
-              -H "Authorization: Bearer ${KEY}" \
               -H "Content-Type: application/json" \
               -d '{}' || true)
             if echo "$code" | grep -qE '200|401|403|405'; then
@@ -102,13 +101,12 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          PUB="${PUBLISHABLE_KEY:-$ANON_KEY}"
-          SEC="${SECRET_KEY:-$SERVICE_ROLE_KEY}"
+          PUB="${PUBLISHABLE_KEY}"
+          SEC="${SECRET_KEY}"
           export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$PUB"
-          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUB"
           export SUPABASE_URL="$API_URL"
-          export SUPABASE_ANON_KEY="$PUB"
-          export SUPABASE_SERVICE_ROLE_KEY="$SEC"
+          export SUPABASE_SECRET_KEY="$SEC"
+          export SUPABASE_PUBLISHABLE_KEY="$PUB"
           export SECRET_KEY="$SEC"
           export PUBLISHABLE_KEY="$PUB"
           pnpm --filter @intell/admin test:e2e:install

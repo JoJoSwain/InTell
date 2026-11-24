@@ -11,10 +11,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 const env = supabaseEnv();
 const url = env.API_URL || env.SUPABASE_URL;
-const serviceKey =
-  env.SECRET_KEY || env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-const anonKey =
-  env.PUBLISHABLE_KEY || env.ANON_KEY || env.SUPABASE_ANON_KEY;
+const serviceKey = env.SECRET_KEY;
+const anonKey = env.PUBLISHABLE_KEY;
 if (!url || !serviceKey || !anonKey) {
   throw new Error("supabase status missing keys — run supabase start");
 }
@@ -34,10 +32,9 @@ async function invoke(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  // Service secret: send apikey (+ Bearer during transition). Staff JWTs: Bearer only.
+  // Service secret: apikey only. Staff JWTs: Bearer only.
   if (key === serviceKey) {
     headers.apikey = key;
-    headers.Authorization = `Bearer ${key}`;
   } else {
     headers.Authorization = `Bearer ${key}`;
   }
@@ -490,11 +487,10 @@ describe.sequential("M3a pack integration", () => {
       const badBearer = await invokeRaw(name, body, {
         Authorization: `Bearer ${wrong}`,
       });
-      expect(badBearer.status, `${name} wrong bearer`).toBe(403);
+      expect(badBearer.status, `${name} bearer only`).toBe(401);
 
       const publishable = await invokeRaw(name, body, {
         apikey: anonKey!,
-        Authorization: `Bearer ${anonKey}`,
       });
       expect(publishable.status, `${name} publishable`).toBe(403);
 
