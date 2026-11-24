@@ -45,7 +45,7 @@ export default async function RevisionDetailPage({ params }: Props) {
   const { data: versions } = await supabase
     .from("revision_versions")
     .select(
-      "id, time_window, narration_asset_id, transcript, vtt, other_time_hint",
+      "id, time_window, narration_asset_id, transcript, vtt, other_time_hint, breath_points_ms, swell_cues_ms",
     )
     .eq("revision_id", revisionId);
 
@@ -105,6 +105,8 @@ export default async function RevisionDetailPage({ params }: Props) {
                 transcript: String(day.transcript ?? ""),
                 vtt: String(day.vtt ?? ""),
                 other_time_hint: l10nEn(day.other_time_hint),
+                breath_points_ms: (day.breath_points_ms as number[]) ?? [],
+                swell_cues_ms: (day.swell_cues_ms as number[]) ?? [],
               }
             : null,
           night: night
@@ -114,6 +116,8 @@ export default async function RevisionDetailPage({ params }: Props) {
                 transcript: String(night.transcript ?? ""),
                 vtt: String(night.vtt ?? ""),
                 other_time_hint: l10nEn(night.other_time_hint),
+                breath_points_ms: (night.breath_points_ms as number[]) ?? [],
+                swell_cues_ms: (night.swell_cues_ms as number[]) ?? [],
               }
             : null,
         }}

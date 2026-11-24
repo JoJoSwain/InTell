@@ -84,3 +84,20 @@ export function canPreviewRelease(role: StaffRole): boolean {
     role === "admin"
   );
 }
+
+/** Sound design authoring — profiles, zones, music, grove cues. */
+export function canEditSound(role: StaffRole): boolean {
+  return role === "sound" || role === "editor" || role === "admin";
+}
+
+/** Any signed-in staff may view sound routes. */
+export function canViewSound(role: StaffRole): boolean {
+  return (
+    role === "viewer" ||
+    role === "moderator" ||
+    role === "writer" ||
+    role === "sound" ||
+    role === "editor" ||
+    role === "admin"
+  );
+}

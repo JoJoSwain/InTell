@@ -14,6 +14,8 @@ export type VersionInitial = {
   transcript: string;
   vtt: string;
   other_time_hint?: string;
+  breath_points_ms?: number[];
+  swell_cues_ms?: number[];
 };
 
 export type RevisionFormInitial = {
@@ -110,6 +112,26 @@ function VersionFields({
           Required when this revision has both Day and Night. Example: &quot;After
           dusk, River speaks of something else.&quot;
         </span>
+      </label>
+      <label className="block text-sm">
+        <span className="text-textMuted">Breath points (ms, comma-separated)</span>
+        <input
+          name={`${window}_breath_points_ms`}
+          defaultValue={(initial?.breath_points_ms ?? []).join(", ")}
+          disabled={readOnly}
+          aria-label={`${label} breath points`}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="text-textMuted">Swell cues (ms, comma-separated)</span>
+        <input
+          name={`${window}_swell_cues_ms`}
+          defaultValue={(initial?.swell_cues_ms ?? []).join(", ")}
+          disabled={readOnly}
+          aria-label={`${label} swell cues`}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+        />
       </label>
     </fieldset>
   );

@@ -13,6 +13,7 @@ import {
   saveHref,
   serverActionError,
 } from "@/lib/server-action-result";
+import { parseCommaSeparatedInts } from "@/lib/sound/helpers";
 
 type TimeWindow = "day" | "night";
 type ChangeKind = "contingency" | "correction";
@@ -48,7 +49,7 @@ function revisionsBase(groveId: string, fragmentId: string) {
   return `/story/groves/${groveId}/fragments/${fragmentId}/revisions`;
 }
 
-function parseVersion(
+function parseVersionFields(
   formData: FormData,
   window: TimeWindow,
 ): {
@@ -58,8 +59,22 @@ function parseVersion(
   vtt: string | null;
   other_time_hint: string;
   version_id: string | null;
+  breath_points_ms: number[];
+  swell_cues_ms: number[];
 } {
   const include = formData.get(`include_${window}`) === "on";
+  let breath_points_ms: number[] = [];
+  let swell_cues_ms: number[] = [];
+  try {
+    breath_points_ms = parseCommaSeparatedInts(
+      String(formData.get(`${window}_breath_points_ms`) ?? ""),
+    );
+    swell_cues_ms = parseCommaSeparatedInts(
+      String(formData.get(`${window}_swell_cues_ms`) ?? ""),
+    );
+  } catch (e) {
+    throw e;
+  }
   return {
     include,
     narration_asset_id: String(
@@ -71,7 +86,16 @@ function parseVersion(
       formData.get(`${window}_other_time_hint`) ?? "",
     ).trim(),
     version_id: String(formData.get(`${window}_version_id`) ?? "").trim() || null,
+    breath_points_ms,
+    swell_cues_ms,
   };
+}
+
+function parseVersion(
+  formData: FormData,
+  window: TimeWindow,
+): ReturnType<typeof parseVersionFields> {
+  return parseVersionFields(formData, window);
 }
 
 function asL10nOrEmpty(text: string): Record<string, string> {
@@ -115,6 +139,8 @@ async function syncVersions(
           other_time_hint: asL10nOrEmpty(data.other_time_hint),
           language: "en",
           time_window: window,
+          breath_points_ms: data.breath_points_ms,
+          swell_cues_ms: data.swell_cues_ms,
         })
         .eq("id", data.version_id);
       if (error) return serverActionError(error.message);
@@ -127,6 +153,8 @@ async function syncVersions(
         transcript: data.transcript,
         vtt: data.vtt,
         other_time_hint: asL10nOrEmpty(data.other_time_hint),
+        breath_points_ms: data.breath_points_ms,
+        swell_cues_ms: data.swell_cues_ms,
       });
       if (error) return serverActionError(error.message);
     }
@@ -160,8 +188,16 @@ export async function createRevision(formData: FormData) {
     changeKind = changeKindRaw;
   }
 
-  const day = parseVersion(formData, "day");
-  const night = parseVersion(formData, "night");
+  let day: ReturnType<typeof parseVersion>;
+  let night: ReturnType<typeof parseVersion>;
+  try {
+    day = parseVersion(formData, "day");
+    night = parseVersion(formData, "night");
+  } catch (e) {
+    return serverActionError(
+      e instanceof Error ? e.message : "invalid breath or swell points",
+    );
+  }
   if (!day.include && !night.include) {
     return serverActionError("at least one of Day or Night is required");
   }
@@ -229,8 +265,16 @@ export async function updateRevision(formData: FormData) {
     changeKind = changeKindRaw;
   }
 
-  const day = parseVersion(formData, "day");
-  const night = parseVersion(formData, "night");
+  let day: ReturnType<typeof parseVersion>;
+  let night: ReturnType<typeof parseVersion>;
+  try {
+    day = parseVersion(formData, "day");
+    night = parseVersion(formData, "night");
+  } catch (e) {
+    return serverActionError(
+      e instanceof Error ? e.message : "invalid breath or swell points",
+    );
+  }
   if (!day.include && !night.include) {
     return serverActionError("at least one of Day or Night is required");
   }

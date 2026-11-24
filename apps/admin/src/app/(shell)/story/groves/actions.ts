@@ -163,6 +163,12 @@ export async function saveFragment(formData: FormData) {
     String(formData.get("indigeny_world") ?? "").trim() || null;
   const indigenyBody =
     String(formData.get("indigeny_body") ?? "").trim() || null;
+  const beaconAssetId =
+    String(formData.get("beacon_asset_id") ?? "").trim() || null;
+  const resolveAssetId =
+    String(formData.get("resolve_asset_id") ?? "").trim() || null;
+  const teaserLockedAssetId =
+    String(formData.get("teaser_locked_asset_id") ?? "").trim() || null;
 
   if (
     !groveId ||
@@ -217,6 +223,9 @@ export async function saveFragment(formData: FormData) {
         indigeny_earth: indigenyEarth,
         indigeny_world: indigenyWorld,
         indigeny_body: indigenyBody,
+        beacon_asset_id: beaconAssetId,
+        resolve_asset_id: resolveAssetId,
+        teaser_locked_asset_id: teaserLockedAssetId,
       })
       .eq("id", id);
     if (error) return serverActionError(error.message);
@@ -253,6 +262,9 @@ export async function saveFragment(formData: FormData) {
       indigeny_earth: indigenyEarth,
       indigeny_world: indigenyWorld,
       indigeny_body: indigenyBody,
+      beacon_asset_id: beaconAssetId,
+      resolve_asset_id: resolveAssetId,
+      teaser_locked_asset_id: teaserLockedAssetId,
     })
     .select("id")
     .single();
