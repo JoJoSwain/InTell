@@ -85,4 +85,4 @@ Lane A did not edit `apps/mobile`.
 
 ### 3. CI
 
-Confirm both `check` and `db` jobs green on the final push of this review-fix commit. No db reset.
+Final commit `a128213`: both required jobs green — `check` and `db` (run 45437703787). No db reset.
