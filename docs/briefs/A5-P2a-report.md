@@ -74,6 +74,8 @@ Lane A did not edit `apps/mobile`.
 
 4. A second Playwright collision: two `GroupedChecklist` panels both used `aria-label="Checklist results"` when A5 sound failures were shown. **Fix:** A5 panel uses `Sound checklist results`; e2e uses exact checklist label.
 
+5. m3d e2e called `run-jobs` with `Authorization: Bearer <secret>` → 401 under K1. **Fix:** send the secret as `apikey` only.
+
 ### 2. Sound action tests
 
 - `lib/sound/validate.ts` — zone GeoJSON (helpers), heardAll ids, growth ≤4 / grove+window, `minDepthM ≥ 0`, stems ≤4, `music_moment` / `beacon` kinds, `BED_MONO` mono beds, breath/swell sorted+unique+within duration

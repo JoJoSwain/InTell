@@ -51,10 +51,11 @@ async function waitUntilReleasePublished(
       throw new Error(`release ${releaseId} failed during pack go-live`);
     }
 
+    // K1: service functions accept the secret in `apikey` only (not Bearer).
     const res = await fetch(`${supabaseUrl}/functions/v1/run-jobs`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
         "Content-Type": "application/json",
       },
       body: "{}",
