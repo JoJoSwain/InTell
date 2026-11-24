@@ -54,6 +54,8 @@ export type InsertAudioPayload = {
   loudness_lufs: number | null;
   true_peak_dbtp: number | null;
   max_short_term_lufs: number | null;
+  crest_factor_db: number | null;
+  safe_for_walkers_checked: boolean;
   staging_path: string;
 };
 
@@ -77,6 +79,8 @@ export async function insertAudioAssetRow(payload: InsertAudioPayload) {
         | "sfx_oneshot"
         | "sfx_bed"
         | "music_stem"
+        | "music_moment"
+        | "beacon"
         | "voice_cue"
         | "growth_cue",
       tags: payload.tags,
@@ -90,6 +94,8 @@ export async function insertAudioAssetRow(payload: InsertAudioPayload) {
       loudness_lufs: payload.loudness_lufs,
       true_peak_dbtp: payload.true_peak_dbtp,
       max_short_term_lufs: payload.max_short_term_lufs,
+      crest_factor_db: payload.crest_factor_db,
+      safe_for_walkers_checked: payload.safe_for_walkers_checked,
       staging_path: payload.staging_path,
       created_by: userId,
     })

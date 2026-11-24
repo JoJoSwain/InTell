@@ -308,6 +308,7 @@ export {
 export {
   audioFormatOffTarget,
   BITRATE_TARGETS,
+  crestFactorDb,
   LOUDNESS_TARGETS,
   loudnessOffTarget,
   measureLoudness,
