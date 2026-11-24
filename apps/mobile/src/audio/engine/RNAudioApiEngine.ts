@@ -267,13 +267,29 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   /**
-   * Call once at the start of a full-mix run: resume if suspended, then reset
-   * the wall/context clock baseline so clockGapMs is not carried over.
+   * Call once at the start of a full-mix run: wait out any pending suspend,
+   * resume if needed, restore master gain (stop-all leaves it near zero),
+   * then reset the wall/context clock baseline so clockGapMs is not carried over.
    */
   async prepareMixStart(): Promise<void> {
     const ctx = this.requireContext();
+    const master = this.master;
+    // stop-all schedules suspend on a silent source's onended; don't race it.
+    const deadline = Date.now() + 2000;
+    while (this.suspendPending && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 20));
+    }
     if (ctx.state === "suspended") {
-      await ctx.resume();
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("[audio-spike] prepareMixStart resume failed", err);
+      }
+    }
+    // fadeMasterAndSuspend ramps master to ~0; resume alone leaves that mute.
+    if (master) {
+      const now = ctx.currentTime;
+      rampGainHeld(master.gain, now, 1, 0);
     }
     this.mixWallStartMs = Date.now();
     this.mixContextStartSec = ctx.currentTime;

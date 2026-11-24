@@ -37,7 +37,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 | T8 | Memory &lt; 150 MB | **fail** | | PSS ~500–600 MB |
 | T9 | Battery (informational) | 89%→76% (−13%) | | unplugged ~60 min |
 
-**Verdict:** _Pending._ Android run 1 failed and has been analyzed (below). Android run 2 (B·S2) is next; Status unchanged.
+**Verdict:** _Pending._ Android run 1 failed and has been analyzed (below). Android run 2 (B·S2) completed 2026-11-24 — render path (T1/T3) passed; platform-session resume/controls still partial. Status unchanged.
 
 ## Findings so far
 (Status remains **Proposed**. Full T1–T9 protocol and iPhone testing are postponed.)
@@ -46,7 +46,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 - **JS timers pause in the background on Android, but engine `onEnded` callbacks still reach JS.** A locked period froze `setInterval` (no 60-second diagnostics until return to `active`); native audio kept playing; `voiceEnded` fired while backgrounded and can top up schedules / write diagnostics.
 - **Design rule:** schedule sound ahead on the **audio clock** (`start(when)`); drive background logic from **engine callbacks** and **location events** — never from `setInterval` alone.
 - **Spike ≠ product ambience params.** The spike’s one-shot interval is a **fixed 8 s** and its gain is a **fixed −12 dB** (simplifications). M4 shared ambience logic must use the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC).
-- **Outstanding:** Android run 2 (B·S2), judged by the decision rule below; then the iPhone build and test.
+- **Outstanding:** Claude’s judgment on Android run 2 (decision rule below); then the iPhone build and test.
 - **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start. Growing positive gap ⇒ dropouts / audio-clock starvation; slight negative drift ⇒ clock-rate difference, not a failure by itself.
 - **Android protocol (B·S1, 2026-11-23):** First attempt blocked by Metro custom `resolveRequest` breaking existing spike WAV asset ids. Fix: install the missing-fixture sentinel resolver only when WAVs are absent (`6330c67`). Protocol then run on Pixel 11 + Bluetooth earbuds. **T4/T5 pass; T1/T2/T3/T6/T7/T8 fail; T9 −13%.** Dominant issue: continuous mix quality collapses under lock (and degrades with interaction) while layers keep playing; `clockGapMs` grows to ~1.7e6 ms; PSS ~500–600 MB. Log: `docs/spikes/logs/pixel11-2026-11-23.jsonl`. Details in `docs/briefs/BS1-report.md`. Status remains **Proposed**.
 - **Android run 1, Claude's analysis (2026-11-23):** B·S1 is a valid fail of the **spike**, not yet a fair test of the **library**. The spike broke AUDIO_SPEC §2.1's budget and basic lifecycle rules:
@@ -67,6 +67,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
   | 82–84 voices | locked | 31% → 23% over 34 minutes |
 
   Brief `docs/briefs/BS2-audio-stability.md` fixes the spike and re-runs the protocol on a **release** build.
+- **Android run 2 (B·S2, 2026-11-24):** Release spike on Pixel 11 + Bluetooth earbuds. **T1/T2/T3 pass** (clean 60 min locked; `clockRate` ~0.9998–1.0008; underruns flat 80→80; PSS ~155–171 MB). **T4/T5/T6/T7 partial** — pause-on-unplug / pause-on-interruption work; **resume after reconnect, other-app audio, and phone call does not** (`shouldResume: false` on `began`; no `resumeAfterFade` observed; Start often disabled until Stop→Start). Lock-screen metadata OK; pause control missing; play auth-gated. **T1c informational FAIL:** MediaElement bed `onLoad` thrash, PSS → ~1.1 GB / 10 min, zero loop events — path not viable as implemented (do not fix in B·S2). First T1 attempt SIGSEGV in `markDeletions`/`isPaused` after mid-mix MediaElement connect; not reproduced after gating MediaElement behind T1c; **M6 rule:** delay `disconnect` until after `onEnded` / ≥1 quantum after `stop`. Crossfade `setValueCurveAtTime` overlap → JS fatal — **M6:** cancel overlapping curves. Details: `docs/briefs/BS2-report.md`. Logs: `docs/spikes/logs/pixel11-2026-11-24-run2.jsonl`, `bs2-adb-*.txt`. Status remains **Proposed**.
 - **Decision rule for Android run 2** (set before the run):
   - If the **render** still fails (T1 or T3), record **Rejected** and commission the fallback brief. No further tuning rounds.
   - If only **platform-session** items fail (T6 focus, T7 controls), Claude chooses between a small native session module alongside the library and the full fallback.

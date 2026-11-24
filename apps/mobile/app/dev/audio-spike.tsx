@@ -579,7 +579,8 @@ function AudioSpikeBody() {
       <Text style={styles.status}>Status: {status}</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {nativeCtx && surroundingsBus ? (
+      {/* Only mount when T1c is armed — preload/onLoad otherwise races the buffer bed and has crashed AudioTrack. */}
+      {nativeCtx && surroundingsBus && streamBed ? (
         <MediaElementBed
           context={nativeCtx}
           destination={surroundingsBus}

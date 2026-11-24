@@ -1,0 +1,4 @@
+2026-11-24T12:02:12.6584015-07:00 T1B_LOCK_CONFIRMED device=adb-67090DLKY005KL-AldORp._adb-tls-connect._tcp pid=26433 stress=on pending=35 aheadMs=280000
+2026-11-24T12:07:20.3767688-07:00 min=5 pid=26433 file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-t1b-5.txt
+2026-11-24T12:12:18.1271937-07:00 min=10 pid=26433 file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-t1b-10.txt
+2026-11-24T12:12:18.1312384-07:00 T1B_10_COMPLETE

@@ -1,0 +1,7 @@
+2026-11-24T10:13:14.4994555-07:00 T1_LOCK_CONFIRMED_RESTART device=adb-67090DLKY005KL-AldORp._adb-tls-connect._tcp pid=17764
+2026-11-24T10:18:22.3922190-07:00 min=5 pid=17764 wake=  mWakefulness=Dozing frozen=    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-5.txt
+2026-11-24T10:28:23.6271615-07:00 min=15 pid=17764 wake=  mWakefulness=Dozing frozen=    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-15.txt
+2026-11-24T10:43:22.6815242-07:00 min=30 pid=17764 wake=  mWakefulness=Dozing frozen=    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-30.txt
+2026-11-24T10:58:20.5484213-07:00 min=45 pid=17764 wake=  mWakefulness=Dozing frozen=    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-45.txt
+2026-11-24T11:13:21.9330843-07:00 min=60 pid=17764 wake=  mWakefulness=Dozing frozen=    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-60.txt
+2026-11-24T11:13:22.0958444-07:00 T1_60_COMPLETE
