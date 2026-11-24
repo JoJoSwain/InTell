@@ -21,17 +21,12 @@ export function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Candidate service credential: `apikey` header first, else Bearer token.
- * Empty string when neither is present.
+ * Service API key from the `apikey` header only (never Bearer — keys are not JWTs).
+ * Empty string when absent.
  */
 export function serviceCredentialFrom(req: Request): string {
   const apiKey = (req.headers.get("apikey") ?? "").trim();
-  if (apiKey.length > 0) return apiKey;
-  const auth = req.headers.get("Authorization") ?? "";
-  if (auth.toLowerCase().startsWith("bearer ")) {
-    return auth.slice("Bearer ".length).trim();
-  }
-  return "";
+  return apiKey.length > 0 ? apiKey : "";
 }
 
 /** True when the credential matches any configured secret key (constant-time). */
@@ -46,8 +41,7 @@ export function matchesSecretKey(credential: string): boolean {
 }
 
 /**
- * Mobile callers that send the publishable key and no user JWT.
- * `apikey` wins over Bearer, matching requireServiceCaller.
+ * Mobile callers that send the publishable key in `apikey` and no user JWT.
  * A staff JWT, a secret key, or any other credential is refused.
  */
 export function requirePublishableCaller(req: Request): Response | null {
@@ -64,8 +58,7 @@ export function requirePublishableCaller(req: Request): Response | null {
 
 /**
  * Service callers only (run-jobs / build-pack / purge-assets).
- * Accepts secret key in `apikey` or `Authorization: Bearer` (transition).
- * Publishable/anon keys and user JWTs are always refused.
+ * Accepts secret key in `apikey` only. Publishable keys and user JWTs are refused.
  */
 export function requireServiceCaller(req: Request): Response | null {
   const credential = serviceCredentialFrom(req);

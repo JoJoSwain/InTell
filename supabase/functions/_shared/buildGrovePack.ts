@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { PackBuildError } from "./packBuildError.ts";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { roundCoord } from "./from-shared/canonicalJson.ts";
 import { isL10nBlank } from "./from-shared/l10n.ts";
@@ -260,15 +261,21 @@ export async function buildGrovePackObject(
         ? c.publicName.en.trim()
         : cid;
     if (!c.homeGroveId) {
-      throw new Error(
-        `character ${characterLabel} (${cid}) missing homeGroveId (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_HOME_GROVE",
+        entity: "character",
+        entityId: cid,
+        message: `${characterLabel} needs a home grove before preview.`,
+      });
     }
     watermarks.push(crow.published_at);
     if (!c.portraitImageId) {
-      throw new Error(
-        `character ${characterLabel} (${cid}) missing portrait (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_PORTRAIT",
+        entity: "character",
+        entityId: cid,
+        message: `${characterLabel} needs a portrait before preview.`,
+      });
     }
     let irow: { data: unknown } | null = null;
     if (overlay?.items.has(itemKey("image", c.portraitImageId))) {
@@ -283,9 +290,12 @@ export async function buildGrovePackObject(
       irow = data;
     }
     if (!irow) {
-      throw new Error(
-        `character ${cid} portrait image missing (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_PORTRAIT",
+        entity: "image",
+        entityId: c.portraitImageId,
+        message: `${characterLabel} needs a portrait before preview.`,
+      });
     }
     const img = parseSnapshot("image", irow.data);
     assetMap.set(img.sha256, {

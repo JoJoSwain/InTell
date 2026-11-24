@@ -7,6 +7,7 @@ import {
 } from "../_shared/clients.ts";
 import { json } from "../_shared/http.ts";
 import { buildGrovePackObject } from "../_shared/buildGrovePack.ts";
+import { PackBuildError } from "../_shared/packBuildError.ts";
 import { loadReleaseOverlay } from "../_shared/packSource.ts";
 
 const Body = z.object({
@@ -85,19 +86,8 @@ Deno.serve(async (req) => {
   const packs: unknown[] = [];
   const assetMeta = new Map<string, { sha: string; ext: string; kind: string; isPublic: boolean }>();
 
-  function staffPreviewBuildError(message: string): string | null {
-    const home = /character (.+?) \(([0-9a-f-]{36})\) missing homeGroveId/i.exec(
-      message,
-    );
-    if (home?.[1]) {
-      return `${home[1]} needs a home grove before preview.`;
-    }
-    const portrait =
-      /character (.+?) \(([0-9a-f-]{36})\) missing portrait\b/i.exec(message);
-    if (portrait?.[1]) {
-      return `${portrait[1]} needs a portrait before preview.`;
-    }
-    return null;
+  function staffPreviewBuildError(err: PackBuildError): string {
+    return err.message;
   }
 
   for (const groveId of groveIds) {
@@ -107,9 +97,10 @@ Deno.serve(async (req) => {
         overlay,
       });
     } catch (err) {
+      if (err instanceof PackBuildError) {
+        return json({ error: staffPreviewBuildError(err) }, 422);
+      }
       const message = err instanceof Error ? err.message : String(err);
-      const staffMsg = staffPreviewBuildError(message);
-      if (staffMsg) return json({ error: staffMsg }, 422);
       return json({ error: message }, 500);
     }
     const { pack, assetShas } = assembled;

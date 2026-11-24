@@ -1,6 +1,5 @@
 /**
  * Deep links from checklist / release items to admin routes.
- * Sound entities are omitted until M4 (no authoring UI).
  */
 
 export type StoryEntity =
@@ -10,6 +9,12 @@ export type StoryEntity =
   | "character"
   | "image"
   | "audio"
+  | "audio_asset"
+  | "ambience_profile"
+  | "ambience_layer"
+  | "ambience_zone"
+  | "music_zone"
+  | "music_cue"
   | string;
 
 /** Release item entity types shown in M3d UI (sound types hidden until M4). */
@@ -27,7 +32,22 @@ export type EntityHrefContext = {
   groveId?: string;
   fragmentId?: string;
   characterId?: string;
+  profileId?: string;
 };
+
+/** A5 publish-check codes surfaced on release detail. */
+export const A5_PUBLISH_CHECK_CODES = [
+  "STEMS_OVER_MAX",
+  "RESOLVE_MISSING",
+  "RESOLVE_DURATION",
+  "BED_MONO",
+  "BED_LONG",
+  "REGION_AMBIENCE_BUDGET",
+  "TRANSIENT",
+  "NARRATION_STEREO",
+  "AUDIO_FORMAT",
+  "GROWTH_STEPS_OVER_MAX",
+] as const;
 
 export function entityAdminHref(
   entity: StoryEntity,
@@ -55,6 +75,19 @@ export function entityAdminHref(
     case "audio":
     case "audio_asset":
       return `/media/audio/${entityId}`;
+    case "ambience_profile":
+      return `/sound/profiles/${entityId}`;
+    case "ambience_layer": {
+      const profileId = ctx?.profileId;
+      return profileId
+        ? `/sound/profiles/${profileId}/layers/${entityId}`
+        : `/sound/profiles`;
+    }
+    case "ambience_zone":
+    case "music_zone":
+      return "/sound/zones";
+    case "music_cue":
+      return `/sound/music/cues/${entityId}`;
     default:
       return null;
   }

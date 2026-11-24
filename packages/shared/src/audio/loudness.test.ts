@@ -141,6 +141,15 @@ describe("measureLoudness EBU Tech 3341", () => {
       0.1,
     );
   });
+
+  it("crestFactorDb is true peak minus RMS of loudest 400 ms", () => {
+    const channels = sineChannels(-20, 2, 1);
+    const r = measureLoudness(channels, SR);
+    expect(Number.isFinite(r.crestFactorDb)).toBe(true);
+    // Sine crest ≈ 3 dB (peak vs RMS); true-peak path adds a little headroom.
+    expect(r.crestFactorDb).toBeGreaterThan(2);
+    expect(r.crestFactorDb).toBeLessThan(8);
+  });
 });
 
 describe("loudnessOffTarget / audioFormatOffTarget", () => {

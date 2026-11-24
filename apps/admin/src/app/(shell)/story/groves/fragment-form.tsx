@@ -38,6 +38,9 @@ type FragmentInitial = {
   indigeny_earth: string;
   indigeny_world: string;
   indigeny_body: string;
+  beacon_asset_id?: string | null;
+  resolve_asset_id?: string | null;
+  teaser_locked_asset_id?: string | null;
 };
 
 type PrereqGroup = { members: string[] };
@@ -58,6 +61,7 @@ export function FragmentForm({
   characters,
   prereqGroups,
   characterLinks,
+  soundAssets = [],
 }: {
   groveId: string;
   initial?: FragmentInitial;
@@ -67,6 +71,7 @@ export function FragmentForm({
   characters: { id: string; name: string }[];
   prereqGroups: PrereqGroup[];
   characterLinks: CharLink[];
+  soundAssets?: { id: string; title: string; kind: string }[];
 }) {
   const [visibility, setVisibility] = useState(
     initial?.visibility ?? "standard",
@@ -253,6 +258,38 @@ export function FragmentForm({
             />
             Ending fragment
           </label>
+          <fieldset className="space-y-3 rounded-md border border-border p-4">
+            <legend className="px-1 text-sm font-medium">Sound overrides</legend>
+            {(
+              [
+                ["beacon_asset_id", "Beacon", initial?.beacon_asset_id],
+                ["resolve_asset_id", "Resolve override", initial?.resolve_asset_id],
+                [
+                  "teaser_locked_asset_id",
+                  "Locked-teaser audio",
+                  initial?.teaser_locked_asset_id,
+                ],
+              ] as const
+            ).map(([name, label, value]) => (
+              <label key={name} className="block text-sm">
+                <span className="text-textMuted">{label}</span>
+                <select
+                  name={name}
+                  defaultValue={value ?? ""}
+                  aria-label={label}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+                >
+                  <option value="">Grove default / none</option>
+                  {soundAssets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.title}
+                      {a.kind !== "narration" ? ` (${a.kind})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </fieldset>
           <label className="block text-sm">
             <span className="text-textMuted">Indigeny — Earth</span>
             <textarea

@@ -75,10 +75,16 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
   const { data: fragments } = await supabase
     .from("fragments")
     .select(
-      "id, grove_id, title, teaser, tier, visibility, location_geojson, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body, status",
+      "id, grove_id, title, teaser, tier, visibility, location_geojson, story_order, is_ending, trigger_radius_m, marker_code, indigeny_earth, indigeny_world, indigeny_body, beacon_asset_id, resolve_asset_id, teaser_locked_asset_id, status",
     )
     .eq("grove_id", id)
     .order("story_order");
+
+  const { data: soundAssets } = await supabase
+    .from("audio_assets")
+    .select("id, title, kind")
+    .in("kind", ["voice_cue", "sfx_oneshot", "music_stem"])
+    .order("title");
 
   const shapeFragments = (fragments ?? []) as {
     id: string;
@@ -228,6 +234,13 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
           <p className="mt-2 text-textMuted">{grove.slug}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/sound/groves/${id}/cues`}
+            className="text-sm text-primary underline"
+            aria-label="Grove sound cues"
+          >
+            Sound cues
+          </Link>
           <UnreleasedBadge
             kind={releaseBadgeKind(grove.id, unreleasedIds, publishedIds)}
           />
@@ -363,6 +376,11 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
             characters={(characters ?? []) as { id: string; name: string }[]}
             prereqGroups={selectedGroups}
             characterLinks={selectedLinks}
+            soundAssets={(soundAssets ?? []).map((a) => ({
+              id: a.id as string,
+              title: String(a.title ?? a.id),
+              kind: String(a.kind),
+            }))}
             initial={
               selected
                 ? (() => {
@@ -382,6 +400,13 @@ export default async function GroveDetailPage({ params, searchParams }: Props) {
                       indigeny_earth: (selected.indigeny_earth as string) ?? "",
                       indigeny_world: (selected.indigeny_world as string) ?? "",
                       indigeny_body: (selected.indigeny_body as string) ?? "",
+                      beacon_asset_id:
+                        (selected.beacon_asset_id as string | null) ?? null,
+                      resolve_asset_id:
+                        (selected.resolve_asset_id as string | null) ?? null,
+                      teaser_locked_asset_id:
+                        (selected.teaser_locked_asset_id as string | null) ??
+                        null,
                     };
                   })()
                 : canEdit

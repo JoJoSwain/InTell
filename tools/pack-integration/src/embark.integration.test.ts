@@ -7,10 +7,8 @@ import { GROVE_ID, ORIGIN, POLYLINE_WALK } from "./embarkFixtures";
 
 const env = supabaseEnv();
 const url = env.API_URL || env.SUPABASE_URL;
-const serviceKey =
-  env.SECRET_KEY || env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-const publishable =
-  env.PUBLISHABLE_KEY || env.ANON_KEY || env.SUPABASE_ANON_KEY;
+const serviceKey = env.SECRET_KEY;
+const publishable = env.PUBLISHABLE_KEY;
 if (!url || !serviceKey || !publishable) {
   throw new Error("supabase status missing keys — run supabase start");
 }
@@ -22,7 +20,6 @@ const svc = createClient(url, serviceKey, {
 function publishableHeaders(): Record<string, string> {
   return {
     apikey: publishable!,
-    Authorization: `Bearer ${publishable}`,
     "Content-Type": "application/json",
   };
 }
@@ -131,7 +128,6 @@ describe("embark integration", () => {
     const secret = await embark(payload, {
       "Content-Type": "application/json",
       apikey: serviceKey!,
-      Authorization: `Bearer ${serviceKey}`,
     });
     expect(secret.status).toBe(403);
   });
