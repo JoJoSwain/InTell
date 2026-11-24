@@ -59,7 +59,9 @@ jobs:
           RUN_JOBS_URL: http://host.docker.internal:54321/functions/v1/run-jobs
         run: pnpm db:setup-local
       - name: Start Routes API stub (embark)
-        run: node tools/routes-stub.mjs &
+        # 0.0.0.0 so the edge-runtime container can reach the host via Docker bridge
+        # (host.docker.internal); loopback-only binds fail on Linux runners.
+        run: ROUTES_STUB_HOST=0.0.0.0 node tools/routes-stub.mjs &
       - name: Wait for Routes stub
         run: |
           for i in $(seq 1 30); do

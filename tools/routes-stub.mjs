@@ -5,6 +5,8 @@
 import http from "node:http";
 
 const PORT = Number(process.env.ROUTES_STUB_PORT || 8791);
+/** Bind address. CI uses 0.0.0.0 so Docker can reach the host via the bridge. */
+const HOST = process.env.ROUTES_STUB_HOST || "127.0.0.1";
 
 const POLYLINE_WALK = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
 const POLYLINE_BIKE = "a~l~Fjk~uOwHJy@P";
@@ -134,6 +136,6 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: "not found" }));
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`routes-stub listening on http://127.0.0.1:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`routes-stub listening on http://${HOST}:${PORT}`);
 });
