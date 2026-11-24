@@ -17,6 +17,12 @@
  * `recordCompletion` → `writeUnlocks` → `metCharacters` → `analytics fragment_completed`
  * → `startAfterglow` (and `growthMoment` when it applies — M9 Journal hook; not emitted yet).
  *
+ * ## Settings / window events
+ * `settingsChanged` merges its `accessibleTrigger` and `locationAvailable` into
+ * `world.settings` for that step (so a lagging shell still gets the right
+ * `setLocationMode`). From the next event onward the shell must pass the
+ * updated `world`. `windowChanged` already uses `event.timeWindow` for the queue.
+ *
  * Lane B (M6) wires location, audio and SQLite to these effects.
  */
 
@@ -441,7 +447,7 @@ function locationModeFor(
     return { type: "setLocationMode", mode: "foreground" };
   }
   if (!world.settings.locationAvailable) {
-    return { type: "setLocationMode", mode: "balanced" };
+    return { type: "setLocationMode", mode: "idle" };
   }
   const last = state.recentFixes[state.recentFixes.length - 1];
   if (!last) return { type: "setLocationMode", mode: "balanced" };
@@ -801,6 +807,9 @@ export function sessionStep(
         );
         if (!started) break;
         next = started;
+      } else if (f.groveId && !next.groveIds.includes(f.groveId)) {
+        // Scan in another grove must still appear on writeVisit.
+        next = { ...next, groveIds: [...next.groveIds, f.groveId] };
       }
 
       const unlocked = isUnlocked(
@@ -988,9 +997,18 @@ export function sessionStep(
     }
 
     case "settingsChanged": {
-      next = checkTimeouts(next, event.at, world, effects);
+      // Merge event values for this step; shell passes updated world afterwards.
+      const worldForStep: SessionWorld = {
+        ...world,
+        settings: {
+          ...world.settings,
+          accessibleTrigger: event.accessibleTrigger,
+          locationAvailable: event.locationAvailable,
+        },
+      };
+      next = checkTimeouts(next, event.at, worldForStep, effects);
       if (next.phase === "exploring") {
-        effects.push(locationModeFor(next, world));
+        effects.push(locationModeFor(next, worldForStep));
       }
       break;
     }

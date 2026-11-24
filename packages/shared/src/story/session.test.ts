@@ -595,6 +595,158 @@ describe("pause / resume", () => {
   });
 });
 
+describe("scan visit grove", () => {
+  it("adds the scanned fragment's groveId so writeVisit includes it", () => {
+    const groveA = GROVE_ID;
+    const groveB = "grove-b";
+    const rootA = frag({
+      id: "f1",
+      groveId: groveA,
+      lat: 40.9612,
+      lng: -111.929,
+    });
+    const physB = frag({
+      id: "phys-b",
+      groveId: groveB,
+      visibility: "physical",
+      radiusM: undefined,
+      lat: 40.97,
+      lng: -111.91,
+    });
+    const w = world({
+      groves: [
+        { id: groveA, boundary: squareAround(rootA.lat, rootA.lng) },
+        { id: groveB, boundary: squareAround(physB.lat, physB.lng) },
+      ],
+      fragments: [rootA, physB],
+      fragmentMeta: {
+        f1: { revisionNo: 1 },
+        "phys-b": { revisionNo: 1 },
+      },
+      markers: { "hash-b": "phys-b" },
+      unlocks: [{ fragmentId: "phys-b" }],
+      settings: {
+        accessibleTrigger: true,
+        locationAvailable: true,
+        accuracyToleranceM: 25,
+      },
+    });
+    const w2 = w;
+    let state = initialSessionState();
+    ({ state } = step(state, {
+      type: "fix",
+      at: 1_000,
+      lat: rootA.lat,
+      lng: rootA.lng,
+      accuracyM: 5,
+      sessionId: "s",
+    }, w2));
+    expect(state.groveIds).toEqual([groveA]);
+    // Stop A's narration so the scan can play immediately
+    ({ state } = step(state, {
+      type: "narrationEnded",
+      at: 2_000,
+      reason: "stopped",
+      playedMs: 500,
+    }, w2));
+    ({ state } = step(state, {
+      type: "scan",
+      at: 3_000,
+      markerHash: "hash-b",
+    }, w2));
+    expect(state.groveIds).toEqual([groveA, groveB]);
+    expect(state.playing?.fragmentId).toBe("phys-b");
+    ({ state } = step(state, {
+      type: "narrationEnded",
+      at: 5_000,
+      reason: "natural",
+      playedMs: 2_000,
+    }, w2));
+    const ended = step(state, { type: "stop", at: 6_000 }, w2);
+    const visit = ended.effects.find((e) => e.type === "writeVisit");
+    expect(visit).toMatchObject({
+      type: "writeVisit",
+      groves: [
+        { groveId: groveA, fragmentsCompleted: 0 },
+        { groveId: groveB, fragmentsCompleted: 1 },
+      ],
+    });
+  });
+});
+
+describe("location mode without access", () => {
+  it("returns idle when locationAvailable is false", () => {
+    const w = world({
+      settings: {
+        accessibleTrigger: false,
+        locationAvailable: false,
+        accuracyToleranceM: 25,
+      },
+    });
+    const physical = frag({
+      id: "phys",
+      visibility: "physical",
+      radiusM: undefined,
+    });
+    const w2: SessionWorld = {
+      ...w,
+      fragments: [physical],
+      fragmentMeta: { phys: { revisionNo: 1 } },
+      markers: { h: "phys" },
+      unlocks: [{ fragmentId: "phys" }],
+    };
+    const { effects } = step(initialSessionState(), {
+      type: "scan",
+      at: 1_000,
+      markerHash: "h",
+      sessionId: "s",
+    }, w2);
+    expect(
+      effects.some(
+        (e) => e.type === "setLocationMode" && e.mode === "idle",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("settingsChanged merges event into world for the step", () => {
+  it("uses event.locationAvailable even when world still says true", () => {
+    const w = world({
+      settings: {
+        accessibleTrigger: true,
+        locationAvailable: true,
+        accuracyToleranceM: 25,
+      },
+    });
+    const f = w.fragments[0]!;
+    let state = initialSessionState();
+    ({ state } = step(state, {
+      type: "fix",
+      at: 1_000,
+      lat: f.lat,
+      lng: f.lng,
+      accuracyM: 5,
+      sessionId: "s",
+    }, w));
+    // World still has locationAvailable: true; event turns it off.
+    const { effects } = step(
+      state,
+      {
+        type: "settingsChanged",
+        at: 2_000,
+        accessibleTrigger: true,
+        locationAvailable: false,
+      },
+      w,
+    );
+    expect(
+      effects.some(
+        (e) => e.type === "setLocationMode" && e.mode === "idle",
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("timeouts and visit", () => {
   it("ends after 15 minutes outside; writeVisit is per grove", () => {
     const w = world({
