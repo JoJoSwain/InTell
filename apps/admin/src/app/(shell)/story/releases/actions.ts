@@ -19,7 +19,11 @@ import {
   failuresFromLastCheck,
   type ChecklistFailure,
 } from "@/components/checklist-badges";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 import { farPieceFailures } from "@/lib/grove-shape-preview";
 
 async function requireStaff() {
@@ -33,12 +37,22 @@ async function requireStaff() {
   return { supabase, staff, userId: user.id };
 }
 
-async function requireEditor() {
+type EditorContext = Awaited<ReturnType<typeof requireStaff>>;
+
+async function requireEditor(): Promise<
+  ActionAuthResult<EditorContext>
+> {
   const ctx = await requireStaff();
   if (!canPublishRelease(ctx.staff.role)) {
-    throw new Error("editor required");
+    return serverActionError("editor required");
   }
-  return ctx;
+  return { ok: true, ...ctx };
+}
+
+async function requireEditorOrThrow(): Promise<EditorContext> {
+  const auth = await requireEditor();
+  if (!auth.ok) throw new Error(auth.error);
+  return auth;
 }
 
 function revalidateRelease(id: string) {
@@ -47,7 +61,7 @@ function revalidateRelease(id: string) {
 }
 
 export async function createRelease(formData: FormData) {
-  const { supabase, userId } = await requireEditor();
+  const { supabase, userId } = await requireEditorOrThrow();
   const name = String(formData.get("name") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!name) throw new Error("name required");
@@ -68,37 +82,39 @@ export async function createRelease(formData: FormData) {
 }
 
 export async function updateReleaseMeta(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const auth = await requireEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  if (!id || !name) throw new Error("id and name required");
+  if (!id || !name) return serverActionError("id and name required");
 
   const { data: existing } = await supabase
     .from("releases")
     .select("status")
     .eq("id", id)
     .maybeSingle();
-  if (!existing) throw new Error("release not found");
+  if (!existing) return serverActionError("release not found");
   if (
     existing.status === "published" ||
     existing.status === "publishing" ||
     existing.status === "cancelled"
   ) {
-    throw new Error("cannot edit this release");
+    return serverActionError("cannot edit this release");
   }
 
   const { error } = await supabase
     .from("releases")
     .update({ name, notes })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   revalidateRelease(id);
   return { ok: true as const, href: saveHref(`/story/releases/${id}`) };
 }
 
 export async function addReleaseItem(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const releaseId = String(formData.get("release_id") ?? "");
   const entity = String(formData.get("entity") ?? "") as ReleaseItemEntity;
   const entityId = String(formData.get("entity_id") ?? "").trim();
@@ -120,7 +136,7 @@ export async function addReleaseItem(formData: FormData) {
 }
 
 export async function removeReleaseItem(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const releaseId = String(formData.get("release_id") ?? "");
   const entity = String(formData.get("entity") ?? "");
   const entityId = String(formData.get("entity_id") ?? "");
@@ -144,7 +160,7 @@ export async function removeReleaseItem(formData: FormData) {
  * that map to allowed entity types (DATA_MODEL §10).
  */
 export async function addMissingItems(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const releaseId = String(formData.get("release_id") ?? "");
   if (!releaseId) throw new Error("release required");
 
@@ -217,7 +233,7 @@ async function resetTowardDraft(
 }
 
 async function farPieceWarningsForRelease(
-  supabase: Awaited<ReturnType<typeof requireEditor>>["supabase"],
+  supabase: EditorContext["supabase"],
   releaseId: string,
 ): Promise<ChecklistFailure[]> {
   const { data: items } = await supabase
@@ -278,7 +294,9 @@ export async function runPublishCheck(
   | { ok: true; failures: ChecklistFailure[]; checkOk: boolean }
   | { ok: false; error: string }
 > {
-  const { supabase } = await requireEditor();
+  const auth = await requireEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const { data, error } = await supabase.rpc("fn_publish_check", {
     p_release_id: releaseId,
   });
@@ -301,7 +319,9 @@ export async function runPublishCheck(
 export async function publishNow(
   releaseId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { supabase } = await requireEditor();
+  const auth = await requireEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const result = await callEdgeFunction(supabase, "publish", {
     releaseId,
   });
@@ -316,7 +336,7 @@ export async function publishNow(
  * Stored value is always UTC in `publish_at`.
  */
 export async function scheduleRelease(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const id = String(formData.get("release_id") ?? "");
   const isoRaw = String(formData.get("publish_at") ?? "").trim();
   const localRaw = String(formData.get("publish_at_local") ?? "").trim();
@@ -356,7 +376,7 @@ export async function scheduleRelease(formData: FormData) {
 }
 
 export async function cancelSchedule(releaseId: string) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   if (!releaseId) throw new Error("release required");
 
   const { error } = await supabase
@@ -376,7 +396,7 @@ export async function cancelScheduleForm(formData: FormData) {
 }
 
 export async function retryFailed(releaseId: string) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   if (!releaseId) throw new Error("release required");
 
   const { error } = await supabase
@@ -403,7 +423,7 @@ export async function retryFailedForm(formData: FormData) {
 }
 
 export async function copyToNewDraft(releaseId: string) {
-  const { supabase, userId } = await requireEditor();
+  const { supabase, userId } = await requireEditorOrThrow();
   if (!releaseId) throw new Error("release required");
 
   const { data: src } = await supabase

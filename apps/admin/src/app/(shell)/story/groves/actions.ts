@@ -17,9 +17,24 @@ import {
 } from "@/lib/staff";
 import { generateMarkerCode } from "@/lib/markers/code";
 import { asL10n } from "@/lib/geo";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
-async function requireEditor() {
+type GroveEditorContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  staff: Awaited<ReturnType<typeof loadStaff>>;
+  userId: string;
+};
+
+type GroveNotesWriterContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  staff: Awaited<ReturnType<typeof loadStaff>>;
+};
+
+async function requireEditor(): Promise<ActionAuthResult<GroveEditorContext>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,12 +42,20 @@ async function requireEditor() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canEditStory(staff.role)) {
-    throw new Error("editor required");
+    return serverActionError("editor required");
   }
-  return { supabase, staff, userId: user.id };
+  return { ok: true, supabase, staff, userId: user.id };
 }
 
-async function requireNotesWriter() {
+async function requireEditorOrThrow(): Promise<GroveEditorContext> {
+  const auth = await requireEditor();
+  if (!auth.ok) throw new Error(auth.error);
+  return auth;
+}
+
+async function requireNotesWriter(): Promise<
+  ActionAuthResult<GroveNotesWriterContext>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,9 +63,9 @@ async function requireNotesWriter() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canWriteStoryNotes(staff.role)) {
-    throw new Error("writer required");
+    return serverActionError("writer required");
   }
-  return { supabase, staff };
+  return { ok: true, supabase, staff };
 }
 
 function slugify(name: string): string {
@@ -54,7 +77,9 @@ function slugify(name: string): string {
 }
 
 export async function saveGrove(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const auth = await requireEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const regionId = String(formData.get("region_id") ?? "");
   const nameEn = String(formData.get("name_en") ?? "").trim();
@@ -65,7 +90,7 @@ export async function saveGrove(formData: FormData) {
   const wildlife = formData.get("allows_speaker_wildlife_sounds") === "on";
   const slugInput = String(formData.get("slug") ?? "").trim();
 
-  if (!regionId || !nameEn) throw new Error("region and name required");
+  if (!regionId || !nameEn) return serverActionError("region and name required");
 
   const name = asL10n(nameEn);
   const premise = asL10n(premiseEn);
@@ -84,7 +109,7 @@ export async function saveGrove(formData: FormData) {
         slug,
       })
       .eq("id", id);
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
 
     revalidatePath("/story/groves");
     revalidatePath(`/story/groves/${id}`);
@@ -104,7 +129,7 @@ export async function saveGrove(formData: FormData) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   const newId = data.id as string;
 
   revalidatePath("/story/groves");
@@ -112,11 +137,9 @@ export async function saveGrove(formData: FormData) {
 }
 
 export async function saveFragment(formData: FormData) {
-  const { supabase, staff } = await requireEditor().catch(async (err) => {
-    // Writers may update Indigeny only — handled by saveFragmentIndigeny
-    throw err;
-  });
-  void staff;
+  const auth = await requireEditor();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
 
   const id = String(formData.get("id") ?? "");
   const groveId = String(formData.get("grove_id") ?? "");
@@ -149,7 +172,7 @@ export async function saveFragment(formData: FormData) {
     Number.isNaN(lat) ||
     Number.isNaN(lng)
   ) {
-    throw new Error("grove, title, lat and lng required");
+    return serverActionError("grove, title, lat and lng required");
   }
 
   if (visibility === "physical") {
@@ -196,7 +219,7 @@ export async function saveFragment(formData: FormData) {
         indigeny_body: indigenyBody,
       })
       .eq("id", id);
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
 
     if (locationChanged) {
       const { error: locErr } = await supabase.rpc("fn_set_fragment_location", {
@@ -204,7 +227,7 @@ export async function saveFragment(formData: FormData) {
         p_lat: lat,
         p_lng: lng,
       });
-      if (locErr) throw new Error(locErr.message);
+      if (locErr) return serverActionError(locErr.message);
     }
 
     revalidatePath(`/story/groves/${groveId}`);
@@ -233,7 +256,7 @@ export async function saveFragment(formData: FormData) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   const newId = data.id as string;
 
   const { error: locErr } = await supabase.rpc("fn_set_fragment_location", {
@@ -241,7 +264,7 @@ export async function saveFragment(formData: FormData) {
     p_lat: lat,
     p_lng: lng,
   });
-  if (locErr) throw new Error(locErr.message);
+  if (locErr) return serverActionError(locErr.message);
 
   revalidatePath(`/story/groves/${groveId}`);
   return {
@@ -252,10 +275,12 @@ export async function saveFragment(formData: FormData) {
 
 /** Writer path: Indigeny fields only (RLS + F1 guard). */
 export async function saveFragmentIndigeny(formData: FormData) {
-  const { supabase } = await requireNotesWriter();
+  const auth = await requireNotesWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const groveId = String(formData.get("grove_id") ?? "");
-  if (!id) throw new Error("id required");
+  if (!id) return serverActionError("id required");
   const { error } = await supabase
     .from("fragments")
     .update({
@@ -266,7 +291,7 @@ export async function saveFragmentIndigeny(formData: FormData) {
       indigeny_body: String(formData.get("indigeny_body") ?? "").trim() || null,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   revalidatePath(`/story/groves/${groveId}`);
   return {
     ok: true as const,
@@ -275,7 +300,7 @@ export async function saveFragmentIndigeny(formData: FormData) {
 }
 
 export async function rotateMarkerCode(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const id = String(formData.get("id") ?? "");
   const groveId = String(formData.get("grove_id") ?? "");
   if (!id) throw new Error("id required");
@@ -291,7 +316,7 @@ export async function rotateMarkerCode(formData: FormData) {
 }
 
 export async function savePrereqGroups(formData: FormData) {
-  const { supabase } = await requireEditor();
+  const { supabase } = await requireEditorOrThrow();
   const fragmentId = String(formData.get("fragment_id") ?? "");
   const groveId = String(formData.get("grove_id") ?? "");
   const payloadRaw = String(formData.get("prereq_json") ?? "[]");
@@ -396,9 +421,11 @@ const JOURNEY_MODES = ["walk", "bike", "transit"] as const;
 
 /** Writer+ may upsert grove journey passages (ADR 0005 / M3e). */
 export async function saveGroveJourneys(formData: FormData) {
-  const { supabase } = await requireNotesWriter();
+  const auth = await requireNotesWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const groveId = String(formData.get("grove_id") ?? "");
-  if (!groveId) throw new Error("grove required");
+  if (!groveId) return serverActionError("grove required");
 
   for (const mode of JOURNEY_MODES) {
     const text = String(formData.get(`journey_${mode}`) ?? "").trim();
@@ -408,7 +435,7 @@ export async function saveGroveJourneys(formData: FormData) {
         .delete()
         .eq("grove_id", groveId)
         .eq("mode", mode);
-      if (error) throw new Error(error.message);
+      if (error) return serverActionError(error.message);
       continue;
     }
     const { error } = await supabase.from("grove_journeys").upsert(
@@ -419,7 +446,7 @@ export async function saveGroveJourneys(formData: FormData) {
       },
       { onConflict: "grove_id,mode" },
     );
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
   }
 
   revalidatePath(`/story/groves/${groveId}`);

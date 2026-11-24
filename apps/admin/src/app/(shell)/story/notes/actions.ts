@@ -4,9 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteStoryNotes, isActiveStaff, loadStaff } from "@/lib/staff";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
-async function requireNotesWriter() {
+async function requireNotesWriter(): Promise<
+  ActionAuthResult<{ supabase: Awaited<ReturnType<typeof createClient>> }>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -14,27 +20,29 @@ async function requireNotesWriter() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canWriteStoryNotes(staff.role)) {
-    throw new Error("writer required");
+    return serverActionError("writer required");
   }
-  return supabase;
+  return { ok: true, supabase };
 }
 
 export async function saveThread(formData: FormData) {
-  const supabase = await requireNotesWriter();
+  const auth = await requireNotesWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  if (!title) throw new Error("title required");
+  if (!title) return serverActionError("title required");
 
   if (id) {
     const { error } = await supabase
       .from("threads")
       .update({ title, notes })
       .eq("id", id);
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
   } else {
     const { error } = await supabase.from("threads").insert({ title, notes });
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
   }
   revalidatePath("/story/notes");
   return { ok: true as const, href: saveHref("/story/notes") };

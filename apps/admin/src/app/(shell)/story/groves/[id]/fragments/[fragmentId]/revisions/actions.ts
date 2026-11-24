@@ -8,12 +8,24 @@ import {
   isActiveStaff,
   loadStaff,
 } from "@/lib/staff";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
 type TimeWindow = "day" | "night";
 type ChangeKind = "contingency" | "correction";
 
-async function requireRevisionWriter() {
+type RevisionWriterContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  staff: Awaited<ReturnType<typeof loadStaff>>;
+  userId: string;
+};
+
+async function requireRevisionWriter(): Promise<
+  ActionAuthResult<RevisionWriterContext>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,9 +33,15 @@ async function requireRevisionWriter() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canWriteRevisions(staff.role)) {
-    throw new Error("writer required");
+    return serverActionError("writer required");
   }
-  return { supabase, staff, userId: user.id };
+  return { ok: true, supabase, staff, userId: user.id };
+}
+
+async function requireRevisionWriterOrThrow(): Promise<RevisionWriterContext> {
+  const auth = await requireRevisionWriter();
+  if (!auth.ok) throw new Error(auth.error);
+  return auth;
 }
 
 function revisionsBase(groveId: string, fragmentId: string) {
@@ -65,7 +83,7 @@ async function syncVersions(
   revisionId: string,
   day: ReturnType<typeof parseVersion>,
   night: ReturnType<typeof parseVersion>,
-) {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const windows: { window: TimeWindow; data: ReturnType<typeof parseVersion> }[] =
     [
       { window: "day", data: day },
@@ -79,12 +97,12 @@ async function syncVersions(
           .from("revision_versions")
           .delete()
           .eq("id", data.version_id);
-        if (error) throw new Error(error.message);
+        if (error) return serverActionError(error.message);
       }
       continue;
     }
     if (!data.narration_asset_id) {
-      throw new Error(`${window}: narration asset required`);
+      return serverActionError(`${window}: narration asset required`);
     }
     // Transcript may be empty in draft; checklist blocks publish (NO_TRANSCRIPT).
     if (data.version_id) {
@@ -99,7 +117,7 @@ async function syncVersions(
           time_window: window,
         })
         .eq("id", data.version_id);
-      if (error) throw new Error(error.message);
+      if (error) return serverActionError(error.message);
     } else {
       const { error } = await supabase.from("revision_versions").insert({
         revision_id: revisionId,
@@ -110,13 +128,16 @@ async function syncVersions(
         vtt: data.vtt,
         other_time_hint: asL10nOrEmpty(data.other_time_hint),
       });
-      if (error) throw new Error(error.message);
+      if (error) return serverActionError(error.message);
     }
   }
+  return { ok: true };
 }
 
 export async function createRevision(formData: FormData) {
-  const { supabase, userId } = await requireRevisionWriter();
+  const auth = await requireRevisionWriter();
+  if (!auth.ok) return auth;
+  const { supabase, userId } = auth;
   const groveId = String(formData.get("grove_id") ?? "");
   const fragmentId = String(formData.get("fragment_id") ?? "");
   const isFirst = formData.get("is_first") === "1";
@@ -125,14 +146,16 @@ export async function createRevision(formData: FormData) {
     String(formData.get("change_note") ?? "").trim() || null;
   const changeTeaserEn = String(formData.get("change_teaser_en") ?? "").trim();
 
-  if (!groveId || !fragmentId) throw new Error("grove and fragment required");
+  if (!groveId || !fragmentId) {
+    return serverActionError("grove and fragment required");
+  }
 
   let changeKind: ChangeKind;
   if (isFirst) {
     changeKind = "contingency";
   } else {
     if (changeKindRaw !== "contingency" && changeKindRaw !== "correction") {
-      throw new Error("change_kind required");
+      return serverActionError("change_kind required");
     }
     changeKind = changeKindRaw;
   }
@@ -140,7 +163,7 @@ export async function createRevision(formData: FormData) {
   const day = parseVersion(formData, "day");
   const night = parseVersion(formData, "night");
   if (!day.include && !night.include) {
-    throw new Error("at least one of Day or Night is required");
+    return serverActionError("at least one of Day or Night is required");
   }
 
   // Do NOT send revision_no — DB trigger assigns it (M3d D2).
@@ -156,10 +179,11 @@ export async function createRevision(formData: FormData) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   const revisionId = data.id as string;
 
-  await syncVersions(supabase, revisionId, day, night);
+  const synced = await syncVersions(supabase, revisionId, day, night);
+  if (!synced.ok) return synced;
 
   const base = revisionsBase(groveId, fragmentId);
   revalidatePath(base);
@@ -168,7 +192,9 @@ export async function createRevision(formData: FormData) {
 }
 
 export async function updateRevision(formData: FormData) {
-  const { supabase } = await requireRevisionWriter();
+  const auth = await requireRevisionWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const groveId = String(formData.get("grove_id") ?? "");
   const fragmentId = String(formData.get("fragment_id") ?? "");
   const revisionId = String(formData.get("revision_id") ?? "");
@@ -179,7 +205,7 @@ export async function updateRevision(formData: FormData) {
   const changeTeaserEn = String(formData.get("change_teaser_en") ?? "").trim();
 
   if (!groveId || !fragmentId || !revisionId) {
-    throw new Error("grove, fragment and revision required");
+    return serverActionError("grove, fragment and revision required");
   }
 
   const { data: existing, error: loadErr } = await supabase
@@ -187,10 +213,10 @@ export async function updateRevision(formData: FormData) {
     .select("id, status, revision_no")
     .eq("id", revisionId)
     .maybeSingle();
-  if (loadErr) throw new Error(loadErr.message);
-  if (!existing) throw new Error("revision not found");
+  if (loadErr) return serverActionError(loadErr.message);
+  if (!existing) return serverActionError("revision not found");
   if (existing.status !== "draft") {
-    throw new Error("only draft revisions can be edited");
+    return serverActionError("only draft revisions can be edited");
   }
 
   let changeKind: ChangeKind;
@@ -198,7 +224,7 @@ export async function updateRevision(formData: FormData) {
     changeKind = "contingency";
   } else {
     if (changeKindRaw !== "contingency" && changeKindRaw !== "correction") {
-      throw new Error("change_kind required");
+      return serverActionError("change_kind required");
     }
     changeKind = changeKindRaw;
   }
@@ -206,7 +232,7 @@ export async function updateRevision(formData: FormData) {
   const day = parseVersion(formData, "day");
   const night = parseVersion(formData, "night");
   if (!day.include && !night.include) {
-    throw new Error("at least one of Day or Night is required");
+    return serverActionError("at least one of Day or Night is required");
   }
 
   const { error } = await supabase
@@ -217,9 +243,10 @@ export async function updateRevision(formData: FormData) {
       change_teaser: asL10nOrEmpty(changeTeaserEn),
     })
     .eq("id", revisionId);
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
 
-  await syncVersions(supabase, revisionId, day, night);
+  const synced = await syncVersions(supabase, revisionId, day, night);
+  if (!synced.ok) return synced;
 
   const base = revisionsBase(groveId, fragmentId);
   revalidatePath(base);
@@ -229,7 +256,7 @@ export async function updateRevision(formData: FormData) {
 }
 
 export async function deleteDraftRevision(formData: FormData) {
-  const { supabase, staff } = await requireRevisionWriter();
+  const { supabase, staff } = await requireRevisionWriterOrThrow();
   // Editors delete; writers may only delete drafts they can update (RLS).
   void staff;
   const groveId = String(formData.get("grove_id") ?? "");
