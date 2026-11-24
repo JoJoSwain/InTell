@@ -19,6 +19,7 @@ import {
   ServerActionSubmit,
 } from "@/components/server-action-form";
 import {
+  A5_PUBLISH_CHECK_CODES,
   entityAdminHref,
   RELEASE_ITEM_ENTITIES,
   type ReleaseItemEntity,
@@ -202,6 +203,11 @@ export default async function ReleaseDetailPage({ params }: Props) {
   const canEdit = canPublishRelease(staff.role);
   const canPreview = canPreviewRelease(staff.role);
   const failures = failuresFromLastCheck(r.last_check);
+  const a5Failures = failures.filter((f) =>
+  A5_PUBLISH_CHECK_CODES.includes(
+      f.code as (typeof A5_PUBLISH_CHECK_CODES)[number],
+    ),
+  );
   const hasMissingDeps = failures.some(
     (f) =>
       f.code === "DEPENDENCY_UNPUBLISHED" &&
@@ -402,6 +408,17 @@ export default async function ReleaseDetailPage({ params }: Props) {
         ) : null}
         {showFailures ? (
           <div className="mt-4">
+            {a5Failures.length > 0 ? (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium">Sound checks (A5)</h3>
+                <div className="mt-2">
+                  <GroupedChecklist
+                    failures={a5Failures}
+                    ariaLabel="Sound checklist results"
+                  />
+                </div>
+              </div>
+            ) : null}
             <GroupedChecklist failures={failures} />
           </div>
         ) : (

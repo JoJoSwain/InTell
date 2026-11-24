@@ -9,7 +9,11 @@ import {
   loadStaff,
   type StaffRole,
 } from "@/lib/staff";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
 const ROLES: StaffRole[] = [
   "admin",
@@ -20,7 +24,12 @@ const ROLES: StaffRole[] = [
   "viewer",
 ];
 
-async function requireAdmin() {
+async function requireAdmin(): Promise<
+  ActionAuthResult<{
+    supabase: Awaited<ReturnType<typeof createClient>>;
+    userId: string;
+  }>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,9 +37,19 @@ async function requireAdmin() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canManageStaff(staff.role)) {
-    throw new Error("admin required");
+    return serverActionError("admin required");
   }
-  return { supabase, userId: user.id };
+  return { ok: true, supabase, userId: user.id };
+}
+
+function requireAdminOrThrow(): Promise<{
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+}> {
+  return requireAdmin().then((auth) => {
+    if (!auth.ok) throw new Error(auth.error);
+    return auth;
+  });
 }
 
 async function callInviteStaff(
@@ -69,7 +88,7 @@ async function callInviteStaff(
 export async function inviteStaff(
   formData: FormData,
 ): Promise<{ error?: string; resent?: boolean }> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireAdminOrThrow();
   const email = String(formData.get("email") ?? "").trim();
   const displayName = String(formData.get("displayName") ?? "").trim();
   const role = String(formData.get("role") ?? "writer") as StaffRole;
@@ -88,7 +107,7 @@ export async function inviteStaff(
 }
 
 export async function deactivateStaff(formData: FormData) {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireAdminOrThrow();
   const userId = String(formData.get("userId") ?? "");
   if (!userId) throw new Error("userId required");
   const result = await callInviteStaff(supabase, {
@@ -100,7 +119,7 @@ export async function deactivateStaff(formData: FormData) {
 }
 
 export async function reactivateStaff(formData: FormData) {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireAdminOrThrow();
   const userId = String(formData.get("userId") ?? "");
   if (!userId) throw new Error("userId required");
   const result = await callInviteStaff(supabase, {
@@ -112,18 +131,20 @@ export async function reactivateStaff(formData: FormData) {
 }
 
 export async function updateStaffRow(formData: FormData) {
-  const { supabase } = await requireAdmin();
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const userId = String(formData.get("userId") ?? "");
   const displayName = String(formData.get("displayName") ?? "").trim();
   const role = String(formData.get("role") ?? "") as StaffRole;
   if (!userId || !displayName || !ROLES.includes(role)) {
-    throw new Error("userId, display name and role are required");
+    return serverActionError("userId, display name and role are required");
   }
   const { error } = await supabase
     .from("staff")
     .update({ display_name: displayName, role })
     .eq("user_id", userId);
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   revalidatePath("/staff");
   return { ok: true as const, href: saveHref("/staff") };
 }

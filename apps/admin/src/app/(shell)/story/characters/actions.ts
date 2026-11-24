@@ -5,9 +5,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canManageCharacters, isActiveStaff, loadStaff } from "@/lib/staff";
 import { asL10n } from "@/lib/geo";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
-async function requireCharacterWriter() {
+async function requireCharacterWriter(): Promise<
+  ActionAuthResult<{ supabase: Awaited<ReturnType<typeof createClient>> }>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -15,13 +21,15 @@ async function requireCharacterWriter() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canManageCharacters(staff.role)) {
-    throw new Error("writer required");
+    return serverActionError("writer required");
   }
-  return supabase;
+  return { ok: true, supabase };
 }
 
 export async function saveCharacter(formData: FormData) {
-  const supabase = await requireCharacterWriter();
+  const auth = await requireCharacterWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const publicName = String(formData.get("public_name_en") ?? "").trim();
@@ -31,7 +39,7 @@ export async function saveCharacter(formData: FormData) {
   const homeGrove =
     String(formData.get("home_grove_id") ?? "").trim() || null;
 
-  if (!name) throw new Error("name required");
+  if (!name) return serverActionError("name required");
 
   const payload = {
     name,
@@ -48,7 +56,7 @@ export async function saveCharacter(formData: FormData) {
       .from("characters")
       .update(payload)
       .eq("id", id);
-    if (error) throw new Error(error.message);
+    if (error) return serverActionError(error.message);
     revalidatePath("/story/characters");
     revalidatePath(`/story/characters/${id}`);
     return { ok: true as const, href: saveHref(`/story/characters/${id}`) };
@@ -59,7 +67,7 @@ export async function saveCharacter(formData: FormData) {
     .insert(payload)
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   revalidatePath("/story/characters");
   return {
     ok: true as const,

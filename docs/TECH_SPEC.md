@@ -87,21 +87,28 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 ```
 - **PackStore:** installed manifests, asset cache, `completions`, `unlocks`, `visits` and so on (DATA_MODEL §14).
 - **SessionStore** (Zustand, persisted to `kv`): the session state machine (§3.2) and `StoryState` (AUDIO_SPEC §4.1).
-- **AudioDirector:** ticks every 1 s plus on state changes. Calls `ambience.evaluate`, `music.select`, `hush.step` and applies their outputs to the engine with ramps. It owns ducking.
+- **AudioDirector:** pure `directorStep` in `packages/shared` (A6). Wakes on a **5 s audio-clock heartbeat** plus state changes (location, session effects, engine events). Composes ambience, music, hush, ducking and the A5 rules into a target mix, then diffs to engine commands.
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
 
 ### 3.2 Session state machine
+A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`directorStep` / `hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each session event as epoch ms (`at`). The AudioDirector’s periodic wake is the **5 s audio-clock heartbeat** (not a 1 s wall timer); wall-clock ms still ride on every director input for hush, afterglow and mix recovery.
 ```
 idle
- ├─ fixInsideGrove | scan(code) → exploring
-exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt} }
- ├─ arrived(fragmentId)       → pick version for current window → (growthMoment?) → play if nothing is playing, else queue(1)
- │                              (exactly one narration voice ever; a queued fragment never interrupts)
- ├─ scan(locked or no version for now) → teaser pop-up
- ├─ narrationEnded(natural)   → record completion (revision, window, on site) → unlock dependents → met characters → events
- ├─ narrationEnded            → afterglow 8 s → play queued if still in range (or if it came from a scan)
- ├─ hushDue                   → hush (AUDIO_SPEC §5)
- ├─ stop | 15 min outside | 3 h → idle (write the visit record)
+ ├─ fix (inside a grove piece) | scan → exploring  (needs sessionId on the event)
+exploring { groveIds, currentGroveId, playing?, queued?, afterglowEndsAt?, lastInsideGroveAt, startedAt }
+ ├─ fix → proximityCandidates → chooseTrigger → queueAfterTrigger
+ │         → play { fragmentId, revisionNo, version, via }  (or queue of one)
+ │         (exactly one narration voice ever; a queued fragment never interrupts)
+ ├─ scan → scanDecision; locked → showTeaser{reason:"locked"}; no version → showTeaser{reason:"wrongTime"};
+ │         else play (physical only; scan replaces the queue)
+ ├─ narrationPaused / narrationResumed → playing stays set; pausedTotalMs accumulates; queue waits
+ ├─ narrationEnded(natural) → recordCompletion → writeUnlocks → metCharacters → analytics
+ │                            → startAfterglow{endsAt,fragmentId,tier}  (growthMoment is an M9 hook)
+ ├─ afterglowElapsed (8 s) → play queued if still in range (or if it came from a scan)
+ ├─ narrationEnded(stopped|interrupted) → recordProgress (no completion); stopped clears the queue;
+ │                                        interrupted keeps a queued scan only
+ ├─ groveEntered { groveId } the first time each grove becomes currentGroveId
+ ├─ stop | 15 min outside | 3 h → idle (writeVisit per grove; stopNarration + computed playedMs if playing)
 ```
 
 ### 3.3 Location
@@ -169,7 +176,7 @@ exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt}
 | `invite-staff` | Admin (admin role) | Invites a staff member by email and creates their `staff` row; deactivates staff |
 | `export-archive` | Admin (editor+) | A zip of revisions, transcripts, Story Notes and metadata for preservation outside InTell (M11) |
 | `preview` | Staff JWT (writer, sound, editor, admin) | Returns a preview manifest for a `draft` / `scheduled` / `failed` release; 1-hour signed URLs for staged assets; published shas use public URLs (DATA_MODEL §12.5) |
-| `embark` | Mobile (M5) | Embark route: `{groveId, mode: walk\|bike\|transit, origin}` → looks up the grove's published opening point itself (so it can only route to groves) → Google Routes API `computeRoutes` (`WALK` / `BICYCLE` / `TRANSIT`, minimal field mask) with a server-only key → `{mode, distanceM, durationS, polyline, transitSteps?, betaNotice?}`. No `DRIVE`. Never stores or logs the origin; per-device daily cap via A1's `fn_device_rate_allow` (`'embark'`, 24 h) plus a Google quota cap (ADR 0005 §5) |
+| `embark` | Mobile (M5) | Embark route: `{groveId, mode: walk\|bike\|transit, origin}` → looks up the grove's published opening point itself (so it can only route to groves) → Google Routes API `computeRoutes` (`WALK` / `BICYCLE` / `TRANSIT`, minimal field mask) with a server-only key → `{mode, distanceM, durationS, polyline, steps?, warnings}`, where `steps` are the walk and transit legs of a transit route and `warnings` are Google's route warnings, passed through (the shared `EmbarkResponse`, A3). The phone also shows ADR 0005's gentle beta note on every walk and bike route. No `DRIVE`. Never stores or logs the origin; per-device daily cap via A1's `fn_device_rate_allow` (`'embark'`, 24 h) plus a Google quota cap (ADR 0005 §5) |
 | `register-device` | Mobile | Upsert a device (platform, version, language, age gate) |
 | `ingest-events` | Mobile | Batched events (≤ 200), idempotent, 600/h |
 | `journal-entry`, `my-entries` | Mobile | Submit a Journal entry (text, or reserve a voice upload); list your entries and their lineage (M9) |

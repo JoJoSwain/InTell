@@ -11,12 +11,21 @@ function add(out: Set<string>, sha: string | undefined): void {
 function addGrove(pack: GrovePack, out: Set<string>): void {
   add(out, pack.grove.growthCueAssetSha);
   for (const character of pack.characters) add(out, character.portraitSha);
+  for (const fragment of pack.fragments) {
+    add(out, fragment.beaconAssetSha);
+    add(out, fragment.resolveAssetSha);
+    add(out, fragment.teaserLockedAssetSha);
+  }
   for (const revision of pack.revisions) {
     for (const version of revision.versions) add(out, version.assetSha);
   }
   for (const cue of pack.music.cues) {
+    add(out, cue.resolveRootAssetSha);
+    add(out, cue.resolveBranchAssetSha);
+    add(out, cue.resolveLeafAssetSha);
     for (const stem of cue.stems) add(out, stem.assetSha);
   }
+  for (const cue of pack.soundCues ?? []) add(out, cue.assetSha);
   for (const asset of pack.assets) add(out, asset.sha);
 }
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { PackBuildError } from "./packBuildError.ts";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { roundCoord } from "./from-shared/canonicalJson.ts";
 import { isL10nBlank } from "./from-shared/l10n.ts";
@@ -185,6 +186,12 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         kind: asset.kind,
       });
+      const breathPoints = Array.isArray(v.breath_points_ms)
+        ? (v.breath_points_ms as number[])
+        : [];
+      const swellCues = Array.isArray(v.swell_cues_ms)
+        ? (v.swell_cues_ms as number[])
+        : [];
       const versionEntry: Record<string, unknown> = {
         lang: v.language,
         timeWindow: v.time_window,
@@ -193,6 +200,8 @@ export async function buildGrovePackObject(
         bytes: asset.bytes,
         transcript: v.transcript,
         ...(v.vtt ? { vtt: v.vtt } : {}),
+        ...(breathPoints.length > 0 ? { breathPointsMs: breathPoints } : {}),
+        ...(swellCues.length > 0 ? { swellCuesMs: swellCues } : {}),
       };
       if (!isL10nBlank(v.other_time_hint)) {
         versionEntry.otherTimeHint = v.other_time_hint;
@@ -252,15 +261,21 @@ export async function buildGrovePackObject(
         ? c.publicName.en.trim()
         : cid;
     if (!c.homeGroveId) {
-      throw new Error(
-        `character ${characterLabel} (${cid}) missing homeGroveId (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_HOME_GROVE",
+        entity: "character",
+        entityId: cid,
+        message: `${characterLabel} needs a home grove before preview.`,
+      });
     }
     watermarks.push(crow.published_at);
     if (!c.portraitImageId) {
-      throw new Error(
-        `character ${characterLabel} (${cid}) missing portrait (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_PORTRAIT",
+        entity: "character",
+        entityId: cid,
+        message: `${characterLabel} needs a portrait before preview.`,
+      });
     }
     let irow: { data: unknown } | null = null;
     if (overlay?.items.has(itemKey("image", c.portraitImageId))) {
@@ -275,9 +290,12 @@ export async function buildGrovePackObject(
       irow = data;
     }
     if (!irow) {
-      throw new Error(
-        `character ${cid} portrait image missing (PACK_BUILD_FAILED)`,
-      );
+      throw new PackBuildError({
+        code: "NO_PORTRAIT",
+        entity: "image",
+        entityId: c.portraitImageId,
+        message: `${characterLabel} needs a portrait before preview.`,
+      });
     }
     const img = parseSnapshot("image", irow.data);
     assetMap.set(img.sha256, {
@@ -373,23 +391,71 @@ export async function buildGrovePackObject(
       } else if (f.data.triggerRadiusM != null) {
         entry.radiusM = f.data.triggerRadiusM;
       }
+      if (f.data.beaconAssetSha) {
+        entry.beaconAssetSha = f.data.beaconAssetSha;
+        assetMap.set(f.data.beaconAssetSha, {
+          sha: f.data.beaconAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "beacon",
+        });
+      }
+      if (f.data.resolveAssetSha) {
+        entry.resolveAssetSha = f.data.resolveAssetSha;
+        assetMap.set(f.data.resolveAssetSha, {
+          sha: f.data.resolveAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "music_moment",
+        });
+      }
+      if (f.data.teaserLockedAssetSha) {
+        entry.teaserLockedAssetSha = f.data.teaserLockedAssetSha;
+        assetMap.set(f.data.teaserLockedAssetSha, {
+          sha: f.data.teaserLockedAssetSha,
+          ext: "m4a",
+          bytes: 1,
+          kind: "voice_cue",
+        });
+      }
       return entry;
     });
 
-  // Music cues with published snapshots for this grove
+  // Music cues: published snapshots, plus overlay projections in preview
+  const cueById = new Map<string, { data: ReturnType<typeof parseSnapshot<"music_cue">>; published_at: string }>();
   const { data: cueRows } = await supabase
     .from("published_snapshots")
     .select("data, published_at")
     .eq("entity", "music_cue");
-  const musicCues = [];
   for (const row of cueRows ?? []) {
     const cue = parseSnapshot("music_cue", row.data);
-    if (cue.status !== "published") continue;
+    cueById.set(cue.id, { data: cue, published_at: row.published_at });
+  }
+  if (overlay) {
+    for (const key of overlay.items) {
+      if (!key.startsWith("music_cue:")) continue;
+      const cid = key.slice("music_cue:".length);
+      try {
+        const dataRaw = await projectEntity(supabase, "music_cue", cid);
+        const cue = parseSnapshot("music_cue", dataRaw);
+        cueById.set(cid, {
+          data: cue,
+          published_at: new Date().toISOString(),
+        });
+      } catch {
+        /* skip broken projection */
+      }
+    }
+  }
+  const musicCues = [];
+  for (const { data: cue, published_at } of cueById.values()) {
+    if (!preview && cue.status !== "published") continue;
+    if (preview && cue.status === "unpublished") continue;
     if (cue.groveId !== groveId && !cue.musicZoneId) continue;
     // grove-bound cues, or zone cues included via region (zone cues go in grove pack when intersecting — seed uses grove cues)
     if (cue.groveId && cue.groveId !== groveId) continue;
     if (!cue.groveId) continue; // zone-only cues stay in region pack for M3a simplicity unless grove-linked
-    watermarks.push(row.published_at);
+    watermarks.push(published_at);
     for (const s of cue.stems) {
       assetMap.set(s.assetSha, {
         sha: s.assetSha,
@@ -398,7 +464,7 @@ export async function buildGrovePackObject(
         kind: "music_stem",
       });
     }
-    musicCues.push({
+    const cueEntry: Record<string, unknown> = {
       id: cue.id,
       useGroveBoundary: !!cue.groveId && !cue.musicZoneId,
       timeWindow: cue.timeWindow,
@@ -417,20 +483,72 @@ export async function buildGrovePackObject(
         loopStartMs: s.loopStartMs ?? null,
         loopEndMs: s.loopEndMs ?? null,
       })),
-    });
+    };
+    if (cue.resolveRootAssetSha) {
+      cueEntry.resolveRootAssetSha = cue.resolveRootAssetSha;
+      assetMap.set(cue.resolveRootAssetSha, {
+        sha: cue.resolveRootAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    if (cue.resolveBranchAssetSha) {
+      cueEntry.resolveBranchAssetSha = cue.resolveBranchAssetSha;
+      assetMap.set(cue.resolveBranchAssetSha, {
+        sha: cue.resolveBranchAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    if (cue.resolveLeafAssetSha) {
+      cueEntry.resolveLeafAssetSha = cue.resolveLeafAssetSha;
+      assetMap.set(cue.resolveLeafAssetSha, {
+        sha: cue.resolveLeafAssetSha,
+        ext: "m4a",
+        bytes: 1,
+        kind: "music_moment",
+      });
+    }
+    musicCues.push(cueEntry);
   }
 
-  // Ambience zones with published snapshots in same region
+  // Ambience zones: published + overlay projections in preview
+  const zoneById = new Map<
+    string,
+    { data: ReturnType<typeof parseSnapshot<"ambience_zone">>; published_at: string }
+  >();
   const { data: zoneRows } = await supabase
     .from("published_snapshots")
     .select("data, published_at")
     .eq("entity", "ambience_zone");
-  const ambienceZones = [];
   for (const row of zoneRows ?? []) {
     const z = parseSnapshot("ambience_zone", row.data);
-    if (z.status !== "published") continue;
+    zoneById.set(z.id, { data: z, published_at: row.published_at });
+  }
+  if (overlay) {
+    for (const key of overlay.items) {
+      if (!key.startsWith("ambience_zone:")) continue;
+      const zid = key.slice("ambience_zone:".length);
+      try {
+        const dataRaw = await projectEntity(supabase, "ambience_zone", zid);
+        const z = parseSnapshot("ambience_zone", dataRaw);
+        zoneById.set(zid, {
+          data: z,
+          published_at: new Date().toISOString(),
+        });
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  const ambienceZones = [];
+  for (const { data: z, published_at } of zoneById.values()) {
+    if (!preview && z.status !== "published") continue;
+    if (preview && z.status === "unpublished") continue;
     if (z.regionId !== groveSnap.regionId) continue;
-    watermarks.push(row.published_at);
+    watermarks.push(published_at);
     ambienceZones.push({
       id: z.id,
       boundary: z.boundary,
@@ -455,6 +573,29 @@ export async function buildGrovePackObject(
       });
     }
   }
+
+  // Grove-level sound cues (beacons + threshold motifs); omit when empty
+  const { data: soundCueRows } = await supabase
+    .from("grove_sound_cues")
+    .select("kind, asset_id")
+    .eq("grove_id", groveId);
+  const soundCues: { kind: string; assetSha: string }[] = [];
+  for (const row of soundCueRows ?? []) {
+    const { data: a } = await supabase
+      .from("audio_assets")
+      .select("sha256, ext, bytes, kind")
+      .eq("id", row.asset_id)
+      .maybeSingle();
+    if (!a) continue;
+    assetMap.set(a.sha256, {
+      sha: a.sha256,
+      ext: a.ext,
+      bytes: a.bytes,
+      kind: a.kind,
+    });
+    soundCues.push({ kind: String(row.kind), assetSha: a.sha256 });
+  }
+  soundCues.sort((a, b) => a.kind.localeCompare(b.kind));
 
   // Fill audio ext/bytes for stems from DB
   for (const [sha, meta] of assetMap) {
@@ -633,6 +774,11 @@ export async function buildGrovePackObject(
       ...(groveSnap.growthCueAssetSha
         ? { growthCueAssetSha: groveSnap.growthCueAssetSha }
         : {}),
+      // Omit default 15 so pre-A5 strict device parsers stay valid (sequencing).
+      ...(groveSnap.depthBloomTextureM != null &&
+      groveSnap.depthBloomTextureM !== 15
+        ? { depthBloomTextureM: groveSnap.depthBloomTextureM }
+        : {}),
       openingFragmentId: openingFrag.data.id,
       journeys,
     },
@@ -649,6 +795,7 @@ export async function buildGrovePackObject(
     music: {
       cues: musicCues.sort((a, b) => String(a.id).localeCompare(String(b.id))),
     },
+    ...(soundCues.length > 0 ? { soundCues } : {}),
     ambienceZones: ambienceZones.sort((a, b) =>
       String(a.id).localeCompare(String(b.id)),
     ),

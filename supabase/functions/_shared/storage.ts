@@ -25,6 +25,54 @@ export async function copyStagingToPublic(
   if (up) throw new Error(`public upload failed for ${toPath}: ${up.message}`);
 }
 
+/**
+ * Copy a landcover grid into public-media content-addressed
+ * (`landcover/{sha}.{ext}`). Source is `file_path` like
+ * `staging-audio/landcover/…/{sha}.json` or `public-media/landcover/…`.
+ */
+export async function copyLandcoverGridToPublic(
+  client: SupabaseClient,
+  sha: string,
+  filePath: string,
+): Promise<{ ext: string; bytes: number }> {
+  const normalized = filePath.replace(/^\/+/, "");
+  let bucket = "staging-audio";
+  let objectPath = normalized;
+  if (normalized.startsWith("staging-audio/")) {
+    objectPath = normalized.slice("staging-audio/".length);
+    bucket = "staging-audio";
+  } else if (normalized.startsWith("public-media/")) {
+    objectPath = normalized.slice("public-media/".length);
+    bucket = "public-media";
+  } else if (normalized.startsWith("private-docs/")) {
+    objectPath = normalized.slice("private-docs/".length);
+    bucket = "private-docs";
+  }
+  const extMatch = objectPath.match(/\.([a-z0-9]+)$/i);
+  const ext = (extMatch?.[1] ?? "bin").toLowerCase();
+  const { data: blob, error: dl } = await client.storage
+    .from(bucket)
+    .download(objectPath);
+  if (dl || !blob) {
+    throw new Error(
+      `landcover download failed for ${bucket}/${objectPath}: ${dl?.message ?? "missing"}`,
+    );
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const toPath = `landcover/${sha}.${ext}`;
+  const { error: up } = await client.storage.from("public-media").upload(
+    toPath,
+    bytes,
+    {
+      contentType: ext === "json" ? "application/json" : "application/octet-stream",
+      upsert: true,
+      cacheControl: CACHE_AUDIO,
+    },
+  );
+  if (up) throw new Error(`landcover public upload failed for ${toPath}: ${up.message}`);
+  return { ext, bytes: bytes.byteLength };
+}
+
 export async function copyStagingImageToPublic(
   client: SupabaseClient,
   sha: string,

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { StaffRole } from "@/lib/staff";
-import { canManageStaff, canViewAudit } from "@/lib/staff";
+import { canManageStaff, canViewAudit, canViewSound } from "@/lib/staff";
 
 type NavItem = { href: string; label: string; show: boolean };
 
@@ -75,6 +75,17 @@ export function ShellSidebar({
     { href: "/media/audio", label: "Audio", show: true },
     { href: "/media/images", label: "Images", show: true },
   ];
+  const sound: NavItem[] = [
+    { href: "/sound/profiles", label: "Profiles", show: canViewSound(role) },
+    { href: "/sound/zones", label: "Zones", show: canViewSound(role) },
+    { href: "/sound/landcover", label: "Landcover", show: canViewSound(role) },
+    { href: "/sound/music", label: "Music", show: canViewSound(role) },
+    {
+      href: "/simulate/aaaaaaaa-bbbb-4ccc-8ddd-000000000010",
+      label: "Simulator",
+      show: canViewSound(role),
+    },
+  ];
   const ops: NavItem[] = [
     { href: "/regions", label: "Regions", show: true },
     { href: "/audit", label: "Audit", show: canViewAudit(role) },
@@ -97,6 +108,7 @@ export function ShellSidebar({
       <nav className="mt-8 space-y-6" aria-label="Ops">
         <NavSection title="Story" items={story} pathname={pathname} />
         <NavSection title="Media" items={media} pathname={pathname} />
+        <NavSection title="Sound" items={sound} pathname={pathname} />
         <NavSection title="Ops" items={ops} pathname={pathname} />
       </nav>
       <form action="/auth/sign-out" method="post" className="mt-auto px-2">

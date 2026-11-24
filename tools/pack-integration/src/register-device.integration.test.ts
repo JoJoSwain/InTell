@@ -7,10 +7,8 @@ import { supabaseEnv } from "./env";
 
 const env = supabaseEnv();
 const url = env.API_URL || env.SUPABASE_URL;
-const serviceKey =
-  env.SECRET_KEY || env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-const publishable =
-  env.PUBLISHABLE_KEY || env.ANON_KEY || env.SUPABASE_ANON_KEY;
+const serviceKey = env.SECRET_KEY;
+const publishable = env.PUBLISHABLE_KEY;
 if (!url || !serviceKey || !publishable) {
   throw new Error("supabase status missing keys — run supabase start");
 }
@@ -43,7 +41,6 @@ async function post(
 function publishableHeaders(authorization?: string): Record<string, string> {
   const headers: Record<string, string> = { apikey: publishable! };
   if (authorization) headers.Authorization = authorization;
-  else headers.Authorization = `Bearer ${publishable}`;
   return headers;
 }
 
@@ -103,7 +100,6 @@ describe("register-device", () => {
 
     const secret = await post(body(deviceId), {
       apikey: serviceKey!,
-      Authorization: `Bearer ${serviceKey}`,
     });
     expect(secret.status).toBe(403);
 

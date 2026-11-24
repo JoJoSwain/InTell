@@ -1,6 +1,9 @@
 import { distanceInsideMeters, pointInPolygon, type GeoJsonPolygon } from "../geo/polygon";
-import type { SeededRng } from "./seededRng";
 import type { TimeWindow } from "../time/timeWindow";
+import type { SeededRng } from "./seededRng";
+import { ONESHOT_CONCURRENT_GLOBAL_MAX } from "./soundFeatures";
+
+export { ONESHOT_CONCURRENT_GLOBAL_MAX };
 
 export type AmbienceLayerInput = {
   id: string;
@@ -235,6 +238,8 @@ export function nextOneShot(input: {
   nowSec: number;
   recentShas: readonly string[];
   concurrent: number;
+  /** Global concurrent oneshots across layers; capped at ONESHOT_CONCURRENT_GLOBAL_MAX. */
+  globalConcurrent?: number;
   narrationPlaying: boolean;
   narrationStartedAtSec: number | null;
   narrationEndsAtSec: number | null;
@@ -258,6 +263,7 @@ export function nextOneShot(input: {
   }
 
   const maxConcurrent = input.layer.maxConcurrent ?? Number.POSITIVE_INFINITY;
+  const globalConcurrent = input.globalConcurrent ?? 0;
   const inStartGuard =
     input.narrationStartedAtSec != null &&
     input.nowSec < input.narrationStartedAtSec + NARRATION_GUARD_S;
@@ -269,6 +275,7 @@ export function nextOneShot(input: {
     input.nowSec - input.lastOneShotAtSec < NARRATION_ONESHOT_GAP_S;
   const blocked =
     input.concurrent >= maxConcurrent ||
+    globalConcurrent >= ONESHOT_CONCURRENT_GLOBAL_MAX ||
     (input.narrationPlaying && (inStartGuard || inEndGuard || tooSoon));
 
   if (blocked) {

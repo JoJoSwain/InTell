@@ -17,12 +17,22 @@ export {
   UiLanguage,
 } from "./schemas/device";
 export {
+  EmbarkMode,
+  EmbarkRequest,
+  EmbarkResponse,
+  EmbarkStep,
+  EmbarkTransitLine,
+} from "./schemas/embark";
+export {
   GrovePack,
+  GrovePackDevice,
   GrovePackFragment,
   PreviewManifest,
   RegionPack,
+  RegionPackDevice,
   PackIndexEntry,
 } from "./schemas/packs";
+export { DeviceAudioSettings } from "./schemas/settings";
 export {
   assetsToDelete,
   assetsToFetch,
@@ -94,6 +104,9 @@ export {
 
 export {
   chronicleReplay,
+  completedEpoch,
+  heardOlderEpoch,
+  isPlayableNow,
   isUnlocked,
   markerState,
   memberSatisfied,
@@ -120,6 +133,24 @@ export {
   type TriggerCandidate,
   type TriggerVia,
 } from "./story/trigger";
+
+export {
+  computedPlayedMs,
+  initialSessionState,
+  LOCATION_HIGH_WITHIN_M,
+  OUTSIDE_END_MS,
+  parseSessionState,
+  SESSION_MAX_MS,
+  SESSION_STATE_VERSION,
+  sessionStep,
+  storyStateOf,
+  type PlayingRef,
+  type SessionEffect,
+  type SessionEvent,
+  type SessionFragmentMeta,
+  type SessionState,
+  type SessionWorld,
+} from "./story/session";
 
 export {
   currentTimeWindow,
@@ -198,6 +229,7 @@ export {
   GROVE_MUSIC_EDGE_FADE_M,
   musicConditionMatches,
   selectMusicCue,
+  selectMusicCueDeferred,
   stemGainDb,
   type MusicCueInput,
   type MusicStemInput,
@@ -220,6 +252,38 @@ export {
   type OneShotState,
 } from "./audio/ambience";
 
+export * from "./audio/soundFeatures";
+export {
+  depthConditionLatched,
+  insideTierBuffersLatched,
+} from "./audio/depthBloom";
+export { pickResolve } from "./audio/resolve";
+export {
+  initialThresholdMotifState,
+  thresholdMotifStep,
+  type ThresholdMotifState,
+} from "./audio/thresholdMotif";
+export { beaconMix, chooseBeacon } from "./audio/beacon";
+export {
+  accentAllowed,
+  backSkipMs,
+  resumePointMs,
+  suggestBreathPoints,
+} from "./audio/breath";
+export {
+  initialLockedTeaserState,
+  localDayKey,
+  lockedTeaserStep,
+} from "./audio/lockedTeaser";
+export {
+  initialMixLevelState,
+  mixLevelFor,
+  shedLayers,
+  type MixLevelState,
+  type MixSignals,
+} from "./audio/mixHealth";
+export { allocateVoices } from "./audio/voices";
+
 export {
   HUSH_CUE_DELAY_MS,
   HUSH_CUE_GAIN_DB,
@@ -229,11 +293,39 @@ export {
   HUSH_HOLD_MIN_S,
   HUSH_TRIGGER_FADE_MS,
   hushStep,
+  hushStepMs,
   initialHushState,
+  initialHushStateMs,
   type HushPhase,
   type HushState,
+  type HushStateMs,
   type HushStep,
+  type HushStepMs,
 } from "./audio/hush";
+
+export {
+  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
+  DIRECTOR_ACCENT_MAX_PENDING,
+  DIRECTOR_HEARTBEAT_SEC,
+  directorStep,
+  diffMix,
+  emptyTargetMix,
+  initialDirectorState,
+  parseDirectorState,
+  serializeDirectorState,
+  defaultDirectorSettings,
+  emptyStory,
+  type DirectorCommand,
+  type DirectorFragment,
+  type DirectorInput,
+  type DirectorMusicCue,
+  type DirectorSessionEffect,
+  type DirectorSettings,
+  type DirectorState,
+  type DirectorWorld,
+  type PendingAccent,
+  type TargetMix,
+} from "./audio/director";
 
 export {
   DEFAULT_ONESHOT_SHAS,
@@ -257,6 +349,7 @@ export {
 export {
   audioFormatOffTarget,
   BITRATE_TARGETS,
+  crestFactorDb,
   LOUDNESS_TARGETS,
   loudnessOffTarget,
   measureLoudness,

@@ -4,9 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canWriteMedia, isActiveStaff, loadStaff } from "@/lib/staff";
-import { saveHref } from "@/lib/server-action-result";
+import {
+  type ActionAuthResult,
+  saveHref,
+  serverActionError,
+} from "@/lib/server-action-result";
 
-async function requireMediaWriter() {
+async function requireMediaWriter(): Promise<
+  ActionAuthResult<{ supabase: Awaited<ReturnType<typeof createClient>>; userId: string }>
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -14,23 +20,27 @@ async function requireMediaWriter() {
   if (!user) redirect("/sign-in");
   const staff = await loadStaff(supabase, user.id);
   if (!isActiveStaff(staff) || !canWriteMedia(staff.role)) {
-    throw new Error("media write required");
+    return serverActionError("media write required");
   }
-  return { supabase, userId: user.id };
+  return { ok: true, supabase, userId: user.id };
 }
 
 export async function updateImageAsset(formData: FormData) {
-  const { supabase } = await requireMediaWriter();
+  const auth = await requireMediaWriter();
+  if (!auth.ok) return auth;
+  const { supabase } = auth;
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const altEn = String(formData.get("alt_en") ?? "").trim();
-  if (!id || !title || !altEn) throw new Error("id, title and alt text required");
+  if (!id || !title || !altEn) {
+    return serverActionError("id, title and alt text required");
+  }
 
   const { error } = await supabase
     .from("image_assets")
     .update({ title, alt_text: { en: altEn } })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return serverActionError(error.message);
   revalidatePath("/media/images");
   revalidatePath(`/media/images/${id}`);
   return { ok: true as const, href: saveHref(`/media/images/${id}`) };
@@ -48,7 +58,9 @@ export type InsertImagePayload = {
 };
 
 export async function insertImageAssetRow(payload: InsertImagePayload) {
-  const { supabase, userId } = await requireMediaWriter();
+  const auth = await requireMediaWriter();
+  if (!auth.ok) throw new Error(auth.error);
+  const { supabase, userId } = auth;
   const { data: existing } = await supabase
     .from("image_assets")
     .select("id, title")

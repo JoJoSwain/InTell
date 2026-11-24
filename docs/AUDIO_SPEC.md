@@ -1,14 +1,14 @@
-# InTell — Audio Spec: Three Layers, One Mix (v3)
+# InTell — Audio Spec: Three Layers, One Mix (v4)
 
-v3 incorporates ADR 0004: all audio is produced by Replaceplace; every fragment version, ambience layer and music cue is tagged **Day** or **Night**; rings and crossroads are removed.
+v4 adds the Nov 23 sound features (A5): growth soundtrack steps, depth bloom, afterglow resolves, threshold motifs, beacons, breath points, locked teasers, a 12-voice budget, a `moment` bus, and safer walker standards. v3’s ADR 0004 Day/Night tagging and Replaceplace-only audio still apply.
 
 InTell is mostly heard, not seen. Three layers play together, mixed on the device:
 
 | Layer | What | Driven by | Data |
 |---|---|---|---|
-| **Story** (narration) | Root, Branch and Leaf fragments, each with a Day and/or Night version | Proximity to a fragment point (or a physical-marker scan), unlock state, Day or Night | `fragments`, `fragment_revisions`, `revision_versions` |
-| **Surroundings** (ambience) | Randomized sound effects and beds that match the setting: birds at the refuge, wind in mountain aspens, traffic hum in town | Which ambience zone you're in (or land cover as a fallback), Day or Night, month, headphones vs speaker | `ambience_profiles`, `ambience_layers`, `ambience_zones`, landcover grid |
-| **Soundtrack** (music) | Looping music, optionally in stems, that changes with place and story | Music zones and Groves, Day or Night, plus story state (which thread or tier you're in, what you've completed) | `music_zones`, `music_cues`, `music_cue_stems` |
+| **Story** (narration) | Root, Branch and Leaf fragments, each with a Day and/or Night version; locked whispered teasers | Proximity (or a physical-marker scan), unlock state, Day or Night | `fragments`, `fragment_revisions`, `revision_versions` |
+| **Surroundings** (ambience) | Randomized beds and rare accents; optional beacons toward unexplored fragments | Ambience zones (or land cover), Day or Night, month, headphones vs speaker | `ambience_profiles`, `ambience_layers`, `ambience_zones`, landcover grid, beacons |
+| **Soundtrack** (music) | Looping stems that grow with the story; afterglow resolves and threshold motifs on the `moment` bus | Music zones and Groves, Day or Night, story state (threads, tiers, completions, depth) | `music_zones`, `music_cues`, `music_cue_stems`, `grove_sound_cues` |
 
 Data definitions are in `DATA_MODEL.md` §3–6.
 
@@ -20,19 +20,28 @@ Data definitions are in `DATA_MODEL.md` §3–6.
 3. **Do no harm to wildlife or neighbors.** Wildlife calls never play through the phone speaker, because playback can disturb animals. They're muted during nesting months the sound designer sets. On speaker, the app plays only `speaker_safe` layers at reduced volume. A grove's wildlife-speaker setting (`allows_speaker_wildlife_sounds`, off by default) silences surroundings on the speaker entirely inside that grove.
 4. **Real sounds of the place first.** Prefer field recordings Replaceplace makes at the actual place. All audio (narration, music, effects) is produced by Replaceplace. "Synthetic" here means *randomly arranged*, not artificially generated: no AI-generated audio.
 5. **The narrator is always intelligible.** Narration is the top priority. Everything else ducks under it.
+6. **Safe for walkers.** No hazard-like sounds. Sharp transients are flagged at publish (`TRANSIENT`). Beds stay stereo and capped in length.
 
 ---
 
 ## 2. Audio engine
 
 ### 2.1 Requirements
-- Several simultaneous sources: **exactly one narration voice** (never two story fragments at once), up to 3 synced music stems, 1–2 ambience beds with crossfade, and up to 6 concurrent one-shots
+- Several simultaneous sources within a **12-voice** budget (`allocateVoices` in `packages/shared`):
+  - narration or locked teaser: **1**
+  - music stems: up to **4**
+  - ambience beds: up to **2**
+  - one-shot accents: up to **2** (global)
+  - beacon: **1** (headphones only)
+  - moment (threshold motif or afterglow resolve): **1**
+  - spare: **1**
 - Per-source gain automation (ramps), stereo pan, and playback-rate or pitch variation for one-shots
 - Sample-accurate synced looping for music stems with loop points
 - Continuous playback with the screen locked and the app in the background, on iOS and Android
 - Lock-screen and now-playing metadata and controls for narration
 - Audio route detection: headphones, Bluetooth or speaker
 - Interruptions (calls, other apps): pause everything and resume politely
+- **Mix health:** `mixLevelFor` sheds layers under clock / battery / thermal stress in order: accents → beacon → extra stems → second bed → music. Shed one layer after `MIX_SHED_AFTER_WINDOWS` (2) consecutive degraded watchdog windows (~10 s). Recover one layer after every `MIX_RECOVER_STEP_MS` (60_000) of healthy clock. Recovery is slower than shedding. During a cue crossfade, accents and the beacon pause.
 
 ### 2.2 Recommended implementation
 - **Primary:** `react-native-audio-api` (Software Mansion; a Web Audio–style graph with `AudioBufferSourceNode`, `GainNode`, `StereoPannerNode` and scheduling). Wrap it behind our own `AudioEngine` interface in **`packages/shared`** (types only); the mobile implementation lives in `apps/mobile/src/audio/engine/`.
@@ -42,24 +51,20 @@ Data definitions are in `DATA_MODEL.md` §3–6.
 
 ```ts
 // packages/shared/src/audio/AudioEngine.ts — see that file for the concrete interface
-// (M1 brief + ADR 0001). Sketch below is illustrative only.
-export interface AudioEngine {
-  init(opts: { mixWithOthers: false }): Promise<void>;
-  load(sha: string, uri: string): Promise<BufferHandle>;
-  playNarration(h: BufferHandle, meta: NowPlayingMeta, startAtMs?: number): VoiceHandle;
-  // … pause/resume, one-shots, loop groups, bed crossfade, gains, route/interruption/remote …
-}
+export type BusId = "story" | "music" | "surroundings" | "ui" | "moment";
 ```
 
 ### 2.3 Buses and default levels
-| Bus | Default level | Ducked under narration | User slider |
-|---|---|---|---|
-| `story` | 0 dB (assets at -16 LUFS) | — | Story |
-| `music` | -8 dB | additional -10 dB, 800 ms attack, 2.5 s release | Music |
-| `surroundings` | -10 dB | additional -6 dB | Surroundings |
-| `ui` | -6 dB | — | (follows Story) |
+| Bus | Default level | Ducked under narration | Held in afterglow | User slider |
+|---|---|---|---|---|
+| `story` | 0 dB (assets at -16 LUFS) | — | — | Story |
+| `music` | -8 dB | additional -10 dB, 800 ms attack, 2.5 s release | yes | Music |
+| `surroundings` | -10 dB | additional -6 dB | yes | Surroundings |
+| `ui` | -6 dB | — | — | (follows Story) |
+| `moment` | -8 dB | additional -10 dB (like music) | **no** — resolves play in the afterglow | (follows Music) |
 
 - **Speaker route:** the `surroundings` bus drops a further 6 dB, and non-`speaker_safe` layers are skipped.
+- **Beacons** play on `surroundings` (Hush silences them). **Locked teasers** play on `story`. **Resolves and threshold motifs** play on `moment`.
 - **Master limiter** at -1 dBFS, if the engine supports it. Otherwise keep the summed gains conservative.
 
 ---
@@ -84,12 +89,13 @@ Run on every location fix and at least every 5 s, as a pure function in `package
 - Each eligible bed layer in the active profile picks one asset (weighted random, avoiding the last `no_repeat_last`) and loops it.
 - When its loop ends, it may switch to another asset with an equal-power crossfade over `crossfade_ms`.
 - Gain is randomized within the min/max range at each switch, then scaled by the profile weight as linear gain: `gainDb + 20·log10(weight)` (silent at weight 0).
+- Beds must be **stereo** (mono bed = publish **error** `BED_MONO`). Duration above **2 minutes** is a publish **warning** `BED_LONG`.
 
 ### 3.4 One-shots
 For each eligible oneshot layer:
 ```
 nextAt = now + max(min_interval_s, Exponential(mean_interval_s / (density × weight)))
-on tick ≥ nextAt and concurrent(layer) < max_concurrent:
+on tick ≥ nextAt and concurrent(layer) < max_concurrent and globalConcurrent < 2:
    asset = weightedPick(layer.assets, excluding lastN)
    gainDb = uniform(gain_db_min, gain_db_max)
    pan    = uniform(pan_min, pan_max)
@@ -97,8 +103,14 @@ on tick ≥ nextAt and concurrent(layer) < max_concurrent:
    engine.playOneShot(asset, {gainDb, pan, rate}) on the surroundings bus
 ```
 - A seeded RNG (seed = session id) makes runs reproducible in tests and in the admin simulator.
-- **Global density cap:** no more than 1 one-shot per 4 s across all layers while narration is playing. A 1.5 s silence guard after narration starts and before it ends keeps the first and last words clear.
-- A one-shot blocked by `max_concurrent`, the density cap or the silence guard is dropped, and the next one is drawn from that tick. Random draws happen only when a shot is scheduled, so results don't depend on the tick rate.
+- **Global accent cap:** at most **2** concurrent one-shots across all layers (`ONESHOT_CONCURRENT_GLOBAL_MAX`). While narration plays, also no more than 1 one-shot per 4 s across all layers. A 1.5 s silence guard after narration starts and before it ends keeps the first and last words clear.
+- A one-shot blocked by `max_concurrent`, the global cap, the density cap or the silence guard is dropped, and the next one is drawn from that tick. Random draws happen only when a shot is scheduled, so results don't depend on the tick rate.
+
+### 3.5 Beacons (guide me by ear)
+- Every unexplored playable fragment may have `beacon_asset_id`; else the grove default for its tier (`grove_sound_cues` kind `beacon_root` / `beacon_branch` / `beacon_leaf`).
+- On by default (`beaconsEnabled: true` in shared settings). Headphones only.
+- Pure `beaconMix(listener, courseDeg | null, target, lastPan)` → `{ gainDb, pan, lowpassHz }`: audible within 100 m; pan from bearing vs course (hold last pan with no course); behind → lowpass.
+- Pure `chooseBeacon`: one at a time; nearest unexplored (`isPlayableNow` and not `completedEpoch`); Root > Branch > Leaf when within 10 m; switch only if another is closer by more than 10 m; none while narration plays.
 
 ---
 
@@ -107,37 +119,49 @@ on tick ≥ nextAt and concurrent(layer) < max_concurrent:
 ### 4.1 Story state (the input to music selection)
 ```ts
 type StoryState = {
-  groveId?: string;                 // grove containing the user, if any
-  playingFragmentId?: string;       // narration currently playing
-  playingTier?: 'root'|'branch'|'leaf';   // tier of the playing fragment (used by `tiers` while narration plays)
-  playingThreadIds: string[];       // threads of the playing fragment (used by `threadIds`)
-  lastFragmentId?: string;          // most recently completed
+  groveId?: string;
+  playingFragmentId?: string;
+  playingTier?: 'root'|'branch'|'leaf';
+  playingThreadIds: string[];
+  lastFragmentId?: string;
   lastTier?: 'root'|'branch'|'leaf';
   lastThreadIds: string[];
-  heard: Set<string>;               // fragment ids completed for their latest contingency (ADR 0003, 0004)
+  heard: Set<string>;               // completed for latest contingency
   timeWindow: 'day'|'night';
   narrationPlaying: boolean;
+  depthM?: number;                  // distanceInsideMeters; absent until first fix
+  insideTierBuffers: ('root'|'branch'|'leaf')[];  // JSON-serializable (not a Set)
 };
 ```
+Without a location fix, `depthM` and buffer membership are absent — depth / buffer conditions do **not** match (they are not treated as 0).
 
-### 4.2 Conditions (zod `MusicCondition`, stored in `music_cues.conditions` and `music_cue_stems.state_gains[].when`)
+### 4.2 Conditions (zod `MusicCondition`)
 ```ts
 const MusicCondition = z.object({
-  threadIds:   z.array(z.string().uuid()).optional(),   // any match with lastThreadIds or the playing fragment's threads
+  threadIds:   z.array(z.string().uuid()).optional(),
   tiers:       z.array(z.enum(['root','branch','leaf'])).optional(),
   heardAll:    z.array(z.string().uuid()).optional(),
   heardAny:    z.array(z.string().uuid()).optional(),
   notHeard:    z.array(z.string().uuid()).optional(),
   narrationPlaying: z.boolean().optional(),
-}).strict();   // every present key must match (AND); empty object = always; an empty array behaves like an absent key
+  minDepthM: z.number().nonnegative().optional(),
+  insideTierBuffer: z.enum(['root','branch','leaf']).optional(),
+}).strict();
+// every present key must match (AND); empty object = always; empty array ≈ absent
 ```
+Depth and buffer keys use **5 m hysteresis** (`DEPTH_BLOOM_HYSTERESIS_M`) via latched serializable state.
+
+**Growth steps:** the grove’s song grows with the story. Each step is its own cue (arrangement) chosen by `heardAll`. Per grove and time window, count the base cue plus every grove cue whose conditions use **only** `heardAll`; that total must be ≤ **4** (publish failure `GROWTH_STEPS_OVER_MAX`). A step may add or remove layers. Admin “after this fragment” writes `heardAll`.
+
+**Depth bloom:** texture default **15 m** deep (`DEPTH_BLOOM_TEXTURE_M_DEFAULT`; per-grove override). Melody: inside a playable Root’s buffer circle (**76.2 m**, `GROVE_BUFFER_M.root`). Branch (45.72 m) and Leaf (30.48 m) buffers are optional. At most **4 stems per cue**.
 
 ### 4.3 Selection (pure function `packages/shared/audio/music.ts`)
-1. Candidate cues: those whose `timeWindow` is the current window, whose zone polygon contains the user (or grove boundary when `useGroveBoundary`), and whose `conditions` match `StoryState`. (Day/Night is a required field on the cue, not a condition.)
+1. Candidate cues: those whose `timeWindow` is the current window, whose zone polygon contains the user (or grove boundary when `useGroveBoundary`), and whose `conditions` match `StoryState`.
 2. Pick the highest `priority`. **Hysteresis:** keep the current cue while it is still a candidate and has played for less than `min_dwell_s`, or if its priority equals the best.
-3. When the cue changes, crossfade over `crossfade_ms` (equal-power). The new cue starts at bar 1 of its loop. (Musical bar-synced transitions are out of scope for v1.)
-4. **Stems:** all stems start together, sample-aligned. Each stem plays at its `gainDb` (its resting level) unless a rule in `state_gains` matches; the first matching rule's `gain_db` then replaces the resting level. Re-evaluated on every state change with a 2 s ramp. Example: a strings layer fades up only while a Branch plays.
-5. **Edges:** music gain multiplies (linear gain) by `clamp(distanceToEdge / edge_fade_m, 0, 1)`. A cue on its grove boundary, or on a grove-pack zone without its own fade, uses 60 m. Outside every zone and grove, music fades to silence. Silence is a valid state.
+3. When a completion would change the cue via `heardAll` growth, **defer** until that fragment’s afterglow ends so the switch lands on the resolve.
+4. When the cue changes, crossfade over `crossfade_ms` (equal-power). The new cue starts at bar 1 of its loop.
+5. **Stems:** all stems start together, sample-aligned. Each stem plays at its `gainDb` unless a rule in `state_gains` matches; the first matching rule replaces the resting level. Re-evaluated on every state change with a 2 s ramp. ≤4 stems; the foundation stem keeps the edge fade.
+6. **Edges:** music gain multiplies (linear) by `clamp(distanceToEdge / edge_fade_m, 0, 1)`. Grove-boundary / pack zones without their own fade use 60 m.
 
 ### 4.4 Example
 ```
@@ -150,60 +174,57 @@ Cue "Salt Marsh – After the Flood" grove=Salt Marsh, night, priority 300, cond
 
 ---
 
-## 5. Hush moments and afterglow
-- **Hush:**
-  - Conditions: the setting is on, the user is inside a grove, no narration has played in the last `hushIntervalMin` (default 7; random ±2), and none is pending.
-  - Fade the music and surroundings buses to -inf over 4 s.
-  - At silence + 1 s, play the `hush` UI voice cue ("Listen.") at -12 dB, recorded by the grove narrator.
-  - Hold 60–90 s (random), then fade back in over 6 s.
-  - The interval and the hold are drawn once (when the quiet period and the hold begin) and kept in the session's Hush state, so the schedule doesn't depend on the tick rate.
-  - If a fragment triggers during a Hush, end the Hush at once with a 1 s fade.
-- **Afterglow:** after a fragment ends, hold the ducked levels for 8 s before releasing. This leaves a beat of quiet for the story to land.
+## 5. Hush moments, afterglow, motifs and resolves
+- **Hush:** unchanged from v3 (setting on, inside grove, interval, fade, "Listen." cue, hold, cancel on trigger). Hush fades music and surroundings (and therefore beacons).
+- **Afterglow:** after a fragment ends, hold ducked levels on `music` and `surroundings` for 8 s (`AFTERGLOW_MS`). The `moment` bus is **not** held ducked, so a resolve can play.
+- **Resolve:** each cue may carry `resolve_root_asset_id` (4–8 s), `resolve_branch_asset_id` (3–6 s), `resolve_leaf_asset_id` (2–4 s). Optional `fragments.resolve_asset_id` overrides the tier. Kind `music_moment`. Missing → plain 8 s pause; publish warning `RESOLVE_MISSING`. Pure `pickResolve` from `startAfterglow{fragmentId, tier}`.
+- **Threshold motif:** one motif per grove per time window (`threshold_motif_day` / `threshold_motif_night`). Plays **once per visit** once depth ≥ **10 m**, never over narration (wait up to **30 s**, then drop). Pure rule from `groveEntered` + depth. Kind `music_moment` on the `moment` bus.
 
 ---
 
-## 6. Asset standards (sound team; enforced as publish warnings)
+## 6. Asset standards (sound team; enforced as publish warnings / errors)
 | Kind | Format | Loudness | Notes |
 |---|---|---|---|
-| narration | AAC `.m4a`, mono, 96 kbps, 44.1/48 kHz | -16 LUFS integrated, -1 dBTP | Trim silence to ≤ 300 ms at the head |
+| narration | AAC `.m4a`, mono 96 kbps, or stereo 128 kbps when the **fragment** has character links | -16 LUFS integrated, -1 dBTP | Trim silence to ≤ 300 ms at the head. Narrator-only stereo → warning. **Narrator always center and close; no character dead center.** |
 | sfx_oneshot | AAC mono or stereo, 128 kbps | -24 LUFS short-term peak region | ≤ 12 s; 50 ms fades |
-| sfx_bed | AAC stereo, 128 kbps | -30 LUFS | 30–120 s, seamless loop points |
-| music_stem | AAC stereo, 160 kbps | -23 LUFS (sum of stems ≈ -20) | All stems in a cue the same length; loop points set |
-| voice_cue / growth_cue | AAC mono, 96 kbps | -18 LUFS | |
+| sfx_bed | AAC **stereo**, 128 kbps | -30 LUFS | Loop points; warn if > 2 min; mono = **error** |
+| music_stem | AAC stereo, 160 kbps | -23 LUFS (sum ≈ -20) | Equal length per cue; loop points |
+| music_moment | AAC stereo, 160 kbps | -20 LUFS | Resolves and threshold motifs |
+| beacon | AAC mono, 96 kbps | -30 LUFS | Loopable; engine pans |
+| voice_cue / growth_cue | AAC mono, 96 kbps | -18 LUFS | Locked teasers reuse `voice_cue` |
 
-- **Staff export phone-ready files** to this table before uploading. There's no server-side transcoding. Masters stay in Replaceplace's own archive, outside InTell.
-- Loudness and true peak are measured at upload in the browser (an ITU-R BS.1770-4 implementation in `packages/shared/src/audio/loudness.ts`, run via Web Audio in the admin) and stored in `audio_assets.loudness_lufs` / `true_peak_dbtp`. Format, channels and bitrate are checked too. Deviations are publish **warnings** (`LOUDNESS`, `AUDIO_FORMAT`).
-- **All audio is produced by Replaceplace.** There are no third-party or licensed sounds, so there are no rights records.
+- **Staff export phone-ready files** before uploading. No server-side transcoding.
+- Loudness / true peak measured at upload (`packages/shared/src/audio/loudness.ts`). Format checks too. Warnings: `LOUDNESS`, `AUDIO_FORMAT`, `TRANSIENT` (crest factor true peak vs RMS of loudest 400 ms **> 20 dB**, `TRANSIENT_CREST_DB`), `BED_LONG`, `REGION_AMBIENCE_BUDGET`, `RESOLVE_MISSING`, `RESOLVE_DURATION`, `NARRATION_STEREO`. Failures: `BED_MONO`, `STEMS_OVER_MAX`, `GROWTH_STEPS_OVER_MAX`.
+- **Safe for walkers:** upload checklist stored on the asset (`safe_for_walkers_checked`). Wildlife rules unchanged.
+- **Breath points / swell:** `revision_versions.breath_points_ms` / `swell_cues_ms`. `suggestBreathPoints`: silences ≥ 350 ms. Resume after interruption: `bp = max(breathPoint ≤ stoppedAtMs)` or 0 if none; `resume = max(0, bp − 300)`. Accents only inside pauses. **Back** skips 10 s and does not use breath points.
+- **Directing for walking ears:** keep sentences short enough to land between footsteps; leave air after place-names; avoid sudden level jumps that read as hazard; prefer mid-range for outdoor intelligibility; characters occupy left/right — narrator stays center.
 
 ---
 
 ## 7. Download size budgets
 | Pack | Target |
 |---|---|
-| Region ambience library | ≤ 40 MB (shared by all groves; downloaded once) |
+| Region ambience library | ≤ 40 MB (publish **warning** when over) |
 | Grove: narration (current revisions, one language) | ≤ 60 MB |
 | Grove: music | ≤ 30 MB |
 | Grove: images (portraits) | ≤ 5 MB |
 
-Day and Night versions both count toward the narration budget. The base map is online (ADR 0002), so there are no tile downloads. Download the Grove pack first; fetch the region library in the background on Wi-Fi.
+Day and Night versions both count toward the narration budget. Download the Grove pack first; fetch the region library in the background on Wi-Fi.
 
 ---
 
 ## 8. Admin: the Listening Simulator
-A browser tool (`/simulate/[groveId]`) that runs **the same pure functions** (`ambience.ts`, `music.ts`, `trigger.ts`, `unlock.ts`) with Web Audio:
-- Drag a "walker" pin on the map. The trigger radii, zones, edge fades and the H3 landcover overlay are visible.
-- A story-state panel: toggle completed fragments, choose Day or Night and a month, and headphones or speaker.
-- A live readout of the active profile weights, scheduled one-shots (a timeline), the music cue and stem gains, and Hush countdowns.
-- Bus meters and mute/solo per layer.
-- A "Record walk" mode that replays a GPX file at 1× or 4× for review sessions with the story team.
-
-The simulator lets the sound designer and writers tune the whole experience without walking the trail, and it doubles as an integration test for the shared logic.
+A browser tool (`/simulate/[groveId]`) that runs **the same pure functions** with Web Audio:
+- Drag a walker pin. Trigger radii, zones, edge fades, H3 overlay, and depth-bloom / buffer circles are visible.
+- Story-state panel: completed fragments, Day/Night, month, headphones/speaker, **beacons on/off**.
+- Live readout: profile weights, oneshot timeline (cap 2), music cue/stems, depth m, buffer flags, beacon pan/gain, motif/resolve/teaser events, Hush countdowns, bus meters (including `moment`).
+- Breath markers on the narration bar; GPX replay at 1× or 4×.
 
 ---
 
 ## 9. Tests (shared logic must be fully unit-tested)
-- **Time window:** day/night boundaries at sunrise and sunset for several dates and latitudes; the polar fallback.
-- **Ambience:** zone priority and edge blending; landcover fallback with neighbor smoothing; Day/Night and month filters; speaker filtering; wildlife nesting mute; density cap during narration; seeded determinism.
-- **Music:** Day/Night filtering; condition matching for every key; priority and hysteresis; dwell; stem rule evaluation; edge fade; silence outside zones.
-- **Hush:** scheduling, cancellation by a trigger, never during narration.
-- **Engine (device tests):** 60-minute locked-screen run with all layers on iOS and Android; route switch mid-play; phone-call interruption and resume; memory stays under 150 MB.
+- **Time window:** day/night boundaries; polar fallback.
+- **Ambience:** zone blend; landcover; filters; global oneshot cap 2; seeded determinism.
+- **Music:** conditions including depth/buffer hysteresis; growth deferral past afterglow; stem ≤4; edge fade.
+- **Resolve / motif / beacon / teaser / breath / mix ladder / voice budget** as in A5.
+- **Engine (device tests):** 60-minute locked-screen run; route switch; interruption; memory under 150 MB.

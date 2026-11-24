@@ -19,8 +19,6 @@ async function invoke(path: string, body: Record<string, unknown>): Promise<void
     method: "POST",
     headers: {
       apikey: key,
-      // Transition: receivers still accept Bearer while callers move to apikey.
-      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),

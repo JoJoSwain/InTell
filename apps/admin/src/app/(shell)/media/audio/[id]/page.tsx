@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   audioFormatOffTarget,
   loudnessOffTarget,
+  TRANSIENT_CREST_DB,
   type LoudnessAssetKind,
 } from "@intell/shared";
 import { createClient } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ export default async function AudioDetailPage({ params }: Props) {
   const { data } = await supabase
     .from("audio_assets")
     .select(
-      "id, title, kind, tags, staging_path, ext, channels, sample_rate, bitrate_kbps, loudness_lufs, true_peak_dbtp, max_short_term_lufs, duration_ms",
+      "id, title, kind, tags, staging_path, ext, channels, sample_rate, bitrate_kbps, loudness_lufs, true_peak_dbtp, max_short_term_lufs, crest_factor_db, safe_for_walkers_checked, duration_ms",
     )
     .eq("id", id)
     .maybeSingle();
@@ -48,6 +49,8 @@ export default async function AudioDetailPage({ params }: Props) {
     loudness_lufs: number | null;
     true_peak_dbtp: number | null;
     max_short_term_lufs?: number | null;
+    crest_factor_db?: number | null;
+    safe_for_walkers_checked?: boolean;
     duration_ms: number;
   };
   const kind = row.kind as LoudnessAssetKind;
@@ -62,6 +65,9 @@ export default async function AudioDetailPage({ params }: Props) {
     sampleRate: row.sample_rate,
     bitrateKbps: row.bitrate_kbps ?? 0,
   });
+  const crest = row.crest_factor_db ?? null;
+  const transient =
+    crest !== null && Number.isFinite(crest) && crest > TRANSIENT_CREST_DB;
   const editable = canWriteMedia(staff.role);
 
   return (
@@ -71,8 +77,20 @@ export default async function AudioDetailPage({ params }: Props) {
         {row.kind} · {row.ext} · {row.channels} ch · {row.sample_rate} Hz ·{" "}
         {row.bitrate_kbps ?? "?"} kbps · {row.duration_ms} ms
       </p>
-      <div className="mt-3">
+      <p className="mt-1 text-sm text-textMuted">
+        Crest{" "}
+        {crest !== null && Number.isFinite(crest)
+          ? `${crest.toFixed(1)} dB`
+          : "—"}
+        {row.safe_for_walkers_checked ? " · walker checklist done" : ""}
+      </p>
+      <div className="mt-3 space-y-1">
         <AudioWarningBadges loudness={loudness} format={format} />
+        {transient ? (
+          <p className="text-sm text-amber-700" role="status">
+            TRANSIENT — crest factor over {TRANSIENT_CREST_DB} dB
+          </p>
+        ) : null}
       </div>
       <div className="mt-6 max-w-2xl">
         <AudioWaveform stagingPath={row.staging_path} />

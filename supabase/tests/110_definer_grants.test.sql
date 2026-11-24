@@ -23,6 +23,7 @@ select is(
     ) s
   ),
   array[
+    'fn_admin_set_zone_boundary(p_kind text, p_zone_id uuid, p_boundary_geojson text)',
     'fn_admin_upsert_region(p_id uuid, p_name text, p_slug text, p_timezone text, p_sun_wkt text, p_bounds_geojson text)',
     'fn_draft_check(p_grove_id uuid)',
     -- N1: trigger-only fn_fragment_revision_assign_no() is no longer granted

@@ -38,7 +38,7 @@ export default async function NewRevisionPage({ params }: Props) {
 
   const { data: assets } = await supabase
     .from("audio_assets")
-    .select("id, title, kind")
+    .select("id, title, kind, staging_path")
     .order("title");
 
   const isFirst = (count ?? 0) === 0;
@@ -58,6 +58,7 @@ export default async function NewRevisionPage({ params }: Props) {
           id: a.id as string,
           title: String(a.title ?? a.id),
           kind: String(a.kind),
+          staging_path: (a.staging_path as string | null) ?? null,
         }))}
       />
     </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   audioFormatOffTarget,
   loudnessOffTarget,
+  TRANSIENT_CREST_DB,
   type LoudnessAssetKind,
 } from "@intell/shared";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ const KINDS: LoudnessAssetKind[] = [
   "sfx_oneshot",
   "sfx_bed",
   "music_stem",
+  "music_moment",
+  "beacon",
   "voice_cue",
   "growth_cue",
 ];
@@ -36,7 +39,9 @@ export function AudioUploadForm() {
   const [warnings, setWarnings] = useState<{
     loudness: boolean;
     format: boolean;
+    transient: boolean;
   } | null>(null);
+  const [crestDb, setCrestDb] = useState<number | null>(null);
   const [loudnessMsg, setLoudnessMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,12 +51,14 @@ export function AudioUploadForm() {
     setStatus(null);
     setDuplicate(null);
     setWarnings(null);
+    setCrestDb(null);
     setLoudnessMsg(null);
     const form = e.currentTarget;
     const fd = new FormData(form);
     const file = fd.get("file");
     const title = String(fd.get("title") ?? "").trim();
     const kind = String(fd.get("kind") ?? "narration") as LoudnessAssetKind;
+    const safeForWalkers = fd.get("safe_for_walkers") === "on";
     const tags = String(fd.get("tags") ?? "")
       .split(",")
       .map((t) => t.trim())
@@ -65,7 +72,11 @@ export function AudioUploadForm() {
     try {
       const analysis = await analyzeAudioFile(file, kind);
       if (analysis.loudnessError) setLoudnessMsg(analysis.loudnessError);
+      setCrestDb(analysis.crestFactorDb);
 
+      const transient =
+        analysis.crestFactorDb !== null &&
+        analysis.crestFactorDb > TRANSIENT_CREST_DB;
       const warn = {
         loudness: loudnessOffTarget(
           kind,
@@ -78,6 +89,7 @@ export function AudioUploadForm() {
           sampleRate: analysis.sampleRate,
           bitrateKbps: analysis.bitrateKbps,
         }),
+        transient,
       };
       setWarnings(warn);
 
@@ -137,6 +149,8 @@ export function AudioUploadForm() {
         loudness_lufs: analysis.loudnessLufs,
         true_peak_dbtp: analysis.truePeakDbtp,
         max_short_term_lufs: analysis.maxShortTermLufs,
+        crest_factor_db: analysis.crestFactorDb,
+        safe_for_walkers_checked: safeForWalkers,
         staging_path: stagingPath,
       });
 
@@ -198,11 +212,38 @@ export function AudioUploadForm() {
           className="mt-1 block w-full text-sm"
         />
       </label>
-      {warnings ? (
-        <AudioWarningBadges
-          loudness={warnings.loudness}
-          format={warnings.format}
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          name="safe_for_walkers"
+          type="checkbox"
+          aria-label="Safe for walkers checklist"
+          className="mt-1"
         />
+        <span className="text-textMuted">
+          Safe for walkers — checked that this won&apos;t startle people on
+          speaker (no sudden loud spikes).
+        </span>
+      </label>
+      {crestDb !== null ? (
+        <p className="text-sm text-textMuted" role="status">
+          Crest factor: {crestDb.toFixed(1)} dB
+          {crestDb > TRANSIENT_CREST_DB
+            ? ` (TRANSIENT warning — over ${TRANSIENT_CREST_DB} dB)`
+            : ""}
+        </p>
+      ) : null}
+      {warnings ? (
+        <>
+          <AudioWarningBadges
+            loudness={warnings.loudness}
+            format={warnings.format}
+          />
+          {warnings.transient ? (
+            <p className="text-sm text-amber-700" role="status">
+              TRANSIENT — crest factor over {TRANSIENT_CREST_DB} dB
+            </p>
+          ) : null}
+        </>
       ) : null}
       {loudnessMsg ? (
         <p className="text-sm text-textMuted" role="status">

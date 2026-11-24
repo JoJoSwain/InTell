@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parseSnapshot } from "./from-shared/snapshots.ts";
 import { persistPackIfChanged, type PackPersistResult } from "./packPersist.ts";
+import { copyLandcoverGridToPublic } from "./storage.ts";
 
 function maxTs(values: (string | null | undefined)[]): string {
   let best = "1970-01-01T00:00:00.000Z";
@@ -12,12 +13,18 @@ function maxTs(values: (string | null | undefined)[]): string {
   return best;
 }
 
-export async function buildRegionPack(
+export type AssembledRegionPack = {
+  pack: Record<string, unknown>;
+  assetShas: string[];
+  bytesTotal: number;
+};
+
+/** Assemble a region pack body without persisting (Simulator / preview). */
+export async function assembleRegionPackObject(
   client: SupabaseClient,
   regionId: string,
-  reason?: string,
-  releaseId?: string,
-): Promise<PackPersistResult> {
+  opts: { copyLandcover?: boolean } = {},
+): Promise<AssembledRegionPack> {
   const watermarks: string[] = [];
   const assetMap = new Map<
     string,
@@ -69,20 +76,41 @@ export async function buildRegionPack(
         }
       }
     }
-    ambienceProfiles.push({
+    const profileEntry: Record<string, unknown> = {
       id: p.id,
       slug: p.slug,
       name: p.name,
-      layers: p.layers.map((l) => ({
-        id: l.id,
-        name: l.name,
-        kind: l.kind,
-        timeWindow: l.timeWindow,
-        wildlifeCall: l.wildlifeCall,
-        speakerSafe: l.speakerSafe,
-        assetShas: l.assetShas,
-      })),
-    });
+      layers: p.layers.map((l) => {
+        const layer: Record<string, unknown> = {
+          id: l.id,
+          name: l.name,
+          kind: l.kind,
+          timeWindow: l.timeWindow,
+          wildlifeCall: l.wildlifeCall,
+          speakerSafe: l.speakerSafe,
+          assetShas: l.assetShas,
+        };
+        if (l.months) layer.months = l.months;
+        if (l.nestingMuteMonths) layer.nestingMuteMonths = l.nestingMuteMonths;
+        if (l.gainDbMin !== undefined) layer.gainDbMin = l.gainDbMin;
+        if (l.gainDbMax !== undefined) layer.gainDbMax = l.gainDbMax;
+        if (l.panMin !== undefined) layer.panMin = l.panMin;
+        if (l.panMax !== undefined) layer.panMax = l.panMax;
+        if (l.pitchCentsMin !== undefined) layer.pitchCentsMin = l.pitchCentsMin;
+        if (l.pitchCentsMax !== undefined) layer.pitchCentsMax = l.pitchCentsMax;
+        if (l.meanIntervalS != null) layer.meanIntervalS = l.meanIntervalS;
+        if (l.minIntervalS != null) layer.minIntervalS = l.minIntervalS;
+        if (l.maxConcurrent !== undefined) layer.maxConcurrent = l.maxConcurrent;
+        if (l.noRepeatLast !== undefined) layer.noRepeatLast = l.noRepeatLast;
+        if (l.crossfadeMs !== undefined) layer.crossfadeMs = l.crossfadeMs;
+        if (l.assetWeights && l.assetWeights.length > 0) {
+          layer.assetWeights = l.assetWeights;
+        }
+        return layer;
+      }),
+    };
+    if (p.density !== undefined) profileEntry.density = p.density;
+    ambienceProfiles.push(profileEntry);
   }
 
   const { data: zoneRows } = await client
@@ -207,10 +235,23 @@ export async function buildRegionPack(
 
   let landcoverOut: Record<string, unknown> | null = null;
   if (landcover) {
-    // Prefer a real content sha when present; M2 seed stored a path, not a sha256.
     const rawSha = String(landcover.sha ?? "");
     const gridSha = /^[0-9a-f]{64}$/i.test(rawSha) ? rawSha.toLowerCase() : null;
     if (gridSha) {
+      if (opts.copyLandcover !== false) {
+        try {
+          await copyLandcoverGridToPublic(
+            client,
+            gridSha,
+            String(landcover.file_path),
+          );
+        } catch (err) {
+          // Pack still carries gridSha; phones fetch landcover/{sha}.* when present.
+          console.warn(
+            `landcover copy skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
       const classes = [];
       for (const c of landcoverClasses ?? []) {
         const { data: prof } = c.profile_id
@@ -256,12 +297,28 @@ export async function buildRegionPack(
     })),
   };
 
+  return {
+    pack,
+    assetShas: assets.map((a) => a.sha.toLowerCase()),
+    bytesTotal: assets.reduce((n, a) => n + a.bytes, 0),
+  };
+}
+
+export async function buildRegionPack(
+  client: SupabaseClient,
+  regionId: string,
+  reason?: string,
+  releaseId?: string,
+): Promise<PackPersistResult> {
+  const assembled = await assembleRegionPackObject(client, regionId, {
+    copyLandcover: true,
+  });
   return persistPackIfChanged(client, {
     scope: "region",
     scopeId: regionId,
-    body: pack,
-    assetShas: assets.map((a) => a.sha.toLowerCase()),
-    bytesTotal: assets.reduce((n, a) => n + a.bytes, 0),
+    body: assembled.pack,
+    assetShas: assembled.assetShas,
+    bytesTotal: assembled.bytesTotal,
     reason,
     releaseId,
   });

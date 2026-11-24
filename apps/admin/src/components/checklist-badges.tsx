@@ -71,9 +71,12 @@ export function ChecklistBadges({
 export function GroupedChecklist({
   failures,
   className,
+  ariaLabel = "Checklist results",
 }: {
   failures: ChecklistFailure[];
   className?: string;
+  /** Distinct when multiple checklists appear on one page (A5 sound panel). */
+  ariaLabel?: string;
 }) {
   if (!failures.length) return null;
 
@@ -87,7 +90,7 @@ export function GroupedChecklist({
   const codes = [...byCode.keys()].sort();
 
   return (
-    <div className={cn("space-y-4", className)} aria-label="Checklist results">
+    <div className={cn("space-y-4", className)} aria-label={ariaLabel}>
       {codes.map((code) => {
         const items = byCode.get(code) ?? [];
         const severity = items[0]?.severity ?? "error";

@@ -117,14 +117,14 @@ isOneToOne: false
                   ]
                 },"audio_assets": {
                   Row: {
-                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"max_short_term_lufs": number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string,"fn_check_audio_asset": Json | null
+                    "bitrate_kbps": number | null,"bytes": number,"channels": number,"created_at": string,"created_by": string | null,"crest_factor_db": number | null,"duration_ms": number,"ext": string,"id": string,"is_public": boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms": number | null,"loop_start_ms": number | null,"loudness_lufs": number | null,"max_short_term_lufs": number | null,"safe_for_walkers_checked": boolean,"sample_rate": number,"sha256": string,"staging_path": string,"tags": (string)[],"title": string,"true_peak_dbtp": number | null,"updated_at": string,"fn_check_audio_asset": Json | null
                   }
                   ComputedFields: "fn_check_audio_asset"
                   Insert: {
-                    "bitrate_kbps"?: number | null,"bytes": number,"channels": number,"created_at"?: string,"created_by"?: string | null,"duration_ms": number,"ext": string,"id"?: string,"is_public"?: boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"sample_rate": number,"sha256": string,"staging_path": string,"tags"?: (string)[],"title": string,"true_peak_dbtp"?: number | null,"updated_at"?: string
+                    "bitrate_kbps"?: number | null,"bytes": number,"channels": number,"created_at"?: string,"created_by"?: string | null,"crest_factor_db"?: number | null,"duration_ms": number,"ext": string,"id"?: string,"is_public"?: boolean,"kind": Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"safe_for_walkers_checked"?: boolean,"sample_rate": number,"sha256": string,"staging_path": string,"tags"?: (string)[],"title": string,"true_peak_dbtp"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "bitrate_kbps"?: number | null,"bytes"?: number,"channels"?: number,"created_at"?: string,"created_by"?: string | null,"duration_ms"?: number,"ext"?: string,"id"?: string,"is_public"?: boolean,"kind"?: Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"sample_rate"?: number,"sha256"?: string,"staging_path"?: string,"tags"?: (string)[],"title"?: string,"true_peak_dbtp"?: number | null,"updated_at"?: string
+                    "bitrate_kbps"?: number | null,"bytes"?: number,"channels"?: number,"created_at"?: string,"created_by"?: string | null,"crest_factor_db"?: number | null,"duration_ms"?: number,"ext"?: string,"id"?: string,"is_public"?: boolean,"kind"?: Database["public"]['Enums']["asset_kind"],"loop_end_ms"?: number | null,"loop_start_ms"?: number | null,"loudness_lufs"?: number | null,"max_short_term_lufs"?: number | null,"safe_for_walkers_checked"?: boolean,"sample_rate"?: number,"sha256"?: string,"staging_path"?: string,"tags"?: (string)[],"title"?: string,"true_peak_dbtp"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -431,14 +431,14 @@ isOneToOne: false
                   ]
                 },"fragments": {
                   Row: {
-                    "created_at": string,"grove_id": string,"id": string,"indigeny_body": string | null,"indigeny_earth": string | null,"indigeny_world": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"teaser": NonNullable<Json>,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"],"fn_check_fragment_local": Json | null,"location_geojson": Json | null
+                    "beacon_asset_id": string | null,"created_at": string,"grove_id": string,"id": string,"indigeny_body": string | null,"indigeny_earth": string | null,"indigeny_world": string | null,"is_ending": boolean,"location": unknown,"marker_code": string | null,"resolve_asset_id": string | null,"status": Database["public"]['Enums']["publish_status"],"story_order": number,"teaser": NonNullable<Json>,"teaser_locked_asset_id": string | null,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m": number,"updated_at": string,"visibility": Database["public"]['Enums']["fragment_visibility"],"fn_check_fragment_local": Json | null,"location_geojson": Json | null
                   }
                   ComputedFields: "fn_check_fragment_local" | "location_geojson"
                   Insert: {
-                    "created_at"?: string,"grove_id": string,"id"?: string,"indigeny_body"?: string | null,"indigeny_earth"?: string | null,"indigeny_world"?: string | null,"is_ending"?: boolean,"location": unknown,"marker_code"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order": number,"teaser"?: NonNullable<Json>,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
+                    "beacon_asset_id"?: string | null,"created_at"?: string,"grove_id": string,"id"?: string,"indigeny_body"?: string | null,"indigeny_earth"?: string | null,"indigeny_world"?: string | null,"is_ending"?: boolean,"location": unknown,"marker_code"?: string | null,"resolve_asset_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order": number,"teaser"?: NonNullable<Json>,"teaser_locked_asset_id"?: string | null,"tier": Database["public"]['Enums']["tier"],"title": NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
                   }
                   Update: {
-                    "created_at"?: string,"grove_id"?: string,"id"?: string,"indigeny_body"?: string | null,"indigeny_earth"?: string | null,"indigeny_world"?: string | null,"is_ending"?: boolean,"location"?: unknown,"marker_code"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order"?: number,"teaser"?: NonNullable<Json>,"tier"?: Database["public"]['Enums']["tier"],"title"?: NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
+                    "beacon_asset_id"?: string | null,"created_at"?: string,"grove_id"?: string,"id"?: string,"indigeny_body"?: string | null,"indigeny_earth"?: string | null,"indigeny_world"?: string | null,"is_ending"?: boolean,"location"?: unknown,"marker_code"?: string | null,"resolve_asset_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"story_order"?: number,"teaser"?: NonNullable<Json>,"teaser_locked_asset_id"?: string | null,"tier"?: Database["public"]['Enums']["tier"],"title"?: NonNullable<Json>,"trigger_radius_m"?: number,"updated_at"?: string,"visibility"?: Database["public"]['Enums']["fragment_visibility"]
                   }
                   Relationships: [
                     {
@@ -489,16 +489,42 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"groves": {
+                },"grove_sound_cues": {
                   Row: {
-                    "allows_speaker_wildlife_sounds": boolean,"created_at": string,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null
+                    "asset_id": string,"created_at": string,"grove_id": string,"id": string,"kind": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "asset_id": string,"created_at"?: string,"grove_id": string,"id"?: string,"kind": string,"updated_at"?: string
                   }
                   Update: {
-                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                    "asset_id"?: string,"created_at"?: string,"grove_id"?: string,"id"?: string,"kind"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "grove_sound_cues_asset_id_fkey"
+      columns: ["asset_id"]
+isOneToOne: false
+      referencedRelation: "audio_assets"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "grove_sound_cues_grove_id_fkey"
+      columns: ["grove_id"]
+isOneToOne: false
+      referencedRelation: "groves"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"groves": {
+                  Row: {
+                    "allows_speaker_wildlife_sounds": boolean,"created_at": string,"depth_bloom_texture_m": number,"gatherings_url": string | null,"growth_cue_id": string | null,"id": string,"name": NonNullable<Json>,"pack_version": number,"premise": NonNullable<Json>,"published_at": string | null,"region_id": string,"slug": string,"status": Database["public"]['Enums']["publish_status"],"updated_at": string,"website_url": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"depth_bloom_texture_m"?: number,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name": NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id": string,"slug": string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
+                  }
+                  Update: {
+                    "allows_speaker_wildlife_sounds"?: boolean,"created_at"?: string,"depth_bloom_texture_m"?: number,"gatherings_url"?: string | null,"growth_cue_id"?: string | null,"id"?: string,"name"?: NonNullable<Json>,"pack_version"?: number,"premise"?: NonNullable<Json>,"published_at"?: string | null,"region_id"?: string,"slug"?: string,"status"?: Database["public"]['Enums']["publish_status"],"updated_at"?: string,"website_url"?: string | null
                   }
                   Relationships: [
                     {
@@ -635,14 +661,14 @@ isOneToOne: false
                   ]
                 },"landcover_grids": {
                   Row: {
-                    "file_path": string,"generated_at": string,"h3_resolution": number,"region_id": string,"source": string,"version": number
+                    "file_path": string,"generated_at": string,"h3_resolution": number,"region_id": string,"sha": string | null,"source": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "file_path": string,"generated_at": string,"h3_resolution"?: number,"region_id": string,"source": string,"version": number
+                    "file_path": string,"generated_at": string,"h3_resolution"?: number,"region_id": string,"sha"?: string | null,"source": string,"version": number
                   }
                   Update: {
-                    "file_path"?: string,"generated_at"?: string,"h3_resolution"?: number,"region_id"?: string,"source"?: string,"version"?: number
+                    "file_path"?: string,"generated_at"?: string,"h3_resolution"?: number,"region_id"?: string,"sha"?: string | null,"source"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -681,14 +707,14 @@ isOneToOne: false
                   ]
                 },"music_cues": {
                   Row: {
-                    "conditions": NonNullable<Json>,"created_at": string,"crossfade_ms": number,"grove_id": string | null,"id": string,"min_dwell_s": number,"music_zone_id": string | null,"name": string,"priority": number,"status": Database["public"]['Enums']["publish_status"],"time_window": Database["public"]['Enums']["time_window"],"updated_at": string
+                    "conditions": NonNullable<Json>,"created_at": string,"crossfade_ms": number,"grove_id": string | null,"id": string,"min_dwell_s": number,"music_zone_id": string | null,"name": string,"priority": number,"resolve_branch_asset_id": string | null,"resolve_leaf_asset_id": string | null,"resolve_root_asset_id": string | null,"status": Database["public"]['Enums']["publish_status"],"time_window": Database["public"]['Enums']["time_window"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conditions"?: NonNullable<Json>,"created_at"?: string,"crossfade_ms"?: number,"grove_id"?: string | null,"id"?: string,"min_dwell_s"?: number,"music_zone_id"?: string | null,"name": string,"priority"?: number,"status"?: Database["public"]['Enums']["publish_status"],"time_window"?: Database["public"]['Enums']["time_window"],"updated_at"?: string
+                    "conditions"?: NonNullable<Json>,"created_at"?: string,"crossfade_ms"?: number,"grove_id"?: string | null,"id"?: string,"min_dwell_s"?: number,"music_zone_id"?: string | null,"name": string,"priority"?: number,"resolve_branch_asset_id"?: string | null,"resolve_leaf_asset_id"?: string | null,"resolve_root_asset_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"time_window"?: Database["public"]['Enums']["time_window"],"updated_at"?: string
                   }
                   Update: {
-                    "conditions"?: NonNullable<Json>,"created_at"?: string,"crossfade_ms"?: number,"grove_id"?: string | null,"id"?: string,"min_dwell_s"?: number,"music_zone_id"?: string | null,"name"?: string,"priority"?: number,"status"?: Database["public"]['Enums']["publish_status"],"time_window"?: Database["public"]['Enums']["time_window"],"updated_at"?: string
+                    "conditions"?: NonNullable<Json>,"created_at"?: string,"crossfade_ms"?: number,"grove_id"?: string | null,"id"?: string,"min_dwell_s"?: number,"music_zone_id"?: string | null,"name"?: string,"priority"?: number,"resolve_branch_asset_id"?: string | null,"resolve_leaf_asset_id"?: string | null,"resolve_root_asset_id"?: string | null,"status"?: Database["public"]['Enums']["publish_status"],"time_window"?: Database["public"]['Enums']["time_window"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -847,14 +873,14 @@ isOneToOne: false
                   ]
                 },"revision_versions": {
                   Row: {
-                    "created_at": string,"id": string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint": NonNullable<Json>,"revision_id": string,"time_window": Database["public"]['Enums']["time_window"],"transcript": string,"updated_at": string,"vtt": string | null
+                    "breath_points_ms": (number)[],"created_at": string,"id": string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint": NonNullable<Json>,"revision_id": string,"swell_cues_ms": (number)[],"time_window": Database["public"]['Enums']["time_window"],"transcript": string,"updated_at": string,"vtt": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint"?: NonNullable<Json>,"revision_id": string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript": string,"updated_at"?: string,"vtt"?: string | null
+                    "breath_points_ms"?: (number)[],"created_at"?: string,"id"?: string,"language": Database["public"]['Enums']["lang"],"narration_asset_id": string,"other_time_hint"?: NonNullable<Json>,"revision_id": string,"swell_cues_ms"?: (number)[],"time_window"?: Database["public"]['Enums']["time_window"],"transcript": string,"updated_at"?: string,"vtt"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"language"?: Database["public"]['Enums']["lang"],"narration_asset_id"?: string,"other_time_hint"?: NonNullable<Json>,"revision_id"?: string,"time_window"?: Database["public"]['Enums']["time_window"],"transcript"?: string,"updated_at"?: string,"vtt"?: string | null
+                    "breath_points_ms"?: (number)[],"created_at"?: string,"id"?: string,"language"?: Database["public"]['Enums']["lang"],"narration_asset_id"?: string,"other_time_hint"?: NonNullable<Json>,"revision_id"?: string,"swell_cues_ms"?: (number)[],"time_window"?: Database["public"]['Enums']["time_window"],"transcript"?: string,"updated_at"?: string,"vtt"?: string | null
                   }
                   Relationships: [
                     {
@@ -1035,6 +1061,9 @@ isOneToOne: false
 "fn_pack_geog_geojson":
 { Args: { "p_id": string,"p_scope": string }; Returns: Json
                            },
+"fn_a5_sound_check_issues":
+{ Args: { "p_release_id": string }; Returns: Json
+                           },
 "fn_publish_check":
 { Args: { "p_release_id": string }; Returns: Json
                            },
@@ -1093,7 +1122,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "asset_kind": "narration"|"sfx_oneshot"|"sfx_bed"|"music_stem"|"voice_cue"|"growth_cue","change_kind": "contingency"|"correction","character_prominence": "major"|"minor","entry_kind": "next"|"character"|"noticed"|"answer"|"memory","entry_status": "submitted"|"read"|"sprouting"|"grown"|"resting"|"hidden","fragment_visibility": "standard"|"physical","journey_mode": "walk"|"bike"|"transit","lang": "en"|"es","publish_status": "draft"|"in_review"|"approved"|"published"|"retired"|"unpublished","release_status": "draft"|"scheduled"|"publishing"|"published"|"failed"|"cancelled","staff_role": "admin"|"editor"|"writer"|"sound"|"moderator"|"viewer","tier": "root"|"branch"|"leaf","time_window": "day"|"night"
+            "asset_kind": "narration"|"sfx_oneshot"|"sfx_bed"|"music_stem"|"music_moment"|"beacon"|"voice_cue"|"growth_cue","change_kind": "contingency"|"correction","character_prominence": "major"|"minor","entry_kind": "next"|"character"|"noticed"|"answer"|"memory","entry_status": "submitted"|"read"|"sprouting"|"grown"|"resting"|"hidden","fragment_visibility": "standard"|"physical","journey_mode": "walk"|"bike"|"transit","lang": "en"|"es","publish_status": "draft"|"in_review"|"approved"|"published"|"retired"|"unpublished","release_status": "draft"|"scheduled"|"publishing"|"published"|"failed"|"cancelled","staff_role": "admin"|"editor"|"writer"|"sound"|"moderator"|"viewer","tier": "root"|"branch"|"leaf","time_window": "day"|"night"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1213,7 +1242,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "asset_kind": ["narration", "sfx_oneshot", "sfx_bed", "music_stem", "voice_cue", "growth_cue"],"change_kind": ["contingency", "correction"],"character_prominence": ["major", "minor"],"entry_kind": ["next", "character", "noticed", "answer", "memory"],"entry_status": ["submitted", "read", "sprouting", "grown", "resting", "hidden"],"fragment_visibility": ["standard", "physical"],"journey_mode": ["walk", "bike", "transit"],"lang": ["en", "es"],"publish_status": ["draft", "in_review", "approved", "published", "retired", "unpublished"],"release_status": ["draft", "scheduled", "publishing", "published", "failed", "cancelled"],"staff_role": ["admin", "editor", "writer", "sound", "moderator", "viewer"],"tier": ["root", "branch", "leaf"],"time_window": ["day", "night"]
+            "asset_kind": ["narration", "sfx_oneshot", "sfx_bed", "music_stem", "music_moment", "beacon", "voice_cue", "growth_cue"],"change_kind": ["contingency", "correction"],"character_prominence": ["major", "minor"],"entry_kind": ["next", "character", "noticed", "answer", "memory"],"entry_status": ["submitted", "read", "sprouting", "grown", "resting", "hidden"],"fragment_visibility": ["standard", "physical"],"journey_mode": ["walk", "bike", "transit"],"lang": ["en", "es"],"publish_status": ["draft", "in_review", "approved", "published", "retired", "unpublished"],"release_status": ["draft", "scheduled", "publishing", "published", "failed", "cancelled"],"staff_role": ["admin", "editor", "writer", "sound", "moderator", "viewer"],"tier": ["root", "branch", "leaf"],"time_window": ["day", "night"]
           }
         }
 } as const

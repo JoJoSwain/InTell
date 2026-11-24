@@ -10,6 +10,8 @@ export type LoudnessAssetKind =
   | "sfx_oneshot"
   | "sfx_bed"
   | "music_stem"
+  | "music_moment"
+  | "beacon"
   | "voice_cue"
   | "growth_cue";
 
@@ -17,6 +19,11 @@ export type LoudnessResult = {
   integrated: number;
   maxShortTerm: number;
   truePeak: number;
+  /**
+   * Crest factor in dB: true peak vs RMS of the loudest 400 ms
+   * (TRANSIENT when > TRANSIENT_CREST_DB).
+   */
+  crestFactorDb: number;
 };
 
 /** Target integrated LUFS (oneshot warning uses short-term vs −24; see loudnessOffTarget). */
@@ -25,6 +32,8 @@ export const LOUDNESS_TARGETS: Readonly<Record<LoudnessAssetKind, number>> = {
   sfx_oneshot: -24,
   sfx_bed: -30,
   music_stem: -23,
+  music_moment: -20,
+  beacon: -30,
   voice_cue: -18,
   growth_cue: -18,
 };
@@ -35,6 +44,8 @@ export const BITRATE_TARGETS: Readonly<Record<LoudnessAssetKind, number>> = {
   sfx_oneshot: 128,
   sfx_bed: 128,
   music_stem: 160,
+  music_moment: 160,
+  beacon: 96,
   voice_cue: 96,
   growth_cue: 96,
 };
@@ -189,29 +200,136 @@ function truePeakDbTp(channels: Float32Array[]): number {
   return 20 * Math.log10(peak);
 }
 
+const SEGMENT_SEC = 0.1;
+
 /**
- * Measure integrated loudness, max short-term loudness, and true peak.
+ * Per-100 ms segment mean-square of K-weighted energy (O(n) prefix sums).
+ * Window mean-square over equal-length segments is O(1).
+ */
+function segmentMeanSquares(
+  weighted: Float32Array[],
+  weights: number[],
+  length: number,
+  segmentSamples: number,
+): Float64Array {
+  const nSeg = Math.floor(length / segmentSamples);
+  const seg = new Float64Array(nSeg);
+  for (let i = 0; i < nSeg; i++) {
+    const start = i * segmentSamples;
+    seg[i] = weightedMeanSquare(
+      weighted,
+      weights,
+      start,
+      start + segmentSamples,
+    );
+  }
+  return seg;
+}
+
+function prefixSums(seg: Float64Array): Float64Array {
+  const p = new Float64Array(seg.length + 1);
+  for (let i = 0; i < seg.length; i++) {
+    p[i + 1] = (p[i] ?? 0) + (seg[i] ?? 0);
+  }
+  return p;
+}
+
+/** Mean square over segments [from, to) via prefix sums. */
+function windowMsFromPrefix(
+  prefix: Float64Array,
+  from: number,
+  to: number,
+): number {
+  const n = to - from;
+  if (n <= 0) return 0;
+  return ((prefix[to] ?? 0) - (prefix[from] ?? 0)) / n;
+}
+
+/**
+ * Crest factor (dB): true peak vs RMS of the loudest 400 ms on planar PCM.
+ */
+export function crestFactorDb(
+  channels: Float32Array[],
+  sampleRate: number,
+  truePeak: number,
+): number {
+  if (
+    channels.length === 0 ||
+    !Number.isFinite(sampleRate) ||
+    sampleRate <= 0 ||
+    !Number.isFinite(truePeak)
+  ) {
+    return -Infinity;
+  }
+  const length = channels.reduce(
+    (min, ch) => Math.min(min, ch.length),
+    channels[0]?.length ?? 0,
+  );
+  if (length === 0) return -Infinity;
+
+  const blockSamples = Math.max(1, Math.round(BLOCK_SEC * sampleRate));
+  const hopSamples = Math.max(1, Math.round(HOP_SEC * sampleRate));
+  let maxMs = 0;
+  let found = false;
+  if (length < blockSamples) {
+    maxMs = weightedMeanSquare(
+      channels,
+      channelWeights(channels.length),
+      0,
+      length,
+    );
+    found = true;
+  } else {
+    for (
+      let start = 0;
+      start + blockSamples <= length;
+      start += hopSamples
+    ) {
+      const z = weightedMeanSquare(
+        channels,
+        channelWeights(channels.length),
+        start,
+        start + blockSamples,
+      );
+      if (!found || z > maxMs) {
+        maxMs = z;
+        found = true;
+      }
+    }
+  }
+  if (!found || !(maxMs > 0)) return Number.POSITIVE_INFINITY;
+  const rmsDb = 10 * Math.log10(maxMs);
+  return truePeak - rmsDb;
+}
+
+/**
+ * Measure integrated loudness, max short-term loudness, true peak, and crest.
  * Expects planar PCM already at the admin analysis rate (48 kHz).
+ * Short-term / gated blocks use per-100 ms segment sums (O(n)).
  */
 export function measureLoudness(
   channels: Float32Array[],
   sampleRate: number,
 ): LoudnessResult {
+  const empty: LoudnessResult = {
+    integrated: -Infinity,
+    maxShortTerm: -Infinity,
+    truePeak: -Infinity,
+    crestFactorDb: -Infinity,
+  };
   if (
     channels.length === 0 ||
     !Number.isFinite(sampleRate) ||
     sampleRate <= 0
   ) {
-    return { integrated: -Infinity, maxShortTerm: -Infinity, truePeak: -Infinity };
+    return empty;
   }
 
   const length = channels.reduce(
     (min, ch) => Math.min(min, ch.length),
     channels[0]?.length ?? 0,
   );
-  if (length === 0) {
-    return { integrated: -Infinity, maxShortTerm: -Infinity, truePeak: -Infinity };
-  }
+  if (length === 0) return empty;
 
   const planar = channels.map((ch) =>
     ch.length === length ? ch : ch.subarray(0, length),
@@ -221,23 +339,22 @@ export function measureLoudness(
   const durationSec = length / sampleRate;
   const truePeak = truePeakDbTp(planar);
 
-  const blockSamples = Math.max(1, Math.round(BLOCK_SEC * sampleRate));
-  const hopSamples = Math.max(1, Math.round(HOP_SEC * sampleRate));
-  const shortSamples = Math.max(1, Math.round(SHORT_TERM_SEC * sampleRate));
+  const segmentSamples = Math.max(1, Math.round(SEGMENT_SEC * sampleRate));
+  const segsPerBlock = Math.max(1, Math.round(BLOCK_SEC / SEGMENT_SEC)); // 4
+  const segsPerShort = Math.max(1, Math.round(SHORT_TERM_SEC / SEGMENT_SEC)); // 30
+  const segMs = segmentMeanSquares(weighted, weights, length, segmentSamples);
+  const prefix = prefixSums(segMs);
 
-  // --- Integrated (gated) ---
+  // --- Integrated (gated): 400 ms blocks, 100 ms hop via segments ---
   const blockMs: number[] = [];
   for (
-    let start = 0;
-    start + blockSamples <= length;
-    start += hopSamples
+    let from = 0;
+    from + segsPerBlock <= segMs.length;
+    from += 1
   ) {
-    blockMs.push(
-      weightedMeanSquare(weighted, weights, start, start + blockSamples),
-    );
+    blockMs.push(windowMsFromPrefix(prefix, from, from + segsPerBlock));
   }
 
-  // Absolute gate −70 LUFS, then relative −10 LU.
   const absThresh = Math.pow(10, (ABSOLUTE_GATE_LUFS - LUFS_OFFSET) / 10);
   const afterAbs = blockMs.filter((z) => z > absThresh);
   let integrated: number;
@@ -257,40 +374,24 @@ export function measureLoudness(
     }
   }
 
-  // --- Max short-term (ungated 3 s windows) ---
+  // --- Max short-term (ungated 3 s windows) via segment prefix sums ---
   // Clips under 3 s: ungated K-weighted mean square of the whole clip (C3).
-  // integrated stays gated BS.1770 (may be −∞ when shorter than one 400 ms block).
   let maxShortTerm: number;
   if (durationSec < SHORT_TERM_SEC) {
+    const z = weightedMeanSquare(weighted, weights, 0, length);
+    maxShortTerm = loudnessFromWeightedMs(z);
+  } else if (segMs.length < segsPerShort) {
     const z = weightedMeanSquare(weighted, weights, 0, length);
     maxShortTerm = loudnessFromWeightedMs(z);
   } else {
     let maxMs = 0;
     let found = false;
     for (
-      let start = 0;
-      start + shortSamples <= length;
-      start += hopSamples
+      let from = 0;
+      from + segsPerShort <= segMs.length;
+      from += 1
     ) {
-      const z = weightedMeanSquare(
-        weighted,
-        weights,
-        start,
-        start + shortSamples,
-      );
-      if (!found || z > maxMs) {
-        maxMs = z;
-        found = true;
-      }
-    }
-    // Also cover a final window ending at EOF if not aligned.
-    if (length >= shortSamples) {
-      const z = weightedMeanSquare(
-        weighted,
-        weights,
-        length - shortSamples,
-        length,
-      );
+      const z = windowMsFromPrefix(prefix, from, from + segsPerShort);
       if (!found || z > maxMs) {
         maxMs = z;
         found = true;
@@ -299,7 +400,8 @@ export function measureLoudness(
     maxShortTerm = found ? loudnessFromWeightedMs(maxMs) : -Infinity;
   }
 
-  return { integrated, maxShortTerm, truePeak };
+  const crest = crestFactorDb(planar, sampleRate, truePeak);
+  return { integrated, maxShortTerm, truePeak, crestFactorDb: crest };
 }
 
 /**
@@ -353,13 +455,17 @@ export function audioFormatOffTarget(
   const ch = params.channels;
   switch (kind) {
     case "narration":
+      // Stereo allowed when the fragment has character links (checked at publish).
+      return ch !== 1 && ch !== 2;
     case "voice_cue":
     case "growth_cue":
+    case "beacon":
       return ch !== 1;
     case "sfx_oneshot":
       return ch !== 1 && ch !== 2;
     case "sfx_bed":
     case "music_stem":
+    case "music_moment":
       return ch !== 2;
     default: {
       const _exhaustive: never = kind;

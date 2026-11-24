@@ -65,7 +65,7 @@ Regions carry the timezone, the Day/Night sun reference and the shared surroundi
 ```sql
 create table audio_assets (
   id uuid pk,
-  kind asset_kind not null,
+  kind asset_kind not null,                        -- includes music_moment (resolves/motifs) and beacon (A5)
   sha256 text unique not null,                     -- content address
   ext text not null check (ext in ('m4a','mp3','wav','caf','ogg')),
   bytes int not null, duration_ms int not null,
@@ -73,7 +73,9 @@ create table audio_assets (
   sample_rate int not null,
   bitrate_kbps int,                                -- measured at upload; checked against AUDIO_SPEC §6
   loudness_lufs numeric(5,2), true_peak_dbtp numeric(5,2),  -- measured at upload in the browser
-  loop_start_ms int, loop_end_ms int,              -- beds and music stems
+  crest_factor_db numeric(5,2),                    -- A5: true peak vs RMS of loudest 400 ms; TRANSIENT if > 20
+  safe_for_walkers_checked boolean not null default false,  -- A5 upload checklist
+  loop_start_ms int, loop_end_ms int,              -- beds, music stems, beacons
   title text not null, tags text[] not null default '{}',
   staging_path text not null,                      -- staging-audio/{sha256}.{ext}
   is_public boolean not null default false,        -- mirrors public-media/a/{sha256}.{ext}; set only by the reconciler
@@ -106,11 +108,22 @@ create table groves (
   website_url text, gatherings_url text,
   allows_speaker_wildlife_sounds boolean not null default false,
   -- no boundary column: the grove's shape is derived from its fragments when packs build (ADR 0006, A2)
+  depth_bloom_texture_m numeric(6,2) not null default 15,  -- A5 depth-bloom texture threshold (m)
   growth_cue_id uuid references audio_assets(id),  -- "This part grew from ideas listeners shared… including yours."
   status publish_status not null default 'draft',
   pack_version int not null default 0,
   published_at timestamptz,
   …ts, unique (region_id, slug)
+);
+
+-- A5: grove-level beacons and threshold motifs (snapshotted / released like other story fields)
+create table grove_sound_cues (
+  id uuid pk, grove_id uuid not null references groves(id) on delete cascade,
+  kind text not null check (kind in (
+    'beacon_root','beacon_branch','beacon_leaf',
+    'threshold_motif_day','threshold_motif_night')),
+  asset_id uuid not null references audio_assets(id),
+  …ts, unique (grove_id, kind)
 );
 -- v3/ADR 0005: no access_notes. Arrival logistics (parking, racks, stops, terrain) are left to the listener.
 
@@ -152,6 +165,9 @@ create table fragments (
   marker_code text unique,                         -- required when physical; printed as a QR link
   story_order numeric not null,                    -- canonical narrative order (Chronicle views)
   indigeny_earth text, indigeny_world text, indigeny_body text,   -- Story Notes: the Indigeny note
+  beacon_asset_id uuid references audio_assets(id),           -- A5; else grove default by tier
+  resolve_asset_id uuid references audio_assets(id),          -- A5; overrides cue tier resolve
+  teaser_locked_asset_id uuid references audio_assets(id),    -- A5 whispered teaser (voice_cue)
   status publish_status not null default 'draft',  -- 'retired' hides from the map, keeps the Chronicle
   …ts,
   check (not is_ending or tier = 'root')
@@ -210,6 +226,8 @@ create table revision_versions (
   time_window time_window not null,                -- Day or Night
   narration_asset_id uuid not null references audio_assets(id),
   transcript text not null, vtt text,
+  breath_points_ms int[] not null default '{}',    -- A5; silences ≥ 350 ms (editable)
+  swell_cues_ms int[] not null default '{}',       -- A5
   other_time_hint jsonb not null default '{}',     -- L10n, public: the Chronicle line advertising THIS version to a listener
                                                    -- who has heard only the other time window (ADR 0005 §4); required when
                                                    -- the revision has both Day and Night versions
@@ -308,8 +326,11 @@ create table music_cues (
   grove_id uuid references groves(id) on delete cascade,   -- grove boundary acts as the zone
   time_window time_window not null,                -- Day or Night (required)
   priority int not null default 100,
-  conditions jsonb not null default '{}',          -- zod MusicCondition (AUDIO_SPEC §4.2)
+  conditions jsonb not null default '{}',          -- zod MusicCondition (AUDIO_SPEC §4.2); may include minDepthM, insideTierBuffer
   min_dwell_s int not null default 45, crossfade_ms int not null default 6000,
+  resolve_root_asset_id uuid references audio_assets(id),     -- A5 music_moment, 4–8 s
+  resolve_branch_asset_id uuid references audio_assets(id),   -- 3–6 s
+  resolve_leaf_asset_id uuid references audio_assets(id),     -- 2–4 s
   status publish_status not null default 'draft',
   …ts,
   check (num_nonnulls(music_zone_id, grove_id) = 1)
@@ -323,7 +344,7 @@ create table music_cue_stems (
   …ts
 );
 ```
-All stems in a cue must have equal `duration_ms` and loop points (enforced at publish). Music conditions no longer reference rings, crossroads or time windows (AUDIO_SPEC §4.2).
+All stems in a cue must have equal `duration_ms` and loop points (enforced at publish). At most **4 stems per cue** (failure `STEMS_OVER_MAX`). Per grove and time window, the base cue plus cues whose conditions use only `heardAll` must total ≤ **4** (failure `GROWTH_STEPS_OVER_MAX`). Music conditions no longer reference rings, crossroads or time windows (AUDIO_SPEC §4.2).
 
 ---
 
@@ -585,18 +606,22 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
                 changeTeaser?,     // from the revision numbered contingencyRevisionNo (the latest contingency), even if
                                    // corrections followed it; omitted when contingencyRevisionNo = 1
                 versions: [{ lang, timeWindow: 'day'|'night', assetSha, durationMs, bytes, transcript, vtt?,
-                             otherTimeHint? }] }],
+                             otherTimeHint?, breathPointsMs?, swellCuesMs? }] }],
   questions: [{ id, text, anchorFragmentId?, anchorCharacterId?, requiresCompleted, opensAt, closesAt }],
-  music: { cues: [{ id, zone?: GeoJSON.Polygon, useGroveBoundary: boolean, timeWindow, priority, conditions,
-                    minDwellS, crossfadeMs, stems: [{ assetSha, role, gainDb, stateGains, loopStartMs, loopEndMs }] }] },
+  music: { cues: [{ id, zone?: GeoJSON.Polygon, useGroveBoundary: boolean, edgeFadeM?, timeWindow, priority, conditions,
+                    minDwellS, crossfadeMs,
+                    resolveRootAssetSha?, resolveBranchAssetSha?, resolveLeafAssetSha?,
+                    stems: [{ assetSha, role, gainDb, stateGains, loopStartMs, loopEndMs }] /* ≤4 */ }] },
+  soundCues?: [{ kind, assetSha }],   // A5 grove_sound_cues (omit key when empty — builder leaves absent keys out)
   ambienceZones: [{ id, boundary, profileSlug, priority, edgeFadeM }],   // zones intersecting grove bbox + 1 km
   gatherings: [{ title /* L10n */, startsAt, url }],
-  assets: [{ sha, ext, bytes, kind }]   // kind: asset_kind | 'image'
+  assets: [{ sha, ext, bytes, kind }]   // kind: asset_kind | 'image' (includes music_moment, beacon)
 }
 ```
+Fragments also optionally carry `beaconAssetSha?`, `resolveAssetSha?`, `teaserLockedAssetSha?`. Grove may carry `depthBloomTextureM?` (default 15 when omitted on device).
 
 ### 12.2 Region pack
-`public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack` (`schema: 2`): `timezone`, `sunReference: {lat, lng}`, `ambienceProfiles` with their layers (each with `timeWindow`) and asset shas, `landcover: {gridSha, h3Resolution, classes} | null`, region-wide `ambienceZones` and `musicZones`/cues not tied to a grove, `uiCues`, `assets`. Profile and layer names are plain strings (staff-facing), as in SQL.
+`public-media/packs/region/{region_id}/{version}.json`, zod `RegionPack` (`schema: 2`): `timezone`, `sunReference: {lat, lng}`, `ambienceProfiles` with their layers (each with `timeWindow`) and asset shas — A5 optionally carries layer `months`, nesting months, gain/pan/pitch ranges, intervals, `noRepeatLast`, `crossfadeMs`, asset weights, and profile `density` — `landcover: {gridSha, h3Resolution, classes} | null`, region-wide `ambienceZones` and `musicZones`/cues not tied to a grove, `uiCues`, `assets`. Profile and layer names are plain strings (staff-facing), as in SQL.
 
 ### 12.3 Index
 `get_pack_index()` (granted to `anon`) returns `[{scope, id, version, manifestPath, manifestSha256, bytesTotal, name, bbox, opening?}]` from the latest **live** `pack_builds` row per scope. Groves appear only when their snapshot status is `published` (including groves with zero playable revisions, so devices can drop removed content). Regions appear when a live build exists. For grove rows, `opening: {lat, lng}` is the published opening root's point (M3e), so the phone can find the nearest grove for Embark without downloading every grove pack. **Storage:** `pack_builds` carries nullable `opening_lat` / `opening_lng` (both null or both set). `build-pack` writes them from the opening root after assembling a grove pack; the index reads them. Region rows and builds without an opening omit the field. **Grove bbox:** read from `pack_builds.bbox`, which `build-pack` writes from the derived boundary, so the index and the pack always agree. A grove build without a bbox isn't listed.
@@ -606,6 +631,7 @@ Removed in v3: `NARRATION_RIGHTS`, `CONSENT_APP`, `SITE_APPROVAL`, `PROTECTED_NO
 - The device must delete any local asset whose sha isn't in the union of the current manifests (mandatory on sync).
 - Manifest paths are versioned and never overwritten; superseded manifests are deleted once a newer version is live.
 - Cache headers: assets `public, max-age=3600`; manifests `public, max-age=60`.
+- **Parsers (A5):** `GrovePack` / `RegionPack` stay **strict** for the pack builder and its tests. Devices use **`GrovePackDevice` / `RegionPackDevice`** (`GrovePack.strip()` / `RegionPack.strip()`), which strip unknown keys so older builds keep working when packs gain optional fields. Schema numbers stay **4** / **2** (no bump). The builder omits a new key when it has no value. Lane B points mobile at the device parsers (M6 checklist); until then, do not publish packs that rely on new keys to binaries that still import the strict schemas.
 
 ### 12.5 Staff preview
 The `preview` edge function returns a **preview manifest** for one release in status `draft`, `scheduled` or `failed` (refuse `publishing` / `published` / `cancelled` with 409). Callers must be active staff who can read the staging buckets (**writer, sound, editor, admin**); viewers and moderators get 403. Auth uses a staff JWT (401 without one).

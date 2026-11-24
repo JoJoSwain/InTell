@@ -33,6 +33,7 @@ function story(overrides: Partial<StoryState> = {}): StoryState {
     heard: new Set<string>(),
     timeWindow: "day",
     narrationPlaying: false,
+    insideTierBuffers: [],
     ...overrides,
   };
 }

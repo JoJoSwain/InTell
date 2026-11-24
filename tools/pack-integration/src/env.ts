@@ -12,25 +12,16 @@ export function supabaseEnv(): Record<string, string> {
   // Prefer process env (CI eval's `supabase status -o env` before vitest).
   // Calling `supabase status` after `functions serve` on Windows can stop the
   // edge_runtime container and break integration with 503.
-  const secret =
-    process.env.SECRET_KEY ??
-    process.env.SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY;
   const publishable =
-    process.env.PUBLISHABLE_KEY ??
-    process.env.ANON_KEY ??
-    process.env.SUPABASE_ANON_KEY;
+    process.env.PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
   const fromProcess = {
     API_URL: process.env.API_URL ?? process.env.SUPABASE_URL,
     SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.API_URL,
-    SECRET_KEY: process.env.SECRET_KEY ?? secret,
-    SERVICE_ROLE_KEY: secret,
-    SUPABASE_SERVICE_ROLE_KEY: secret,
-    PUBLISHABLE_KEY: process.env.PUBLISHABLE_KEY ?? publishable,
-    ANON_KEY: publishable,
-    SUPABASE_ANON_KEY: publishable,
+    SECRET_KEY: secret,
+    PUBLISHABLE_KEY: publishable,
   };
-  if (fromProcess.API_URL && fromProcess.SERVICE_ROLE_KEY && fromProcess.ANON_KEY) {
+  if (fromProcess.API_URL && fromProcess.SECRET_KEY && fromProcess.PUBLISHABLE_KEY) {
     return Object.fromEntries(
       Object.entries(fromProcess).filter(([, v]) => typeof v === "string"),
     ) as Record<string, string>;
@@ -56,20 +47,13 @@ export function supabaseEnv(): Record<string, string> {
     }
     out[k] = v;
   }
-  // Normalize aliases after parsing CLI output.
-  const resolvedSecret =
-    out.SECRET_KEY || out.SERVICE_ROLE_KEY || out.SUPABASE_SERVICE_ROLE_KEY;
-  const resolvedPublishable =
-    out.PUBLISHABLE_KEY || out.ANON_KEY || out.SUPABASE_ANON_KEY;
+  const resolvedSecret = out.SECRET_KEY ?? out.SUPABASE_SECRET_KEY;
+  const resolvedPublishable = out.PUBLISHABLE_KEY ?? out.SUPABASE_PUBLISHABLE_KEY;
   if (resolvedSecret) {
-    out.SECRET_KEY = out.SECRET_KEY || resolvedSecret;
-    out.SERVICE_ROLE_KEY = resolvedSecret;
-    out.SUPABASE_SERVICE_ROLE_KEY = resolvedSecret;
+    out.SECRET_KEY = resolvedSecret;
   }
   if (resolvedPublishable) {
-    out.PUBLISHABLE_KEY = out.PUBLISHABLE_KEY || resolvedPublishable;
-    out.ANON_KEY = resolvedPublishable;
-    out.SUPABASE_ANON_KEY = resolvedPublishable;
+    out.PUBLISHABLE_KEY = resolvedPublishable;
   }
   return out;
 }

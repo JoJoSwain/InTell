@@ -1,5 +1,5 @@
 /**
- * Supabase API keys (new publishable/secret + legacy anon/service_role fallbacks).
+ * Supabase API keys (publishable/secret maps + singular env fallbacks).
  * Never log key material.
  */
 
@@ -34,30 +34,30 @@ const defaultGetEnv: EnvGet = (name) => Deno.env.get(name) ?? undefined;
 
 /**
  * Every secret key value from SUPABASE_SECRET_KEYS (JSON name→key),
- * plus SUPABASE_SERVICE_ROLE_KEY when set (legacy / local / CI).
+ * plus SUPABASE_SECRET_KEY when set and not already in the map (local single-key).
  */
 export function secretKeys(getEnv: EnvGet = defaultGetEnv): string[] {
   const map = parseKeyMapJson(readEnv("SUPABASE_SECRET_KEYS", getEnv));
   const values = Object.values(map);
-  const legacy = readEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv);
-  if (legacy && !values.includes(legacy)) values.push(legacy);
+  const singular = readEnv("SUPABASE_SECRET_KEY", getEnv);
+  if (singular && !values.includes(singular)) values.push(singular);
   return values;
 }
 
-/** Preferred outbound service key: SUPABASE_SECRET_KEYS.default, else legacy. */
+/** Preferred outbound service key: SUPABASE_SECRET_KEYS.default, else SUPABASE_SECRET_KEY. */
 export function serviceKey(getEnv: EnvGet = defaultGetEnv): string {
   const map = parseKeyMapJson(readEnv("SUPABASE_SECRET_KEYS", getEnv));
   const fromDefault = map.default?.trim();
   if (fromDefault) return fromDefault;
-  return readEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv) ?? "";
+  return readEnv("SUPABASE_SECRET_KEY", getEnv) ?? "";
 }
 
-/** Publishable (or legacy anon) key for user-scoped clients. */
+/** Publishable key for user-scoped clients. */
 export function publishableKey(getEnv: EnvGet = defaultGetEnv): string {
   const map = parseKeyMapJson(readEnv("SUPABASE_PUBLISHABLE_KEYS", getEnv));
   const fromDefault = map.default?.trim();
   if (fromDefault) return fromDefault;
-  return readEnv("SUPABASE_ANON_KEY", getEnv) ?? "";
+  return readEnv("SUPABASE_PUBLISHABLE_KEY", getEnv) ?? "";
 }
 
 /** Replace any known key substrings so logs never carry secrets. */

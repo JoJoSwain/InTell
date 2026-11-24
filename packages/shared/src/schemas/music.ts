@@ -9,6 +9,8 @@ export const MusicCondition = z
     heardAny: z.array(z.string().uuid()).optional(),
     notHeard: z.array(z.string().uuid()).optional(),
     narrationPlaying: z.boolean().optional(),
+    minDepthM: z.number().nonnegative().optional(),
+    insideTierBuffer: z.enum(["root", "branch", "leaf"]).optional(),
   })
   .strict();
 
