@@ -37,6 +37,8 @@ export class AudioSessionController {
   private onBusy: BusyHandler | null = null;
   private onRouteChange: RouteHandler | null = null;
   private notificationWarning = false;
+  /** Last route from the module; null until the first event (no pause on initial speaker). */
+  private lastRoute: RouteEvent["route"] | null = null;
 
   getMode(): FocusMode {
     return this.mode;
@@ -121,6 +123,7 @@ export class AudioSessionController {
     }
     this.started = false;
     this.mode = "userPaused";
+    this.lastRoute = null;
   }
 
   async requestFocus(): Promise<boolean> {
@@ -201,8 +204,17 @@ export class AudioSessionController {
   }
 
   private async onRoute(e: RouteEvent): Promise<void> {
+    const prev = this.lastRoute;
+    this.lastRoute = e.route;
     this.onRouteChange?.(e);
-    if (e.route === "speaker") {
+    // Pause only on a transition onto speaker (unplug), never on the
+    // initial emit while already on speaker / unknown.
+    const lostExternal =
+      prev != null &&
+      prev !== "speaker" &&
+      prev !== "unknown" &&
+      e.route === "speaker";
+    if (lostExternal) {
       await this.applyAction({ type: "routeSpeaker" });
       await this.update({}, "paused");
     }
