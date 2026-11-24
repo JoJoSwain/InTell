@@ -1,6 +1,7 @@
 # A4 report — session state machine
 
-**Lane A · A4** · branch `a/a4-session` · PR #29
+**Lane A · A4** · branch `a/a4-session` @ `b7eee6e` · PR #29  
+(Implementation pushed. `gh` was not authenticated in this environment, so renaming the PR to **A4: session state machine** and marking it ready still need a one-shot `gh pr edit 29 --title "A4: session state machine" && gh pr ready 29` from a logged-in shell.)
 
 ## What changed
 
