@@ -24,6 +24,10 @@ export type StoryState = {
   heard: ReadonlySet<string>;
   timeWindow: TimeWindow;
   narrationPlaying: boolean;
+  /** Absent until the first fix — depth conditions then do not match. */
+  depthM?: number;
+  /** Serializable latched buffer membership (not a Set). */
+  insideTierBuffers: ("root" | "branch" | "leaf")[];
 };
 
 /** Plan name for `StoryState`. */
@@ -84,7 +88,50 @@ export function musicConditionMatches(
   ) {
     return false;
   }
+
+  if (condition.minDepthM !== undefined) {
+    if (story.depthM === undefined || story.depthM < condition.minDepthM) {
+      return false;
+    }
+  }
+  if (condition.insideTierBuffer !== undefined) {
+    if (!story.insideTierBuffers.includes(condition.insideTierBuffer)) {
+      return false;
+    }
+  }
   return true;
+}
+
+/**
+ * Like selectMusicCue, but defers a growth-step change (heardAll-driven cue
+ * upgrade) until afterglow ends.
+ */
+export function selectMusicCueDeferred(
+  input: Parameters<typeof selectMusicCue>[0] & {
+    pendingGrowthCueId: string | null;
+    afterglowEndsAt: number | null;
+    at: number;
+  },
+): ReturnType<typeof selectMusicCue> {
+  const base = selectMusicCue(input);
+  if (
+    input.pendingGrowthCueId &&
+    input.afterglowEndsAt !== null &&
+    input.at < input.afterglowEndsAt
+  ) {
+    const current = input.current
+      ? input.cues.find((c) => c.id === input.current?.cueId)
+      : undefined;
+    if (current) {
+      const distanceM = distanceInsideMeters(input.point, current.boundary);
+      return {
+        cue: current,
+        edgeGain: edgeGainFor(distanceM, current.edgeFadeM),
+        crossfadeMs: 0,
+      };
+    }
+  }
+  return base;
 }
 
 function edgeGainFor(distanceM: number, edgeFadeM: number): number {

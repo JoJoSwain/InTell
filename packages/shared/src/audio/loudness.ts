@@ -10,6 +10,8 @@ export type LoudnessAssetKind =
   | "sfx_oneshot"
   | "sfx_bed"
   | "music_stem"
+  | "music_moment"
+  | "beacon"
   | "voice_cue"
   | "growth_cue";
 
@@ -25,6 +27,8 @@ export const LOUDNESS_TARGETS: Readonly<Record<LoudnessAssetKind, number>> = {
   sfx_oneshot: -24,
   sfx_bed: -30,
   music_stem: -23,
+  music_moment: -20,
+  beacon: -30,
   voice_cue: -18,
   growth_cue: -18,
 };
@@ -35,6 +39,8 @@ export const BITRATE_TARGETS: Readonly<Record<LoudnessAssetKind, number>> = {
   sfx_oneshot: 128,
   sfx_bed: 128,
   music_stem: 160,
+  music_moment: 160,
+  beacon: 96,
   voice_cue: 96,
   growth_cue: 96,
 };
@@ -353,13 +359,17 @@ export function audioFormatOffTarget(
   const ch = params.channels;
   switch (kind) {
     case "narration":
+      // Stereo allowed when the fragment has character links (checked at publish).
+      return ch !== 1 && ch !== 2;
     case "voice_cue":
     case "growth_cue":
+    case "beacon":
       return ch !== 1;
     case "sfx_oneshot":
       return ch !== 1 && ch !== 2;
     case "sfx_bed":
     case "music_stem":
+    case "music_moment":
       return ch !== 2;
     default: {
       const _exhaustive: never = kind;

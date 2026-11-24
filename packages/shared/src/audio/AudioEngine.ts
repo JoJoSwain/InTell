@@ -3,7 +3,7 @@
  * Types only — no React Native imports. Mobile and admin Web Audio both implement this.
  */
 
-export type BusId = "story" | "music" | "surroundings" | "ui";
+export type BusId = "story" | "music" | "surroundings" | "ui" | "moment";
 export type AudioRoute = "headphones" | "bluetooth" | "speaker" | "unknown";
 
 export interface BufferHandle {

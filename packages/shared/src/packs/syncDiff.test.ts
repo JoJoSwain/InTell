@@ -74,6 +74,9 @@ function groveFixture(): GrovePack {
         markerHash,
         threadIds: [],
         characters: [],
+        beaconAssetSha: sha(20),
+        resolveAssetSha: sha(21),
+        teaserLockedAssetSha: sha(22),
       },
     ],
     crossGroveLinks: [],
@@ -108,6 +111,9 @@ function groveFixture(): GrovePack {
           conditions: {},
           minDwellS: 0,
           crossfadeMs: 0,
+          resolveRootAssetSha: sha(23),
+          resolveBranchAssetSha: sha(24),
+          resolveLeafAssetSha: sha(25),
           stems: [
             {
               assetSha: sha(4),
@@ -119,11 +125,23 @@ function groveFixture(): GrovePack {
         },
       ],
     },
+    soundCues: [
+      { kind: "threshold_motif_day", assetSha: sha(26) },
+      { kind: "beacon_root", assetSha: sha(27) },
+    ],
     ambienceZones: [],
     gatherings: [],
     assets: [
       { sha: sha(3), ext: "m4a", bytes: 100, kind: "narration" },
       { sha: sha(5), ext: "webp", bytes: 50, kind: "image" },
+      { sha: sha(20), ext: "m4a", bytes: 40, kind: "beacon" },
+      { sha: sha(21), ext: "m4a", bytes: 40, kind: "music_moment" },
+      { sha: sha(22), ext: "m4a", bytes: 40, kind: "voice_cue" },
+      { sha: sha(23), ext: "m4a", bytes: 40, kind: "music_moment" },
+      { sha: sha(24), ext: "m4a", bytes: 40, kind: "music_moment" },
+      { sha: sha(25), ext: "m4a", bytes: 40, kind: "music_moment" },
+      { sha: sha(26), ext: "m4a", bytes: 40, kind: "music_moment" },
+      { sha: sha(27), ext: "m4a", bytes: 40, kind: "beacon" },
     ],
   });
 }
@@ -325,18 +343,25 @@ describe("assetsToFetch", () => {
 });
 
 describe("assetsToDelete", () => {
-  const shared = sha(3);
-  const onlyA = sha(21);
-  const onlyB = sha(22);
-  const orphan = sha(23);
+  const shared = sha(90);
+  const onlyA = sha(91);
+  const onlyB = sha(92);
+  const orphan = sha(93);
 
   function groveWith(id: string, asset: string, also: string[]): GrovePack {
     const pack = groveFixture();
+    const fragment = {
+      ...pack.fragments[0]!,
+      beaconAssetSha: undefined,
+      resolveAssetSha: undefined,
+      teaserLockedAssetSha: undefined,
+    };
     return GrovePack.parse({
       ...pack,
       groveId: id,
       grove: { ...pack.grove, id, growthCueAssetSha: undefined },
       characters: [],
+      fragments: [fragment],
       revisions: [
         {
           ...pack.revisions[0],
@@ -346,6 +371,7 @@ describe("assetsToDelete", () => {
         },
       ],
       music: { cues: [] },
+      soundCues: undefined,
       assets: [
         { sha: asset, ext: "m4a", bytes: 10, kind: "narration" },
         ...also.map((item) => ({

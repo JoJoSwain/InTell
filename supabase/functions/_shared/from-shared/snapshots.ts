@@ -41,6 +41,7 @@ export const GroveSnapshot = z
     boundary: GeoJsonPolygon.optional(),
     growthCueAssetId: Uuid.nullable().optional(),
     growthCueAssetSha: Sha256.nullable().optional(),
+    depthBloomTextureM: z.number().positive().optional(),
     status: PublishStatus,
     journeys: z
       .object({
@@ -96,6 +97,9 @@ export const FragmentSnapshot = z
         })
         .strict(),
     ),
+    beaconAssetSha: Sha256.nullable().optional(),
+    resolveAssetSha: Sha256.nullable().optional(),
+    teaserLockedAssetSha: Sha256.nullable().optional(),
   })
   .strict();
 
@@ -150,6 +154,20 @@ export const AmbienceLayerSnapshot = z
           .strict(),
       )
       .optional(),
+    months: z.array(z.number().int()).optional(),
+    nestingMuteMonths: z.array(z.number().int()).optional(),
+    gainDbMin: z.number().optional(),
+    gainDbMax: z.number().optional(),
+    panMin: z.number().optional(),
+    panMax: z.number().optional(),
+    pitchCentsMin: z.number().int().optional(),
+    pitchCentsMax: z.number().int().optional(),
+    meanIntervalS: z.number().nullable().optional(),
+    minIntervalS: z.number().nullable().optional(),
+    maxConcurrent: z.number().int().optional(),
+    noRepeatLast: z.number().int().optional(),
+    crossfadeMs: z.number().int().optional(),
+    assetWeights: z.array(z.number()).optional(),
   })
   .strict();
 
@@ -229,6 +247,9 @@ export const MusicCueSnapshot = z
     crossfadeMs: z.number().int(),
     status: PublishStatus,
     stems: z.array(MusicCueStemSnapshot),
+    resolveRootAssetSha: Sha256.nullable().optional(),
+    resolveBranchAssetSha: Sha256.nullable().optional(),
+    resolveLeafAssetSha: Sha256.nullable().optional(),
   })
   .strict();
 

@@ -69,20 +69,41 @@ export async function buildRegionPack(
         }
       }
     }
-    ambienceProfiles.push({
+    const profileEntry: Record<string, unknown> = {
       id: p.id,
       slug: p.slug,
       name: p.name,
-      layers: p.layers.map((l) => ({
-        id: l.id,
-        name: l.name,
-        kind: l.kind,
-        timeWindow: l.timeWindow,
-        wildlifeCall: l.wildlifeCall,
-        speakerSafe: l.speakerSafe,
-        assetShas: l.assetShas,
-      })),
-    });
+      layers: p.layers.map((l) => {
+        const layer: Record<string, unknown> = {
+          id: l.id,
+          name: l.name,
+          kind: l.kind,
+          timeWindow: l.timeWindow,
+          wildlifeCall: l.wildlifeCall,
+          speakerSafe: l.speakerSafe,
+          assetShas: l.assetShas,
+        };
+        if (l.months) layer.months = l.months;
+        if (l.nestingMuteMonths) layer.nestingMuteMonths = l.nestingMuteMonths;
+        if (l.gainDbMin !== undefined) layer.gainDbMin = l.gainDbMin;
+        if (l.gainDbMax !== undefined) layer.gainDbMax = l.gainDbMax;
+        if (l.panMin !== undefined) layer.panMin = l.panMin;
+        if (l.panMax !== undefined) layer.panMax = l.panMax;
+        if (l.pitchCentsMin !== undefined) layer.pitchCentsMin = l.pitchCentsMin;
+        if (l.pitchCentsMax !== undefined) layer.pitchCentsMax = l.pitchCentsMax;
+        if (l.meanIntervalS != null) layer.meanIntervalS = l.meanIntervalS;
+        if (l.minIntervalS != null) layer.minIntervalS = l.minIntervalS;
+        if (l.maxConcurrent !== undefined) layer.maxConcurrent = l.maxConcurrent;
+        if (l.noRepeatLast !== undefined) layer.noRepeatLast = l.noRepeatLast;
+        if (l.crossfadeMs !== undefined) layer.crossfadeMs = l.crossfadeMs;
+        if (l.assetWeights && l.assetWeights.length > 0) {
+          layer.assetWeights = l.assetWeights;
+        }
+        return layer;
+      }),
+    };
+    if (p.density !== undefined) profileEntry.density = p.density;
+    ambienceProfiles.push(profileEntry);
   }
 
   const { data: zoneRows } = await client
