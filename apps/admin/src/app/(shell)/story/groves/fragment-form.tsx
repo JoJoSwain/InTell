@@ -266,7 +266,7 @@ export function FragmentForm({
                 ["resolve_asset_id", "Resolve override", initial?.resolve_asset_id],
                 [
                   "teaser_locked_asset_id",
-                  "Locked teaser",
+                  "Locked-teaser audio",
                   initial?.teaser_locked_asset_id,
                 ],
               ] as const

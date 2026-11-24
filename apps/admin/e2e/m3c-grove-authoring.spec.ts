@@ -39,7 +39,7 @@ test.describe("M3c grove authoring", () => {
     // Fragment A (root, no prereq)
     await page.getByRole("link", { name: "New fragment" }).click();
     await page.getByLabel("Fragment title").fill(`Frag A ${stamp}`);
-    await page.getByLabel("Teaser").fill("Teaser A");
+    await page.getByLabel("Teaser", { exact: true }).fill("Teaser A");
     await page.getByLabel("Tier").selectOption("root");
     await page.getByLabel("Latitude").fill("41.1");
     await page.getByLabel("Longitude").fill("-111.9");
@@ -53,7 +53,7 @@ test.describe("M3c grove authoring", () => {
     await page.goto(`${grovePath}?new=1`);
     await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`Frag B ${stamp}`);
-    await page.getByLabel("Teaser").fill("Teaser B");
+    await page.getByLabel("Teaser", { exact: true }).fill("Teaser B");
     await page.getByLabel("Latitude").fill("41.101");
     await page.getByLabel("Longitude").fill("-111.901");
     await page.getByRole("button", { name: "Add fragment" }).click();
@@ -65,7 +65,7 @@ test.describe("M3c grove authoring", () => {
     await page.goto(`${grovePath}?new=1`);
     await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`Frag C ${stamp}`);
-    await page.getByLabel("Teaser").fill("Teaser C");
+    await page.getByLabel("Teaser", { exact: true }).fill("Teaser C");
     await page.getByLabel("Visibility").selectOption("physical");
     await page.getByLabel("Latitude").fill("41.102");
     await page.getByLabel("Longitude").fill("-111.902");
@@ -162,7 +162,7 @@ test.describe("M3c grove authoring", () => {
     await page.getByRole("button", { name: "Save fragment" }).click();
     await page.waitForURL(/[?&]_=\d+/, { timeout: 20_000 });
     await waitForClientReady(page);
-    await expect(page.getByLabel("Teaser")).toHaveValue(stamp, {
+    await expect(page.getByLabel("Teaser", { exact: true })).toHaveValue(stamp, {
       timeout: 15_000,
     });
     await expect(page.getByLabel("Latitude")).toHaveValue(latBefore);

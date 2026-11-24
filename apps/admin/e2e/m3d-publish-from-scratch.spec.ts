@@ -108,7 +108,7 @@ test.describe("M3d publish from scratch", () => {
     // --- Physical marker fragment ---
     await page.getByRole("link", { name: "New fragment" }).click();
     await page.getByLabel("Fragment title").fill(`Physical ${stamp}`);
-    await page.getByLabel("Teaser").fill("Physical teaser");
+    await page.getByLabel("Teaser", { exact: true }).fill("Physical teaser");
     await page.getByLabel("Visibility").selectOption("physical");
     await page.getByLabel("Latitude").fill("41.1");
     await page.getByLabel("Longitude").fill("-111.9");
@@ -126,7 +126,7 @@ test.describe("M3d publish from scratch", () => {
     await page.getByRole("link", { name: "New fragment" }).click();
     await expect(page.getByRole("heading", { name: "Add fragment" })).toBeVisible();
     await page.getByLabel("Fragment title").fill(`DayOnly ${stamp}`);
-    await page.getByLabel("Teaser").fill("Day-only teaser");
+    await page.getByLabel("Teaser", { exact: true }).fill("Day-only teaser");
     await page.getByLabel("Tier").selectOption("root");
     await page.getByLabel("Latitude").fill("41.101");
     await page.getByLabel("Longitude").fill("-111.901");

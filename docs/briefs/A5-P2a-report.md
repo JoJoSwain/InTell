@@ -70,6 +70,8 @@ Lane A did not edit `apps/mobile`.
 
 2. After the allowlist fix, pack-integration still failed: `build-pack staff JWT: expected 401 to be 403`. Under K1, service functions read **apikey only**; a staff Bearer JWT with no apikey is treated as a missing service key → **401**, not a wrong-key **403**. **Fix:** update `packs.integration.test.ts` to expect 401 for staff-JWT-only.
 
+3. Playwright then failed: `getByLabel('Teaser')` matched both the fragment teaser text field and the new **Locked teaser** select (substring match). **Fix:** rename the select to `Locked-teaser audio` and use `{ exact: true }` in m3c/m3d e2e.
+
 ### 2. Sound action tests
 
 - `lib/sound/validate.ts` — zone GeoJSON (helpers), heardAll ids, growth ≤4 / grove+window, `minDepthM ≥ 0`, stems ≤4, `music_moment` / `beacon` kinds, `BED_MONO` mono beds, breath/swell sorted+unique+within duration
