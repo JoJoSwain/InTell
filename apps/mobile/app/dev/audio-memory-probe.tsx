@@ -189,10 +189,17 @@ function Body() {
   }, []);
 
   const runLoopProbe = useCallback(async () => {
+    // Prefer a short seamless fixture so 10 loops finish in ~1 minute.
+    // Fall back to the 2‑minute bed if the short file is missing.
     setStatus("looping bed (10×)");
     setLoopNote("playing…");
     try {
-      const uri = FIXTURE_DIR + "probe-bed-2min-stereo.m4a";
+      const shortUri = FIXTURE_DIR + "probe-bed-6s-stereo.m4a";
+      const longUri = FIXTURE_DIR + "probe-bed-2min-stereo.m4a";
+      let uri = shortUri;
+      const shortInfo = await FileSystem.getInfoAsync(shortUri);
+      if (!shortInfo.exists) uri = longUri;
+
       const buf = await decodeAudioData(uri);
       const ctx = new AudioContext();
       await ctx.resume();
@@ -216,13 +223,13 @@ function Body() {
         setTimeout(resolve, buf.duration * loops * 1000 + 2000);
       });
 
-      const note =
-        "BufferSource loop×10 finished. Listen for click/gap at boundaries.";
+      const note = `BufferSource.loop ×${loops} on ${uri.includes("6s") ? "6s" : "2min"} bed (${buf.duration.toFixed(3)}s). Listen for click/gap at boundaries.`;
       setLoopNote(note);
       await appendSpikeLog({
         type: "memoryProbeLoop",
         loops,
         durationSec: buf.duration,
+        uri,
         note,
       });
       await ctx.close();
