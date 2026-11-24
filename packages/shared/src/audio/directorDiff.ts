@@ -56,8 +56,10 @@ export type TargetMix = {
     meta: NowPlayingMeta;
   };
   moment: null | { id: string; sha: string; gainDb: number };
-  hushCue: null | { sha: string; gainDb: number };
+  hushCue: null | { sha: string; gainDb: number; whenSec: number };
   desiredLoaded: string[];
+  /** Per-sha decode hints (narration → 24 kHz). */
+  decodeHzBySha: Record<string, number>;
   suspended: boolean;
 };
 
@@ -86,6 +88,7 @@ export function emptyTargetMix(route: AudioRoute = "headphones"): TargetMix {
     moment: null,
     hushCue: null,
     desiredLoaded: [],
+    decodeHzBySha: {},
     suspended: false,
   };
 }
@@ -151,7 +154,14 @@ export function diffMix(
   }
 
   for (const sha of nextLoaded) {
-    if (!prevLoaded.has(sha)) commands.push({ type: "load", sha });
+    if (!prevLoaded.has(sha)) {
+      const decodeHz = next.decodeHzBySha[sha];
+      commands.push(
+        decodeHz != null
+          ? { type: "load", sha, decodeHz }
+          : { type: "load", sha },
+      );
+    }
   }
 
   for (const bus of Object.keys(next.busDb) as BusId[]) {
@@ -255,7 +265,12 @@ export function diffMix(
   }
 
   if (next.narration) {
-    if (!prev.narration || prev.narration.id !== next.narration.id) {
+    if (
+      !prev.narration ||
+      prev.narration.id !== next.narration.id ||
+      prev.narration.startAtMs !== next.narration.startAtMs ||
+      prev.narration.sha !== next.narration.sha
+    ) {
       commands.push({
         type: "playNarration",
         id: next.narration.id,
@@ -286,7 +301,7 @@ export function diffMix(
       gainDb: next.hushCue.gainDb,
       pan: 0,
       rate: 1,
-      whenSec: 0,
+      whenSec: next.hushCue.whenSec ?? 0,
     });
   }
 

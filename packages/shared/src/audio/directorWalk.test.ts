@@ -55,6 +55,31 @@ function demoDirectorWorld(
         breathPointsMs: [500, 1500],
         resolveSha: "resolve-f1",
       },
+      {
+        id: "f2",
+        lat: origin.lat + 0.0003,
+        lng: origin.lng + 0.0003,
+        radiusM: 40,
+        tier: "branch",
+        visibility: "standard",
+        title: "f2",
+        beaconSha: "beacon-f2",
+        narrationShaByWindow: { day: "narr-f2" },
+        breathPointsMs: [400, 1200],
+        resolveSha: "resolve-f2",
+      },
+      {
+        id: "f3",
+        lat: origin.lat + 0.0006,
+        lng: origin.lng - 0.0002,
+        radiusM: 40,
+        tier: "leaf",
+        visibility: "standard",
+        title: "f3",
+        narrationShaByWindow: { day: "narr-f3" },
+        breathPointsMs: [300],
+        resolveSha: "resolve-f3",
+      },
     ],
     musicCues: [],
     ambienceZones: [],
@@ -69,8 +94,20 @@ function demoDirectorWorld(
   };
 }
 
+function hadResolve(
+  commands: { type: string; sha?: string }[],
+  state: { resolvePlay: { sha: string } | null; lastEmitted: { moment: { sha: string } | null } },
+  sha: string,
+): boolean {
+  return (
+    commands.some((c) => c.type === "playMoment" && c.sha === sha) ||
+    state.resolvePlay?.sha === sha ||
+    state.lastEmitted.moment?.sha === sha
+  );
+}
+
 describe("director Farmington walk", () => {
-  it("keeps voice/beacon/motif/resolve/suspend invariants on the demo GPX", () => {
+  it("one resolve after each natural completion; voice/beacon/motif/suspend invariants", () => {
     const gpx = parseGpx(readFileSync(GPX_PATH, "utf8"));
     expect(gpx.length).toBeGreaterThan(100);
     const t0 = gpx[0]!.t;
@@ -84,10 +121,15 @@ describe("director Farmington walk", () => {
     });
 
     let motifPlays = 0;
-    let resolvePlays = 0;
     let maxVoices = 0;
     let maxBeacons = 0;
     let accentWhileNarrating = 0;
+    const completions = ["f1", "f2", "f3"] as const;
+    const resolveByCompletion: Record<string, boolean> = {
+      f1: false,
+      f2: false,
+      f3: false,
+    };
 
     director = directorStep(
       director,
@@ -125,65 +167,77 @@ describe("director Farmington walk", () => {
       }
     }
 
-    director = directorStep(
-      director,
-      {
-        type: "sessionEffect",
-        effect: {
-          type: "play",
-          fragmentId: "f1",
-          revisionNo: 1,
-          sha: "narr-f1",
-          breathPointsMs: [500, 1500],
-          durationMs: 2000,
+    let t = t0 + 1000;
+    let audioSec = 1;
+    for (const fragmentId of completions) {
+      const frag = dw.fragments.find((f) => f.id === fragmentId)!;
+      director = directorStep(
+        director,
+        {
+          type: "sessionEffect",
+          effect: {
+            type: "play",
+            fragmentId,
+            revisionNo: 1,
+            sha: frag.narrationShaByWindow?.day,
+            breathPointsMs: frag.breathPointsMs,
+            durationMs: 2000,
+          },
+          audioSec,
+          wallAtMs: t,
         },
-        audioSec: 1,
-        wallAtMs: t0 + 1000,
-      },
-      dw,
-    ).state;
-    maxVoices = Math.max(maxVoices, director.activeVoiceIds.length);
+        dw,
+      ).state;
+      maxVoices = Math.max(maxVoices, director.activeVoiceIds.length);
 
-    {
+      t += 1000;
+      audioSec += 1;
       const mid = directorStep(
         director,
         {
           type: "narrationProgress",
           positionMs: 1000,
           durationMs: 2000,
-          audioSec: 2,
-          wallAtMs: t0 + 2000,
+          audioSec,
+          wallAtMs: t,
         },
         dw,
       );
       director = mid.state;
       accentWhileNarrating += mid.state.lastEmitted.accentsPending.length;
-    }
 
-    {
+      t += 1000;
+      audioSec += 1;
       const after = directorStep(
         director,
         {
           type: "sessionEffect",
           effect: {
             type: "startAfterglow",
-            endsAt: t0 + 3000 + AFTERGLOW_MS,
-            fragmentId: "f1",
-            tier: "root",
+            endsAt: t + AFTERGLOW_MS,
+            fragmentId,
+            tier: frag.tier,
           },
-          audioSec: 3,
-          wallAtMs: t0 + 3000,
+          audioSec,
+          wallAtMs: t,
         },
         dw,
       );
       director = after.state;
-      if (
-        after.commands.some((c) => c.type === "playMoment") ||
-        after.state.resolvePlay ||
-        after.state.lastEmitted.moment
-      ) {
-        resolvePlays += 1;
-      }
+      resolveByCompletion[fragmentId] = hadResolve(
+        after.commands,
+        after.state,
+        frag.resolveSha!,
+      );
+
+      // Let afterglow end before the next completion
+      t += AFTERGLOW_MS + 100;
+      audioSec += AFTERGLOW_MS / 1000 + 0.1;
+      director = directorStep(
+        director,
+        { type: "heartbeat", audioSec, wallAtMs: t },
+        dw,
+      ).state;
     }
 
     for (let i = 0; i < Math.min(40, gpx.length); i++) {
@@ -235,8 +289,10 @@ describe("director Farmington walk", () => {
     expect(maxVoices).toBeLessThanOrEqual(12);
     expect(maxBeacons).toBeLessThanOrEqual(1);
     expect(motifPlays).toBeLessThanOrEqual(1);
-    expect(resolvePlays).toBeGreaterThanOrEqual(1);
     expect(accentWhileNarrating).toBe(0);
+    expect(resolveByCompletion.f1).toBe(true);
+    expect(resolveByCompletion.f2).toBe(true);
+    expect(resolveByCompletion.f3).toBe(true);
   });
 
   it("resume mid-afterglow continues identically", () => {

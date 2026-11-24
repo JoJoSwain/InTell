@@ -49,5 +49,27 @@ pnpm test       # green (shared 256; admin 58)
 - `voiceLedger` / oneshotSchedule B·S2 unification
 - Engine streaming
 
+## Review fixes (A6-review.md)
+
+Added the eleven director-level tests the brief required:
+1. Resolve by tier + fragment override + plain 8 s pause fallback
+2. Growth deferral until afterglow ends
+3. Hush schedule, "Listen." on `ui`, cancel by `play` (1 s fade)
+4. Accent gating to breath pauses; ≤2 pending; ≤20 s ahead
+5. Locked teaser once/day; never over narration; never `wrongTime`
+6. Beacon start / update / stop (narration, setting off, speaker)
+7. Voice budget ≤12; accents + beacon paused during cue crossfade
+8. Mix ladder shed order, recovery after `MIX_RECOVER_STEP_MS`, narration never shed
+9. Interruption resume → `playNarration` at `resumePointMs`
+10. Memory: 24 kHz narration loads; current+next only; unload others; no load while suspended
+11. Resume mid-Hush (serialize/parse continues identically)
+
+Walk test now asserts **one resolve after each** of three natural completions (f1/f2/f3).
+
+Code fixes found by the new tests:
+- Interruption `ended` + `shouldResume` remounts narration so diff emits `playNarration { startAtMs }`
+- `load` commands carry `decodeHz` for narration shas; `TargetMix.decodeHzBySha`
+- Accents are not scheduled into pending while narrating outside a breath pause
+
 ## For Jordan
 - No db reset requested or performed.

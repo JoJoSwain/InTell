@@ -453,9 +453,14 @@ const TargetMixSchema = z.object({
     .object({ id: z.string(), sha: z.string(), gainDb: z.number() })
     .nullable(),
   hushCue: z
-    .object({ sha: z.string(), gainDb: z.number() })
+    .object({
+      sha: z.string(),
+      gainDb: z.number(),
+      whenSec: z.number(),
+    })
     .nullable(),
   desiredLoaded: z.array(z.string()),
+  decodeHzBySha: z.record(z.number()),
   suspended: z.boolean(),
 });
 

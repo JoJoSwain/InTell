@@ -421,11 +421,21 @@ function buildTargetMix(state: DirectorState, world: DirectorWorld): TargetMix {
 
   const hushCue: TargetMix["hushCue"] =
     state.hushPlayCue && world.hushListenSha && usableSha(state, world.hushListenSha)
-      ? { sha: world.hushListenSha, gainDb: HUSH_CUE_GAIN_DB }
+      ? {
+          sha: world.hushListenSha,
+          gainDb: HUSH_CUE_GAIN_DB,
+          whenSec: state.audioClockSec,
+        }
       : null;
 
   const desiredLoaded = new Set<string>();
-  if (narration) desiredLoaded.add(narration.sha);
+  const decodeHzBySha: Record<string, number> = {};
+  const narrHz = world.engineCaps.narrationDecodeHz;
+
+  if (narration) {
+    desiredLoaded.add(narration.sha);
+    decodeHzBySha[narration.sha] = narrHz;
+  }
   if (music) for (const s of music.stems) desiredLoaded.add(s.sha);
   for (const b of beds) desiredLoaded.add(b.sha);
   for (const a of accentsPending) desiredLoaded.add(a.sha);
@@ -436,13 +446,14 @@ function buildTargetMix(state: DirectorState, world: DirectorWorld): TargetMix {
     desiredLoaded.add(state.teaserPlay.sha);
   }
 
-  // Prefetch nearest playable unexplored narration
+  // Prefetch at most one next playable narration (current + next only)
   const playable = world.fragments
     .filter(
       (f) =>
         f.visibility !== "physical" &&
         f.visibility !== "locked" &&
-        !state.story.heard.has(f.id),
+        !state.story.heard.has(f.id) &&
+        f.id !== state.narration.fragmentId,
     )
     .map((f) => ({
       ...f,
@@ -452,7 +463,10 @@ function buildTargetMix(state: DirectorState, world: DirectorWorld): TargetMix {
   const nearest = playable[0];
   if (nearest?.narrationShaByWindow?.[state.timeWindow]) {
     const sha = nearest.narrationShaByWindow[state.timeWindow]!;
-    if (usableSha(state, sha)) desiredLoaded.add(sha);
+    if (usableSha(state, sha)) {
+      desiredLoaded.add(sha);
+      decodeHzBySha[sha] = narrHz;
+    }
   }
 
   return {
@@ -466,6 +480,7 @@ function buildTargetMix(state: DirectorState, world: DirectorWorld): TargetMix {
     moment,
     hushCue,
     desiredLoaded: [...desiredLoaded],
+    decodeHzBySha,
     suspended: state.suspended,
   };
 }
@@ -669,11 +684,19 @@ function evaluateContinuous(
   next.bedByLayerId = bedByLayerId;
   next.recentBedShas = recentBedShas;
 
-  const filled = fillAccentHorizon(next, world, oneshotLayers, rng);
-  next.pendingAccents = filled.pending;
-  next.oneshotByLayerId = filled.oneshotByLayerId;
-  next.lastOneShotAtSec = filled.lastOneShotAtSec;
-  next.accentSeq = filled.accentSeq;
+  // Accents only schedule into breath pauses while narration plays
+  if (
+    next.narration.playing &&
+    !accentAllowed(next.narration.positionMs, next.narration.breathPointsMs)
+  ) {
+    next.pendingAccents = [];
+  } else {
+    const filled = fillAccentHorizon(next, world, oneshotLayers, rng);
+    next.pendingAccents = filled.pending;
+    next.oneshotByLayerId = filled.oneshotByLayerId;
+    next.lastOneShotAtSec = filled.lastOneShotAtSec;
+    next.accentSeq = filled.accentSeq;
+  }
 
   // Beacon
   const headphones =
@@ -834,6 +857,7 @@ export function directorStep(
 ): { state: DirectorState; commands: DirectorCommand[] } {
   let next = withClocks(state, input.audioSec, input.wallAtMs);
   const { rng, used } = makeRng(next);
+  let remountNarration = false;
 
   switch (input.type) {
     case "heartbeat":
@@ -1063,16 +1087,14 @@ export function directorStep(
             next.narration.positionMs,
           );
         }
-      } else {
-        // ended
-        if (input.shouldResume === true) {
-          next.suspended = false;
-          if (next.narration.playing && next.narration.sha) {
-            // resumePointMs already set; playNarration will use startAtMs
-          }
+      } else if (input.shouldResume === true) {
+        next.suspended = false;
+        // Force remount so diff emits playNarration at resumePointMs
+        if (next.narration.playing && next.narration.sha) {
+          remountNarration = true;
         }
-        // unpaired ended → nothing (gap in RN audio API)
       }
+      // unpaired ended → nothing (gap in react-native-audio-api)
       break;
     case "health":
       next = { ...next, clockStarving: input.clockStarving };
@@ -1106,7 +1128,10 @@ export function directorStep(
   next = evaluateContinuous(next, world, rng);
   next = { ...next, rngCursor: next.rngCursor + used() };
 
-  return emit(state.lastEmitted, next, world);
+  const prevEmitted = remountNarration
+    ? { ...state.lastEmitted, narration: null }
+    : state.lastEmitted;
+  return emit(prevEmitted, next, world);
 }
 
 /** @deprecated import AFTERGLOW_MS from DuckingPolicy — re-export for tests */
