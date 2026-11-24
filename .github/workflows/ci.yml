@@ -50,6 +50,8 @@ jobs:
       - run: git diff --exit-code supabase/seed-media.json
       # Clear any leftover containers/ports from a cancelled prior attempt on this VM.
       - run: pnpm exec supabase stop --no-backup || true
+      - name: Reserve Supabase and stub ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329,8791
       - run: pnpm exec supabase start
       - name: Setup local DB + Vault + seed media
         env:
