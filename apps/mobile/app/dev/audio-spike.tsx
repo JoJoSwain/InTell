@@ -19,7 +19,11 @@ import {
   ONESHOT_STRESS_MAX_PENDING,
   OneShotWindowScheduler,
 } from "@intell/shared";
-import { RNAudioApiEngine } from "../../src/audio/engine";
+import {
+  MediaElementBed,
+  RNAudioApiEngine,
+  type StreamBedLoopEvent,
+} from "../../src/audio/engine";
 import { SPIKE_ASSET_MODULES } from "../../src/audio/spike/assets";
 import {
   FIXTURES_MISSING_MESSAGE,
@@ -37,6 +41,11 @@ import {
 const SPIKE_ONESHOT_SEED = hashSeed("intell-audio-spike");
 const STRESS_BUDGET = 40;
 const NORMAL_BUDGET = 12;
+/** T1 default: decode narration at half rate to cut PCM footprint. */
+const NARRATION_DECODE_RATE_HZ = 24_000;
+/** T1c local AAC bed (push to app files/spikes/ before the run). */
+const STREAM_BED_URI =
+  "file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a";
 
 /** Release builds only enable this route when EXPO_PUBLIC_AUDIO_SPIKE=1 at build time. */
 const SPIKE_ALLOWED =
@@ -77,12 +86,24 @@ function AudioSpikeBody() {
   const bedIsWind = useRef(true);
   const stemBDb = useRef(-8);
   const stressMode = useRef(false);
+  /** Default on — T1 uses 24 kHz narration decode. */
+  const narration24kMode = useRef(true);
+  const streamBedMode = useRef(false);
   const lastDiagLogWallMs = useRef(0);
 
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [running, setRunning] = useState(false);
   const [stress, setStress] = useState(false);
+  const [narration24k, setNarration24k] = useState(true);
+  const [streamBed, setStreamBed] = useState(false);
+  const [streamBedPlaying, setStreamBedPlaying] = useState(false);
+  const [nativeCtx, setNativeCtx] = useState<ReturnType<
+    RNAudioApiEngine["getNativeContext"]
+  > | null>(null);
+  const [surroundingsBus, setSurroundingsBus] = useState<ReturnType<
+    RNAudioApiEngine["getBusNode"]
+  > | null>(null);
   const [diag, setDiag] = useState<EngineDiagnostics | null>(null);
   const [status, setStatus] = useState("idle");
 
@@ -186,9 +207,16 @@ function AudioSpikeBody() {
           ["oneshot_6", SPIKE_ASSET_MODULES.oneshot6],
         ];
         for (const [sha, mod] of loads) {
-          await engine.load(sha, String(mod));
+          if (sha === "narration" && narration24kMode.current) {
+            await engine.load(sha, String(mod), NARRATION_DECODE_RATE_HZ);
+          } else {
+            await engine.load(sha, String(mod));
+          }
         }
         if (cancelled) return;
+
+        setNativeCtx(engine.getNativeContext());
+        setSurroundingsBus(engine.getBusNode("surroundings"));
 
         unsubs.push(
           engine.onTick(() => {
@@ -326,6 +354,60 @@ function AudioSpikeBody() {
     [],
   );
 
+  const applyNarration24k = useCallback(async (on: boolean) => {
+    narration24kMode.current = on;
+    setNarration24k(on);
+    const engine = engineRef.current;
+    if (!engine || !ready) {
+      void appendSpikeLog({
+        type: "narrationDecodeRate",
+        hz: on ? NARRATION_DECODE_RATE_HZ : "file",
+      });
+      return;
+    }
+    try {
+      setStatus(
+        on ? "reloading narration @ 24 kHz" : "reloading narration @ file rate",
+      );
+      engine.invalidateBuffer("narration");
+      await engine.load(
+        "narration",
+        String(SPIKE_ASSET_MODULES.narration),
+        on ? NARRATION_DECODE_RATE_HZ : undefined,
+      );
+      await appendSpikeLog({
+        type: "narrationDecodeRate",
+        hz: on ? NARRATION_DECODE_RATE_HZ : "file",
+        decodedBytes: engine.getDiagnostics().decodedBytes,
+      });
+      setStatus("ready");
+      setDiag(engine.getDiagnostics());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [ready]);
+
+  const applyStreamBed = useCallback((on: boolean) => {
+    streamBedMode.current = on;
+    setStreamBed(on);
+    void appendSpikeLog({ type: "streamBedToggle", on, uri: STREAM_BED_URI });
+  }, []);
+
+  const onStreamBedLoop = useCallback(
+    (e: StreamBedLoopEvent) => {
+      const engine = engineRef.current;
+      const d = engine?.getDiagnostics();
+      void appendSpikeLog({
+        type: "streamBedLoop",
+        ...e,
+        contextTimeMs: d?.contextTimeMs,
+        clockRate: d?.clockRate,
+        appState: d?.appState ?? engine?.getAppState(),
+      });
+    },
+    [],
+  );
+
   const startFullMix = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine || !ready) return;
@@ -359,13 +441,26 @@ function AudioSpikeBody() {
           loopEndMs: 16_000,
         },
       ]);
-      bedRef.current = engine.crossfadeBed(
-        "surroundings",
-        null,
-        { sha: "bed_wind", durationMs: 30_000 },
-        { gainDb: -10, fadeMs: 50, loopStartMs: 0, loopEndMs: 30_000 },
-      );
-      bedIsWind.current = true;
+
+      if (streamBedMode.current) {
+        // T1c: MediaElement file player instead of decoded buffer bed.
+        bedRef.current = null;
+        setStreamBedPlaying(true);
+        await appendSpikeLog({
+          type: "streamBedStart",
+          uri: STREAM_BED_URI,
+          narrationHz: narration24kMode.current ? NARRATION_DECODE_RATE_HZ : "file",
+        });
+      } else {
+        setStreamBedPlaying(false);
+        bedRef.current = engine.crossfadeBed(
+          "surroundings",
+          null,
+          { sha: "bed_wind", durationMs: 30_000 },
+          { gainDb: -10, fadeMs: 50, loopStartMs: 0, loopEndMs: 30_000 },
+        );
+        bedIsWind.current = true;
+      }
       stemBDb.current = -8;
 
       oneshotScheduler.current.reset(
@@ -377,10 +472,18 @@ function AudioSpikeBody() {
 
       resetDiagnosticsTickClock();
       lastDiagLogWallMs.current = Date.now();
-      await appendDiagnostics(engine.getDiagnostics(), { event: "mixStarted" });
+      await appendDiagnostics(engine.getDiagnostics(), {
+        event: "mixStarted",
+        streamBed: streamBedMode.current,
+        narrationHz: narration24kMode.current ? NARRATION_DECODE_RATE_HZ : "file",
+      });
 
       setRunning(true);
-      setStatus("running");
+      setStatus(
+        streamBedMode.current
+          ? "running (T1c MediaElement bed)"
+          : "running",
+      );
       setDiag(engine.getDiagnostics());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -443,6 +546,7 @@ function AudioSpikeBody() {
     const engine = engineRef.current;
     if (!engine) return;
     mixRunning.current = false;
+    setStreamBedPlaying(false);
     await engine.stopAllMix(500);
     loopRef.current = null;
     bedRef.current = null;
@@ -468,9 +572,33 @@ function AudioSpikeBody() {
       <Text style={styles.hint}>
         Deep link: intell://dev/audio-spike
         {process.env.EXPO_PUBLIC_AUDIO_SPIKE === "1" ? " (release spike)" : ""}
+        {"\n"}
+        T1: narration 24 kHz on by default. T1c: enable MediaElement bed, push
+        probe-bed-2min-stereo.m4a to files/spikes/.
       </Text>
       <Text style={styles.status}>Status: {status}</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {nativeCtx && surroundingsBus ? (
+        <MediaElementBed
+          context={nativeCtx}
+          destination={surroundingsBus}
+          sourceUri={STREAM_BED_URI}
+          gainDb={-10}
+          playing={streamBedPlaying}
+          onLoop={onStreamBedLoop}
+          onReady={() => {
+            void appendSpikeLog({ type: "streamBedReady", uri: STREAM_BED_URI });
+          }}
+          onError={(err) => {
+            setError(`MediaElement bed: ${err.message}`);
+            void appendSpikeLog({
+              type: "streamBedError",
+              message: err.message,
+            });
+          }}
+        />
+      ) : null}
 
       <Btn
         label="Start full mix"
@@ -482,9 +610,31 @@ function AudioSpikeBody() {
         onPress={toggleNarration}
         disabled={!running}
       />
-      <Btn label="Crossfade bed" onPress={crossfadeBed} disabled={!running} />
+      <Btn
+        label="Crossfade bed"
+        onPress={crossfadeBed}
+        disabled={!running || streamBed}
+      />
       <Btn label="Stem B up" onPress={stemBUp} disabled={!running} />
       <Btn label="Stem B down" onPress={stemBDown} disabled={!running} />
+      <Btn
+        label={
+          narration24k
+            ? "Narration: 24 kHz (ON)"
+            : "Narration: 24 kHz"
+        }
+        onPress={() => void applyNarration24k(!narration24kMode.current)}
+        disabled={running}
+      />
+      <Btn
+        label={
+          streamBed
+            ? "T1c: MediaElement bed (ON)"
+            : "T1c: MediaElement bed"
+        }
+        onPress={() => applyStreamBed(!streamBedMode.current)}
+        disabled={running}
+      />
       <Btn
         label={stress ? "Stress: B·S1 load (ON)" : "Stress: B·S1 load"}
         onPress={() => applyStress(!stressMode.current)}

@@ -53,6 +53,13 @@ export class BufferLruCache {
     this.buffers.set(sha, buffer);
   }
 
+  /** Drop one entry (e.g. reloading narration at a different sample rate). */
+  delete(sha: string): void {
+    if (!this.buffers.has(sha)) return;
+    this.buffers.delete(sha);
+    this.accounting.delete(sha);
+  }
+
   clear(): void {
     this.buffers.clear();
     this.accounting.clear();

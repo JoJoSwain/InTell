@@ -17,6 +17,7 @@ import {
   AudioContext,
   AudioManager,
   PlaybackNotificationManager,
+  decodeAudioData,
   type AudioBuffer,
   type AudioBufferSourceNode,
   type AudioEventSubscription,
@@ -422,11 +423,27 @@ export class RNAudioApiEngine implements AudioEngine {
     this.tick();
   }
 
-  async load(sha: string, uri: string): Promise<BufferHandle> {
+  /** Drop a cached decode so the next `load` re-decodes. */
+  invalidateBuffer(sha: string): void {
+    this.cache?.delete(sha);
+    this.buffers.delete(sha);
+  }
+
+  /**
+   * Decode and cache a buffer. Pass `sampleRate` to resample on decode
+   * (e.g. 24000 for T1 narration). Call `invalidateBuffer` before toggling
+   * rates so a file-rate reload does not hit a prior 24 kHz entry.
+   */
+  async load(
+    sha: string,
+    uri: string,
+    sampleRate?: number,
+  ): Promise<BufferHandle> {
     this.requireContext();
     const cache = this.requireCache();
+
     const cached = cache.get(sha);
-    if (cached) {
+    if (cached && sampleRate == null) {
       const handle: InternalBuffer = {
         sha,
         durationMs: cached.duration * 1000,
@@ -435,9 +452,15 @@ export class RNAudioApiEngine implements AudioEngine {
       this.buffers.set(sha, handle);
       return { sha, durationMs: handle.durationMs };
     }
+    if (sampleRate != null) {
+      cache.delete(sha);
+      this.buffers.delete(sha);
+    }
 
     const input: string | number = /^\d+$/.test(uri) ? Number(uri) : uri;
-    const buffer = await this.context!.decodeAudioData(input);
+    // Standalone decodeAudioData accepts an optional sampleRate; context.decode
+    // always uses context.sampleRate.
+    const buffer = await decodeAudioData(input, sampleRate);
     cache.set(sha, buffer);
     const handle: InternalBuffer = {
       sha,
@@ -446,6 +469,18 @@ export class RNAudioApiEngine implements AudioEngine {
     };
     this.buffers.set(sha, handle);
     return { sha, durationMs: handle.durationMs };
+  }
+
+  /** Native AudioContext for spike helpers (MediaElement bed). */
+  getNativeContext(): AudioContext {
+    return this.requireContext();
+  }
+
+  /** Bus gain node for attaching external sources (MediaElement). */
+  getBusNode(bus: BusId): GainNode {
+    const node = this.buses[bus];
+    if (!node) throw new Error(`bus ${bus} missing`);
+    return node;
   }
 
   playNarration(
