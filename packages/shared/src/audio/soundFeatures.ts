@@ -25,6 +25,10 @@ export const REGION_AMBIENCE_BUDGET_BYTES = 40 * 1024 * 1024;
 
 export const BEACON_RANGE_M = 100;
 export const BEACON_TIER_NEAR_M = 10;
+/** Gain at the range edge (faint). */
+export const BEACON_GAIN_FAR_DB = -24;
+/** Gain at 0 m (still under narration). */
+export const BEACON_GAIN_NEAR_DB = -6;
 
 export const BREATH_SILENCE_MIN_MS = 350;
 export const RESUME_PREROLL_MS = 300;

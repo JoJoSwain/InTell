@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GROVE_BUFFER_M } from "../geo/groveShape";
 import { GrovePack, GrovePackDevice } from "../schemas/packs";
-import { beaconMix, chooseBeacon } from "./beacon";
+import { beaconMix, beaconPanFromRelative, chooseBeacon } from "./beacon";
 import {
   accentAllowed,
   backSkipMs,
@@ -21,6 +21,10 @@ import {
 import { pickResolve } from "./resolve";
 import {
   BACK_SKIP_MS,
+  BEACON_GAIN_FAR_DB,
+  BEACON_GAIN_NEAR_DB,
+  BEACON_RANGE_M,
+  BEACON_TIER_NEAR_M,
   BEACONS_ENABLED_DEFAULT,
   DEPTH_BLOOM_TEXTURE_M_DEFAULT,
   MIX_RECOVER_STEP_MS,
@@ -33,6 +37,7 @@ import {
   TRANSIENT_CREST_DB,
   VOICE_BUDGET_TOTAL,
 } from "./soundFeatures";
+import { distanceMeters } from "../geo/polygon";
 import {
   initialThresholdMotifState,
   thresholdMotifStep,
@@ -125,36 +130,134 @@ describe("thresholdMotifStep", () => {
 
 describe("beacon", () => {
   const listener = { lat: 40.98, lng: -111.9 };
-  it("mixes front/back and holds pan without course", () => {
-    const ahead = beaconMix(
-      listener,
-      0,
-      { lat: 40.981, lng: -111.9 },
+
+  /** Offset north by metres (approx). */
+  function northOf(m: number) {
+    return { lat: listener.lat + m / 111_320, lng: listener.lng };
+  }
+
+  it("gain is linear in dB from FAR at range to NEAR at 0 m", () => {
+    expect(BEACON_GAIN_FAR_DB).toBe(-24);
+    expect(BEACON_GAIN_NEAR_DB).toBe(-6);
+    const near = beaconMix(listener, 0, listener, 0);
+    expect(near.gainDb).toBeCloseTo(BEACON_GAIN_NEAR_DB, 5);
+    const midTarget = northOf(BEACON_RANGE_M / 2);
+    const mid = beaconMix(listener, 0, midTarget, 0);
+    expect(distanceMeters(listener, midTarget)).toBeCloseTo(
+      BEACON_RANGE_M / 2,
       0,
     );
+    expect(mid.gainDb).toBeCloseTo(
+      (BEACON_GAIN_NEAR_DB + BEACON_GAIN_FAR_DB) / 2,
+      0,
+    );
+    const farTarget = northOf(BEACON_RANGE_M);
+    const far = beaconMix(listener, 0, farTarget, 0);
+    expect(far.gainDb).toBeCloseTo(BEACON_GAIN_FAR_DB, 0);
+  });
+
+  it("pans front half and mirrors the back half (180° centered)", () => {
+    expect(beaconPanFromRelative(0)).toBe(0);
+    expect(beaconPanFromRelative(45)).toBeCloseTo(0.5);
+    expect(beaconPanFromRelative(-45)).toBeCloseTo(-0.5);
+    expect(beaconPanFromRelative(90)).toBe(1);
+    expect(beaconPanFromRelative(-90)).toBe(-1);
+    expect(beaconPanFromRelative(135)).toBeCloseTo(0.5);
+    expect(beaconPanFromRelative(-135)).toBeCloseTo(-0.5);
+    expect(beaconPanFromRelative(180)).toBe(0);
+    expect(beaconPanFromRelative(-180)).toBe(0);
+
+    const ahead = beaconMix(listener, 0, northOf(50), 0);
+    expect(ahead.pan).toBeCloseTo(0, 1);
     expect(ahead.lowpassHz).toBe(18_000);
-    const held = beaconMix(
+
+    const behind = beaconMix(
       listener,
-      null,
-      { lat: 40.981, lng: -111.9 },
-      0.5,
+      0,
+      { lat: listener.lat - 50 / 111_320, lng: listener.lng },
+      0,
     );
+    expect(behind.pan).toBeCloseTo(0, 1);
+    expect(behind.lowpassHz).toBe(2_000);
+
+    const held = beaconMix(listener, null, northOf(50), 0.5);
     expect(held.pan).toBe(0.5);
   });
 
-  it("chooses nearest with tier preference and hysteresis", () => {
-    const id = chooseBeacon({
-      listener,
-      playableUnexplored: [
-        { id: "leaf", tier: "leaf", lat: 40.9801, lng: -111.9 },
-        { id: "root", tier: "root", lat: 40.98015, lng: -111.9 },
-      ],
-      currentId: null,
-      narrationPlaying: false,
-      beaconsEnabled: true,
-      headphones: true,
-    });
-    expect(id).toBe("root");
+  it("chooses by nearest band then tier (stable), with switch hysteresis", () => {
+    // Old pairwise comparator was non-transitive for leaf@0 / root@9 / branch@15
+    // depending on input order. New rule: d0=0, band ≤10 → leaf+root → root.
+    const trio = [
+      { id: "leaf", tier: "leaf" as const, lat: listener.lat, lng: listener.lng },
+      {
+        id: "root",
+        tier: "root" as const,
+        ...northOf(9),
+      },
+      {
+        id: "branch",
+        tier: "branch" as const,
+        ...northOf(15),
+      },
+    ];
+    expect(
+      chooseBeacon({
+        listener,
+        playableUnexplored: trio,
+        currentId: null,
+        narrationPlaying: false,
+        beaconsEnabled: true,
+        headphones: true,
+      }),
+    ).toBe("root");
+    expect(
+      chooseBeacon({
+        listener,
+        playableUnexplored: [...trio].reverse(),
+        currentId: null,
+        narrationPlaying: false,
+        beaconsEnabled: true,
+        headphones: true,
+      }),
+    ).toBe("root");
+
+    expect(
+      chooseBeacon({
+        listener,
+        playableUnexplored: [
+          { id: "leaf", tier: "leaf", lat: 40.9801, lng: -111.9 },
+          { id: "root", tier: "root", lat: 40.98015, lng: -111.9 },
+        ],
+        currentId: null,
+        narrationPlaying: false,
+        beaconsEnabled: true,
+        headphones: true,
+      }),
+    ).toBe("root");
+
+    // Hysteresis: stay on current unless best is > BEACON_TIER_NEAR_M closer
+    expect(BEACON_TIER_NEAR_M).toBe(10);
+    const currentNear = {
+      id: "cur",
+      tier: "leaf" as const,
+      ...northOf(8),
+    };
+    const slightlyCloserRoot = {
+      id: "root2",
+      tier: "root" as const,
+      ...northOf(5),
+    };
+    expect(
+      chooseBeacon({
+        listener,
+        playableUnexplored: [currentNear, slightlyCloserRoot],
+        currentId: "cur",
+        narrationPlaying: false,
+        beaconsEnabled: true,
+        headphones: true,
+      }),
+    ).toBe("cur");
+
     expect(
       chooseBeacon({
         listener,

@@ -1,5 +1,10 @@
 import { distanceMeters, type LatLng } from "../geo/polygon";
-import { BEACON_RANGE_M, BEACON_TIER_NEAR_M } from "./soundFeatures";
+import {
+  BEACON_GAIN_FAR_DB,
+  BEACON_GAIN_NEAR_DB,
+  BEACON_RANGE_M,
+  BEACON_TIER_NEAR_M,
+} from "./soundFeatures";
 
 const TIER_RANK = { root: 0, branch: 1, leaf: 2 } as const;
 
@@ -21,6 +26,15 @@ function norm180(deg: number): number {
   return d;
 }
 
+/** Pan from relative bearing; back half is mirrored so 180° is centered. */
+export function beaconPanFromRelative(relativeDeg: number): number {
+  const abs = Math.abs(relativeDeg);
+  if (abs === 0 || abs === 180) return 0;
+  const signed = relativeDeg > 0 ? 1 : -1;
+  if (abs <= 90) return signed * (abs / 90);
+  return signed * ((180 - abs) / 90);
+}
+
 /**
  * Gain falls with distance (silent beyond BEACON_RANGE_M).
  * Pan from relative bearing; with no course, hold lastPan.
@@ -36,15 +50,17 @@ export function beaconMix(
   if (d > BEACON_RANGE_M) {
     return { gainDb: Number.NEGATIVE_INFINITY, pan: lastPan, lowpassHz: 18_000 };
   }
-  const t = 1 - d / BEACON_RANGE_M;
-  const gainDb = -6 + 12 * t; // about -6 at edge, +6 near
+  // Linear in dB: NEAR at 0 m → FAR at range edge
+  const t = d / BEACON_RANGE_M;
+  const gainDb =
+    BEACON_GAIN_NEAR_DB + (BEACON_GAIN_FAR_DB - BEACON_GAIN_NEAR_DB) * t;
 
   let pan = lastPan;
   let relative = 0;
   if (courseDeg !== null) {
     const brg = bearingDeg(listener, target);
     relative = norm180(brg - courseDeg);
-    pan = Math.max(-1, Math.min(1, relative / 90));
+    pan = beaconPanFromRelative(relative);
   }
 
   const behind = courseDeg !== null && Math.abs(relative) > 90;
@@ -60,8 +76,9 @@ export type BeaconCandidate = {
 };
 
 /**
- * One beacon: nearest unexplored playable; Root>Branch>Leaf within 10 m;
- * switch only if closer by >10 m; none while narration / disabled / speaker.
+ * One beacon: nearest unexplored playable; among those within
+ * BEACON_TIER_NEAR_M of the nearest, pick Root>Branch>Leaf then distance then id;
+ * switch only if closer by > BEACON_TIER_NEAR_M; none while narration / disabled / speaker.
  */
 export function chooseBeacon(input: {
   listener: LatLng;
@@ -80,26 +97,30 @@ export function chooseBeacon(input: {
     return null;
   }
 
-  const ranked = [...input.playableUnexplored]
+  const inRange = input.playableUnexplored
     .map((c) => ({
       ...c,
       distanceM: distanceMeters(input.listener, c),
     }))
-    .filter((c) => c.distanceM <= BEACON_RANGE_M)
-    .sort((a, b) => {
-      if (Math.abs(a.distanceM - b.distanceM) <= BEACON_TIER_NEAR_M) {
-        const tier = TIER_RANK[a.tier] - TIER_RANK[b.tier];
-        if (tier !== 0) return tier;
-      }
-      if (a.distanceM !== b.distanceM) return a.distanceM - b.distanceM;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    });
+    .filter((c) => c.distanceM <= BEACON_RANGE_M);
 
-  const best = ranked[0];
+  if (inRange.length === 0) return null;
+
+  const d0 = Math.min(...inRange.map((c) => c.distanceM));
+  const band = inRange.filter((c) => c.distanceM <= d0 + BEACON_TIER_NEAR_M);
+
+  band.sort((a, b) => {
+    const tier = TIER_RANK[a.tier] - TIER_RANK[b.tier];
+    if (tier !== 0) return tier;
+    if (a.distanceM !== b.distanceM) return a.distanceM - b.distanceM;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+
+  const best = band[0];
   if (!best) return null;
 
   if (input.currentId) {
-    const current = ranked.find((c) => c.id === input.currentId);
+    const current = inRange.find((c) => c.id === input.currentId);
     if (
       current &&
       best.id !== current.id &&
