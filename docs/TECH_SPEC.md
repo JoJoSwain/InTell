@@ -91,16 +91,16 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
 
 ### 3.2 Session state machine
+A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` and carries out the effects. Hush belongs to the AudioDirector (`hush.ts`), which reads `storyStateOf(...)`, not to the session machine.
 ```
 idle
  ├─ fixInsideGrove | scan(code) → exploring
-exploring { groveIds, playing?, queued?, lastInsideGroveAt, hush:{state, nextAt} }
+exploring { groveIds, playing?, queued?, afterglowEndsAt?, lastInsideGroveAt, startedAt }
  ├─ arrived(fragmentId)       → pick version for current window → (growthMoment?) → play if nothing is playing, else queue(1)
  │                              (exactly one narration voice ever; a queued fragment never interrupts)
  ├─ scan(locked or no version for now) → teaser pop-up
  ├─ narrationEnded(natural)   → record completion (revision, window, on site) → unlock dependents → met characters → events
  ├─ narrationEnded            → afterglow 8 s → play queued if still in range (or if it came from a scan)
- ├─ hushDue                   → hush (AUDIO_SPEC §5)
  ├─ stop | 15 min outside | 3 h → idle (write the visit record)
 ```
 
