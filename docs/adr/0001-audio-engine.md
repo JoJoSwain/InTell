@@ -87,6 +87,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
   - Delay `disconnect` until after `onEnded`, or at least one quantum after `stop`.
   - Never connect a source into the live graph as a side effect of preloading.
   - Cancel an overlapping automation curve before scheduling a new one.
+- **B·S3 smoke (2026-11-24, incomplete protocol):** Expo Module `audio-session` (Media3 `SimpleBasePlayer` + FGS + JS focus machine) on release build; library session disabled (`sessionOwner=audio-session`). Smoke: focus held (`USAGE_MEDIA`/`CONTENT_TYPE_SPEECH`), Media3 session metadata + pause/play via `media_session dispatch`. Full T4–T7 + 15‑min T1 deferred — phone left mid-run. See `docs/briefs/BS3-report.md`. **Status unchanged.**
 - **Open items:**
   - **Bed streaming:** the library's MediaElement path isn't viable (T1c). Beds decode within the LRU cap for now, and streaming is revisited in M7, with a native streamed bed player as one option.
   - **Memory:** about 155–171 MB against the 150 MB bar. Re-measure in M6 with real assets and the map mounted, then set the whole-app target.
