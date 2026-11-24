@@ -37,7 +37,7 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 | T8 | Memory &lt; 150 MB | **fail** | | PSS ~500–600 MB |
 | T9 | Battery (informational) | 89%→76% (−13%) | | unplugged ~60 min |
 
-**Verdict:** _Pending_ (Android protocol **run**; several fails — Status unchanged for Claude)
+**Verdict:** _Pending._ Android run 1 failed and has been analyzed (below). Android run 2 (B·S2) is next; Status unchanged.
 
 ## Findings so far
 (Status remains **Proposed**. Full T1–T9 protocol and iPhone testing are postponed.)
@@ -46,9 +46,42 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 - **JS timers pause in the background on Android, but engine `onEnded` callbacks still reach JS.** A locked period froze `setInterval` (no 60-second diagnostics until return to `active`); native audio kept playing; `voiceEnded` fired while backgrounded and can top up schedules / write diagnostics.
 - **Design rule:** schedule sound ahead on the **audio clock** (`start(when)`); drive background logic from **engine callbacks** and **location events** — never from `setInterval` alone.
 - **Spike ≠ product ambience params.** The spike’s one-shot interval is a **fixed 8 s** and its gain is a **fixed −12 dB** (simplifications). M4 shared ambience logic must use the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC).
-- **Outstanding:** Claude’s read of the Android T1–T9 results (Accept / Reject / more work); the iPhone build and test.
+- **Outstanding:** Android run 2 (B·S2), judged by the decision rule below; then the iPhone build and test.
 - **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start. Growing positive gap ⇒ dropouts / audio-clock starvation; slight negative drift ⇒ clock-rate difference, not a failure by itself.
 - **Android protocol (B·S1, 2026-11-23):** First attempt blocked by Metro custom `resolveRequest` breaking existing spike WAV asset ids. Fix: install the missing-fixture sentinel resolver only when WAVs are absent (`6330c67`). Protocol then run on Pixel 11 + Bluetooth earbuds. **T4/T5 pass; T1/T2/T3/T6/T7/T8 fail; T9 −13%.** Dominant issue: continuous mix quality collapses under lock (and degrades with interaction) while layers keep playing; `clockGapMs` grows to ~1.7e6 ms; PSS ~500–600 MB. Log: `docs/spikes/logs/pixel11-2026-11-23.jsonl`. Details in `docs/briefs/BS1-report.md`. Status remains **Proposed**.
+- **Android run 1, Claude's analysis (2026-11-23):** B·S1 is a valid fail of the **spike**, not yet a fair test of the **library**. The spike broke AUDIO_SPEC §2.1's budget and basic lifecycle rules:
+  - **Too many voices:** 42 live voices at mix start (37 one-shots queued 5 minutes ahead), against a budget of 12.
+  - **Leaks on Stop:** 12–21 voices leaked on every Stop (42 → 63 → 84 over three starts of one engine), and finished nodes were never disconnected.
+  - **JS timers:** cleanup and resume ran on JS timers, which don't run while locked.
+  - **Clicks:** ramps restarted from stale values (T3).
+  - **Cut fades:** an immediate suspend cut the fades.
+  - **Focus:** no `duck` handling (nine unpaired `ended` events) and no confirmed focus hold (T6).
+  - **Build:** a debug build with the map stack mounted.
+
+  The clock shows the effect, as context seconds per wall second:
+
+  | Load | Screen | Clock speed |
+  |---|---|---|
+  | 63 voices | unlocked | 99% |
+  | 61 voices | locked | 64% → 39% over 20 minutes |
+  | 82–84 voices | locked | 31% → 23% over 34 minutes |
+
+  Brief `docs/briefs/BS2-audio-stability.md` fixes the spike and re-runs the protocol on a **release** build.
+- **Decision rule for Android run 2** (set before the run):
+  - If the **render** still fails (T1 or T3), record **Rejected** and commission the fallback brief. No further tuning rounds.
+  - If only **platform-session** items fail (T6 focus, T7 controls), Claude chooses between a small native session module alongside the library and the full fallback.
+  - If Android passes, the iPhone run decides adoption, as before.
+- **Library observations so far:**
+  - `onEnded` is unreliable for sources stopped before they start; some never fire.
+  - No underrun counter is exposed.
+  - `decodeAudioData` holds 32-bit float PCM, so narration needs streaming or just-in-time decoding (B·S2 Part 4 probes the options).
+- **Engine operating rules** (any engine, learned from B·S1):
+  1. A hard source budget (12, per AUDIO_SPEC §2.1), enforced by the engine.
+  2. Schedule on the audio clock, just in time (no more than 20 s ahead), woken by an audio-clock heartbeat. No JS timers in the audio path.
+  3. Every node is released and disconnected exactly once, and the engine can prove it (created = released + live).
+  4. Fade before every stop or suspend.
+  5. Request focus explicitly, and re-request it on every start and resume.
+  6. Test release builds, locked, for 60 minutes, with objective counters (clock rate, AudioFlinger underruns), not only by ear.
 
 ## Consequences
 - UI never imports `react-native-audio-api` (ESLint `no-restricted-imports`).
