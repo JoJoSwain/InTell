@@ -238,10 +238,21 @@ export {
 export {
   DEFAULT_ONESHOT_SHAS,
   ONESHOT_HORIZON_SEC,
+  ONESHOT_LOOKAHEAD_SEC,
+  ONESHOT_MAX_PENDING,
   ONESHOT_MEAN_INTERVAL_SEC,
+  ONESHOT_STRESS_LOOKAHEAD_SEC,
+  ONESHOT_STRESS_MAX_PENDING,
   OneShotWindowScheduler,
   type OneShotPlan,
 } from "./audio/oneshotSchedule";
+
+export {
+  VoiceLedger,
+  type VoiceEntry,
+  type VoiceKind,
+  type VoiceLedgerStats,
+} from "./audio/voiceLedger";
 
 export {
   audioFormatOffTarget,

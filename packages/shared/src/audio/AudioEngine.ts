@@ -65,6 +65,22 @@ export interface EngineDiagnostics {
    * locked.
    */
   jsTickGapMs?: number;
+  /** Scheduled one-shots not yet started on the audio clock. */
+  pendingOneShots?: number;
+  /** Voice nodes instantiated since init (ledger created count). */
+  nodesCreated?: number;
+  /** Voice nodes released since init. */
+  nodesReleased?: number;
+  /** Voices removed by sweep because onEnded never fired. */
+  missedEnded?: number;
+  /** One-shots dropped when over the §2.1 source budget. */
+  oneshotDropped?: number;
+  /** Context seconds per wall second over the last diagnostics window. */
+  clockRate?: number;
+  /** Whether the engine holds Android audio focus while playing. */
+  focusHeld?: boolean;
+  /** Set when clockRate stays below 0.98 for two windows (log only in B·S2). */
+  audioHealth?: "ok" | "degraded";
 }
 
 export interface AudioEngine {

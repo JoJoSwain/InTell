@@ -1,7 +1,20 @@
 import { createSeededRng, type SeededRng } from "./seededRng";
 
 export const ONESHOT_MEAN_INTERVAL_SEC = 8;
-export const ONESHOT_HORIZON_SEC = 5 * 60;
+
+/** Production top-up: at most this many seconds ahead on the audio clock. */
+export const ONESHOT_LOOKAHEAD_SEC = 20;
+/** Production cap on concurrently scheduled (not yet started) one-shots. */
+export const ONESHOT_MAX_PENDING = 2;
+
+/** B·S1 stress load (T1b): 37 pending, 300 s ahead. */
+export const ONESHOT_STRESS_LOOKAHEAD_SEC = 5 * 60;
+export const ONESHOT_STRESS_MAX_PENDING = 37;
+
+/**
+ * @deprecated Use {@link ONESHOT_STRESS_LOOKAHEAD_SEC} for stress; production uses {@link ONESHOT_LOOKAHEAD_SEC}.
+ */
+export const ONESHOT_HORIZON_SEC = ONESHOT_STRESS_LOOKAHEAD_SEC;
 export const DEFAULT_ONESHOT_SHAS = [
   "oneshot_1",
   "oneshot_2",
@@ -53,7 +66,7 @@ export class OneShotWindowScheduler {
    * Cursor skips over times already in the past without re-rolling (those were
    * scheduled on an earlier fill, or the window lapsed while JS slept).
    */
-  fillWindow(nowSec: number, horizonSec: number): OneShotPlan[] {
+  fillWindow(nowSec: number, horizonSec: number, maxPlans?: number): OneShotPlan[] {
     if (this.nextAtSec == null) {
       this.nextAtSec = nowSec + this.intervalSec;
     }
@@ -63,10 +76,30 @@ export class OneShotWindowScheduler {
     const until = nowSec + horizonSec;
     const out: OneShotPlan[] = [];
     while (this.nextAtSec <= until) {
+      if (maxPlans != null && out.length >= maxPlans) {
+        break;
+      }
       out.push(this.makePlan(this.nextAtSec));
       this.nextAtSec += this.intervalSec;
     }
     return out;
+  }
+
+  /**
+   * Top up at most `(maxPendingCap - maxPendingAlready)` new plans within
+   * `lookaheadSec`, respecting the pending budget on the engine.
+   */
+  fillWindowLimited(
+    nowSec: number,
+    lookaheadSec: number,
+    maxPendingAlready: number,
+    maxPendingCap: number,
+  ): OneShotPlan[] {
+    const room = Math.max(0, maxPendingCap - maxPendingAlready);
+    if (room === 0) {
+      return [];
+    }
+    return this.fillWindow(nowSec, lookaheadSec, room);
   }
 
   private makePlan(atSec: number): OneShotPlan {
