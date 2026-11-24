@@ -1,6 +1,6 @@
 # B·S2 brief (Lane B): fix the spike engine, then re-run the Android protocol on a release build
 
-**Lane:** B (Mobile) · **Branch:** `b/bs2-audio-stability` (in `C:\dev\intell-lanes\b`, cut from `b/bs1-audio-protocol` at `4bfb4f8`; this brief is its first commit) · **No plan step,** but stop after Part 2's smoke check and report before Jordan's full run.
+**Lane:** B (Mobile) · **Branch:** `b/bs2-audio-stability` (in `C:\dev\intell-lanes\b`, cut from `b/bs1-audio-protocol` at `4bfb4f8`; this brief is its first commit) · **No plan step,** but always stop after Part 2's smoke check and report the numbers before Jordan's full run.
 
 **Why:** B·S1 failed T1, T2, T3, T6, T7 and T8 on the Pixel 11. Claude's reading of the log (below) is that most of the failure comes from our spike, not yet from the library. The spike:
 - ran 3–7× more voices than AUDIO_SPEC §2.1 allows;
@@ -134,15 +134,21 @@ Keep the `AudioEngine` interface stable. Adding fields to `EngineDiagnostics` is
   - T1: no clock jump over 50 ms, and total growth under 250 ms.
   - T8: total PSS under 150 MB, with no steady climb.
 
-## Part 4: narration memory probe (informational, Lane B alone)
-AUDIO_SPEC §6 ships narration as AAC. `decodeAudioData` turns it into 32-bit float PCM: 5 minutes of mono at 48 kHz is about 58 MB.
+## Part 4: narration and bed memory probe (informational, Lane B alone)
+AUDIO_SPEC §6 ships narration and beds as AAC. `decodeAudioData` turns them into 32-bit float PCM: 5 minutes of mono narration at 48 kHz is about 58 MB, and a 2-minute stereo bed about 46 MB. The planned sound features stream both.
+
+Run this part any time you're not waiting on Jordan, for example while Claude reviews the smoke-check numbers.
 
 Find out what 1.0.1 offers to avoid that:
 - a sample-rate option for `decodeAudioData`
 - `AudioBufferQueueSourceNode` (a file played in chunks)
 - `StreamerNode`: does it accept local files, and does it pull in FFmpeg?
 
-Generate a 5-minute mono AAC test file (a tone sweep or noise is fine). For each option that exists, measure the decode time, `decodedBytes` and PSS. Report the numbers; don't wire anything into the engine.
+Generate two test files (a tone sweep or noise is fine): a 5-minute mono AAC "narration" and a 2-minute stereo AAC "bed" with seamless loop points. For each option that exists, measure the decode time, `decodedBytes` and PSS.
+
+For the bed, also check whether it loops seamlessly while streaming: no click, gap or drift at the loop point over 10 loops.
+
+Report the numbers; don't wire anything into the engine.
 
 ## Record
 - **`docs/spikes/M1-audio-test-results.md`:** add an **"Android run 2"** column, and keep run 1.
@@ -157,7 +163,7 @@ Write `docs/briefs/BS2-report.md`, starting with `Lane B · B·S2`. Cover:
 - the smoke-check numbers and the results table
 - a clock-rate table per 5 minutes for T1 and T1b
 - the `adb` highlights (underruns, busiest threads, process state, thermal) and memory
-- the narration probe
+- the narration and bed probe
 - anything surprising
 
 Then push with `git push -u origin b/bs2-audio-stability`. Open **one PR** titled "B·S1 + B·S2: ADR 0001 Android audio test". It carries the B·S1 commits too, since B·S1 never got a PR. Stop for Claude's review.
