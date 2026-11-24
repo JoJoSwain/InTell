@@ -51,7 +51,7 @@ export default async function RevisionDetailPage({ params }: Props) {
 
   const { data: assets } = await supabase
     .from("audio_assets")
-    .select("id, title, kind")
+    .select("id, title, kind, staging_path")
     .order("title");
 
   const day = (versions ?? []).find((v) => v.time_window === "day");
@@ -90,6 +90,7 @@ export default async function RevisionDetailPage({ params }: Props) {
           id: a.id as string,
           title: String(a.title ?? a.id),
           kind: String(a.kind),
+          staging_path: (a.staging_path as string | null) ?? null,
         }))}
         initial={{
           id: revision.id as string,

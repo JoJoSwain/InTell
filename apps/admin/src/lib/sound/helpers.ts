@@ -75,3 +75,20 @@ export function parseMusicConditionJson(
     return { error: "conditions must be valid JSON" };
   }
 }
+
+/** Validate and normalize a zone boundary Polygon for admin saves. */
+export function parsePolygonGeoJson(
+  raw: string,
+): string | { error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { error: "boundary GeoJSON required" };
+  try {
+    const geo = JSON.parse(trimmed) as { type?: string; coordinates?: unknown };
+    if (geo.type !== "Polygon" || !Array.isArray(geo.coordinates)) {
+      return { error: "boundary must be a GeoJSON Polygon" };
+    }
+    return JSON.stringify(geo);
+  } catch {
+    return { error: "boundary must be valid GeoJSON" };
+  }
+}

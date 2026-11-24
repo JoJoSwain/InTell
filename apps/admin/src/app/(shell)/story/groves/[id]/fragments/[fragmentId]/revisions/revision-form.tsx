@@ -4,9 +4,15 @@ import {
   ServerActionForm,
   ServerActionSubmit,
 } from "@/components/server-action-form";
+import { BreathPointsField } from "@/components/sound/breath-points-field";
 import { createRevision, updateRevision } from "./actions";
 
-export type AudioOption = { id: string; title: string; kind: string };
+export type AudioOption = {
+  id: string;
+  title: string;
+  kind: string;
+  staging_path?: string | null;
+};
 
 export type VersionInitial = {
   id?: string;
@@ -34,11 +40,13 @@ function VersionFields({
   assets,
   initial,
   readOnly,
+  stagingByAssetId,
 }: {
   window: "day" | "night";
   assets: AudioOption[];
   initial?: VersionInitial | null;
   readOnly: boolean;
+  stagingByAssetId: Record<string, string>;
 }) {
   const label = window === "day" ? "Day" : "Night";
   const included = Boolean(initial);
@@ -113,26 +121,23 @@ function VersionFields({
           dusk, River speaks of something else.&quot;
         </span>
       </label>
-      <label className="block text-sm">
-        <span className="text-textMuted">Breath points (ms, comma-separated)</span>
-        <input
-          name={`${window}_breath_points_ms`}
-          defaultValue={(initial?.breath_points_ms ?? []).join(", ")}
-          disabled={readOnly}
-          aria-label={`${label} breath points`}
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="text-textMuted">Swell cues (ms, comma-separated)</span>
-        <input
-          name={`${window}_swell_cues_ms`}
-          defaultValue={(initial?.swell_cues_ms ?? []).join(", ")}
-          disabled={readOnly}
-          aria-label={`${label} swell cues`}
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
-        />
-      </label>
+      <BreathPointsField
+        name={`${window}_breath_points_ms`}
+        label={`${label} breath points (ms, comma-separated)`}
+        defaultValue={initial?.breath_points_ms ?? []}
+        disabled={readOnly}
+        stagingPath={
+          initial?.narration_asset_id
+            ? stagingByAssetId[initial.narration_asset_id]
+            : null
+        }
+      />
+      <BreathPointsField
+        name={`${window}_swell_cues_ms`}
+        label={`${label} swell cues (ms, comma-separated)`}
+        defaultValue={initial?.swell_cues_ms ?? []}
+        disabled={readOnly}
+      />
     </fieldset>
   );
 }
@@ -158,10 +163,14 @@ export function RevisionForm({
   const changeKind = isFirst
     ? "contingency"
     : (initial?.change_kind ?? "");
-  // Remount when server-provided field values change after save (R1).
+  // Remount when server-provided field values change after save (R1 / save-twice).
   const remountKey = initial?.id
-    ? `rev:${initial.id}:${initial.change_teaser ?? ""}:${initial.day?.other_time_hint ?? ""}:${initial.night?.other_time_hint ?? ""}`
+    ? `rev:${initial.id}:${initial.change_teaser ?? ""}:${initial.day?.other_time_hint ?? ""}:${initial.night?.other_time_hint ?? ""}:${(initial.day?.breath_points_ms ?? []).join(",")}`
     : `rev:new:${fragmentId}`;
+  const stagingByAssetId: Record<string, string> = {};
+  for (const a of audioAssets) {
+    if (a.staging_path) stagingByAssetId[a.id] = a.staging_path;
+  }
 
   return (
     <ServerActionForm
@@ -260,12 +269,14 @@ export function RevisionForm({
         assets={audioAssets}
         initial={initial?.day}
         readOnly={readOnly}
+        stagingByAssetId={stagingByAssetId}
       />
       <VersionFields
         window="night"
         assets={audioAssets}
         initial={initial?.night}
         readOnly={readOnly}
+        stagingByAssetId={stagingByAssetId}
       />
 
       {!readOnly ? (

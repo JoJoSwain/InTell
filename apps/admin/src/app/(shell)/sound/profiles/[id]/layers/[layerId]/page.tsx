@@ -12,6 +12,7 @@ import {
   ServerActionSubmit,
 } from "@/components/server-action-form";
 import { BedAssetHints } from "@/components/sound/bed-asset-hints";
+import { LayerAudition } from "@/components/sound/layer-audition";
 import { formatIntArray } from "@/lib/sound/helpers";
 import { saveAmbienceLayer, saveLayerAssetWeights } from "../../../../actions";
 
@@ -44,7 +45,7 @@ export default async function AmbienceLayerPage({ params }: Props) {
   const { data: assets } = assetIds.length
     ? await supabase
         .from("audio_assets")
-        .select("id, title, kind, channels, duration_ms")
+        .select("id, title, kind, channels, duration_ms, staging_path")
         .in("id", assetIds)
     : { data: [] };
 
@@ -61,6 +62,7 @@ export default async function AmbienceLayerPage({ params }: Props) {
       kind: string;
       channels: number;
       duration_ms: number;
+      staging_path: string | null;
     }[]).map((a) => [a.id, a]),
   );
 
@@ -274,6 +276,18 @@ export default async function AmbienceLayerPage({ params }: Props) {
         </ServerActionForm>
       ) : null}
 
+      <LayerAudition
+        assets={((assets ?? []) as {
+          id: string;
+          title: string;
+          staging_path: string | null;
+        }[]).map((a) => ({
+          id: a.id,
+          title: a.title,
+          staging_path: a.staging_path,
+        }))}
+      />
+
       <section className="mt-12 max-w-xl" aria-labelledby="weights-heading">
         <h2 id="weights-heading" className="font-serif text-xl font-semibold">
           Asset weights
@@ -285,7 +299,7 @@ export default async function AmbienceLayerPage({ params }: Props) {
           >
             <input type="hidden" name="layer_id" value={layerId} />
             <input type="hidden" name="profile_id" value={profileId} />
-            {(weights ?? []).map((w, i) => {
+            {(weights ?? []).map((w) => {
               const asset = assetById.get(w.asset_id as string);
               return (
                 <div key={w.asset_id as string} className="rounded-md border border-border p-3">
