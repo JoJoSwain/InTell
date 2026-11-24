@@ -72,6 +72,8 @@ Lane A did not edit `apps/mobile`.
 
 3. Playwright then failed: `getByLabel('Teaser')` matched both the fragment teaser text field and the new **Locked teaser** select (substring match). **Fix:** rename the select to `Locked-teaser audio` and use `{ exact: true }` in m3c/m3d e2e.
 
+4. A second Playwright collision: two `GroupedChecklist` panels both used `aria-label="Checklist results"` when A5 sound failures were shown. **Fix:** A5 panel uses `Sound checklist results`; e2e uses exact checklist label.
+
 ### 2. Sound action tests
 
 - `lib/sound/validate.ts` — zone GeoJSON (helpers), heardAll ids, growth ≤4 / grove+window, `minDepthM ≥ 0`, stems ≤4, `music_moment` / `beacon` kinds, `BED_MONO` mono beds, breath/swell sorted+unique+within duration

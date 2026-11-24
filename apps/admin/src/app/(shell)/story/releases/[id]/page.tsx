@@ -412,7 +412,10 @@ export default async function ReleaseDetailPage({ params }: Props) {
               <div className="mb-6">
                 <h3 className="text-sm font-medium">Sound checks (A5)</h3>
                 <div className="mt-2">
-                  <GroupedChecklist failures={a5Failures} />
+                  <GroupedChecklist
+                    failures={a5Failures}
+                    ariaLabel="Sound checklist results"
+                  />
                 </div>
               </div>
             ) : null}

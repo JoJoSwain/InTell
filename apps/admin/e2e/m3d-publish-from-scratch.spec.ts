@@ -234,7 +234,9 @@ test.describe("M3d publish from scratch", () => {
     for (let i = 0; i < 8; i++) {
       await page.getByRole("button", { name: "Run publish checklist" }).click();
       await expect(
-        page.getByLabel("Checklist results").or(page.getByText(/no failures/i)),
+        page
+          .getByLabel("Checklist results", { exact: true })
+          .or(page.getByText("Last check reported no failures.")),
       ).toBeVisible({ timeout: 20_000 });
       const addMissing = page.getByRole("button", {
         name: "Add missing dependency items from checklist",
