@@ -2,7 +2,6 @@ package expo.modules.audiosession
 
 import android.os.Looper
 import androidx.annotation.OptIn
-import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
@@ -26,10 +25,13 @@ class MixPlayer(
   private var title: String = "InTell"
   private var artist: String = ""
   private var positionMs: Long = 0
+  /** PNG/JPEG bytes for MediaMetadata artwork (app icon). */
+  private var artworkBytes: ByteArray? = null
 
-  fun setMeta(newTitle: String, newArtist: String) {
+  fun setMeta(newTitle: String, newArtist: String, artwork: ByteArray? = artworkBytes) {
     title = newTitle
     artist = newArtist
+    if (artwork != null) artworkBytes = artwork
     invalidateState()
   }
 
@@ -40,11 +42,14 @@ class MixPlayer(
   }
 
   override fun getState(): State {
-    val metadata =
+    val metadataBuilder =
       MediaMetadata.Builder()
         .setTitle(title)
         .setArtist(artist)
-        .build()
+    artworkBytes?.let { bytes ->
+      metadataBuilder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+    }
+    val metadata = metadataBuilder.build()
     val item =
       MediaItemData.Builder("intell-mix")
         .setMediaMetadata(metadata)

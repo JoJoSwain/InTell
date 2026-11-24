@@ -4,12 +4,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import expo.modules.kotlin.Promise
@@ -17,6 +19,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import java.io.ByteArrayOutputStream
 
 class SessionMetaRecord : Record {
   @Field
@@ -151,7 +154,9 @@ class AudioSessionModule : Module() {
           onSkipBack = { sendEvent("remote", mapOf("command" to "skipBack")) },
         )
       mixPlayer = player
-      player.setMeta(meta.title, meta.artist)
+      player.setMeta(meta.title, meta.artist, loadAppIconArtwork(ctx))
+      // playWhenReady=true before the service is started / session added
+      // so Media3 promotes FGS inside the ~5 s window.
       player.setPlayback(true)
 
       val session =
@@ -160,7 +165,7 @@ class AudioSessionModule : Module() {
           .build()
       mediaSession = session
     } else {
-      mixPlayer?.setMeta(meta.title, meta.artist)
+      mixPlayer?.setMeta(meta.title, meta.artist, loadAppIconArtwork(ctx))
       mixPlayer?.setPlayback(true)
     }
 
@@ -172,16 +177,25 @@ class AudioSessionModule : Module() {
   private fun startServiceAndAttach() {
     val ctx = context
     val intent = Intent(ctx, MixPlaybackService::class.java)
+    // MixPlayer must already be playWhenReady=true so Media3 can promote
+    // the FGS within Android's ~5 s window after startForegroundService.
+    mixPlayer?.setPlayback(true)
     try {
       ContextCompat.startForegroundService(ctx, intent)
     } catch (e: Exception) {
-      android.util.Log.e("AudioSession", "startForegroundService refused: ${e.message}", e)
+      logForegroundServiceException("startForegroundService", e)
     }
     val attach = {
       val service = MixPlaybackService.instance
       val session = mediaSession
+      // Re-assert playing right before addSession (Media3 promotion trigger).
+      mixPlayer?.setPlayback(true)
       if (service != null && session != null) {
-        service.attachSession(session)
+        try {
+          service.attachSession(session)
+        } catch (e: Exception) {
+          logForegroundServiceException("attachSession", e)
+        }
       }
     }
     if (MixPlaybackService.instance != null) {
@@ -249,5 +263,46 @@ class AudioSessionModule : Module() {
       }
     observer.start()
     routeObserver = observer
+  }
+
+  private fun loadAppIconArtwork(ctx: Context): ByteArray? {
+    return try {
+      val drawable =
+        ctx.packageManager.getApplicationIcon(ctx.applicationInfo)
+      val bitmap =
+        if (drawable is android.graphics.drawable.BitmapDrawable) {
+          drawable.bitmap
+        } else {
+          drawable.toBitmap(
+            width = 256,
+            height = 256,
+            config = Bitmap.Config.ARGB_8888,
+          )
+        }
+      val out = ByteArrayOutputStream()
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+      out.toByteArray()
+    } catch (e: Exception) {
+      android.util.Log.w("AudioSession", "app icon artwork unavailable: ${e.message}")
+      null
+    }
+  }
+
+  private fun logForegroundServiceException(where: String, e: Exception) {
+    val name = e.javaClass.name
+    val isDenied =
+      (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        e is android.app.ForegroundServiceStartNotAllowedException) ||
+        name.contains("ForegroundServiceStartNotAllowed") ||
+        name.contains("ForegroundServiceDidNotStartInTime")
+    if (isDenied) {
+      android.util.Log.e(
+        "AudioSession",
+        "$where: foreground service refused ($name): ${e.message}",
+        e,
+      )
+    } else {
+      android.util.Log.e("AudioSession", "$where refused: ${e.message}", e)
+    }
   }
 }
