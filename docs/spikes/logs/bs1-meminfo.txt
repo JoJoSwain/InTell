@@ -1,0 +1,8 @@
+T1 start local=2026-11-23T19:35:58.1881827-07:00 battery=89% USB=false PSS=531014
+T8-min5 ts=2026-11-23T19:40:58.4731317-07:00 level: 88 USB powered: false TOTAL PSS:   506770            TOTAL RSS:   615856       TOTAL SWAP PSS:    43011
+T8-min30-manual ts=2026-11-23T20:05:00.3099426-07:00 level: 83 USB powered: false TOTAL PSS:   536377            TOTAL RSS:   651956       TOTAL SWAP PSS:    37623
+T8-min30 ts=2026-11-23T20:05:59.6322538-07:00 level: 83 USB powered: false TOTAL PSS:   536106            TOTAL RSS:   595756       TOTAL SWAP PSS:    92807
+T8-min60 ts=2026-11-23T20:36:00.9658233-07:00 level: 76 USB powered: false TOTAL PSS:   552015            TOTAL RSS:   612332       TOTAL SWAP PSS:    92519
+T9-end 
+T8-min60-manual ts=2026-11-23T20:36:04.5818577-07:00 level: 76 USB powered: false TOTAL PSS:   611490            TOTAL RSS:   671592       TOTAL SWAP PSS:    92515
+T9-end level: 76 USB powered: false (2026-11-23T20:36)

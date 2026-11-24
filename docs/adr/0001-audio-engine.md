@@ -27,17 +27,17 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 
 | # | Test | Android | iOS | Notes |
 |---|---|---|---|---|
-| T1 | 60-minute locked run + clock health | blocked | | spike UI crash — see BS1-report |
-| T2 | Stem alignment (ear) | blocked | | |
-| T3 | Ducking | blocked | | |
-| T4 | Route switching | blocked | | |
-| T5 | Phone call | blocked | | |
-| T6 | Other app audio | blocked | | |
-| T7 | Lock-screen controls | blocked | | |
-| T8 | Memory &lt; 150 MB | blocked | | |
-| T9 | Battery (informational) | blocked | | |
+| T1 | 60-minute locked run + clock health | **fail** | | lock → immediate/severe distortion; `clockGapMs` → ~1.7e6 ms |
+| T2 | Stem alignment (ear) | **fail** | | too degraded under lock to judge |
+| T3 | Ducking | **fail** | | clicks/choppiness after toggles |
+| T4 | Route switching | **pass** | | BT unplug pauses; stayed paused |
+| T5 | Phone call | **pass** | | paused and resumed |
+| T6 | Other app audio | **fail** | | did not pause; distorted |
+| T7 | Lock-screen controls | **fail** | | pause ok; locked audio garbage |
+| T8 | Memory &lt; 150 MB | **fail** | | PSS ~500–600 MB |
+| T9 | Battery (informational) | 89%→76% (−13%) | | unplugged ~60 min |
 
-**Verdict:** _Pending_ (Android protocol blocked; Status unchanged)
+**Verdict:** _Pending_ (Android protocol **run**; several fails — Status unchanged for Claude)
 
 ## Findings so far
 (Status remains **Proposed**. Full T1–T9 protocol and iPhone testing are postponed.)
@@ -46,9 +46,9 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
 - **JS timers pause in the background on Android, but engine `onEnded` callbacks still reach JS.** A locked period froze `setInterval` (no 60-second diagnostics until return to `active`); native audio kept playing; `voiceEnded` fired while backgrounded and can top up schedules / write diagnostics.
 - **Design rule:** schedule sound ahead on the **audio clock** (`start(when)`); drive background logic from **engine callbacks** and **location events** — never from `setInterval` alone.
 - **Spike ≠ product ambience params.** The spike’s one-shot interval is a **fixed 8 s** and its gain is a **fixed −12 dB** (simplifications). M4 shared ambience logic must use the spec’s **random (exponential) intervals** and **gain ranges** (AUDIO_SPEC).
-- **Outstanding:** the T1–T9 device protocol on Pixel, and the iPhone build and test.
+- **Outstanding:** Claude’s read of the Android T1–T9 results (Accept / Reject / more work); the iPhone build and test.
 - **Clock-gap interpretation.** `clockGapMs` = wall elapsed since mix start − context elapsed since mix start. Growing positive gap ⇒ dropouts / audio-clock starvation; slight negative drift ⇒ clock-rate difference, not a failure by itself.
-- **Android protocol (B·S1, 2026-11-23):** Wireless debugging and fixture generate succeeded; debug APK installed on Pixel 11 (Android 17). Opening `intell://dev/audio-spike` crashed on `require(…narration_90s.wav)` (`TypeError: undefined is not a function` in `assets.ts`). T1–T9 not run. No product code changed. Details in `docs/briefs/BS1-report.md`.
+- **Android protocol (B·S1, 2026-11-23):** First attempt blocked by Metro custom `resolveRequest` breaking existing spike WAV asset ids. Fix: install the missing-fixture sentinel resolver only when WAVs are absent (`6330c67`). Protocol then run on Pixel 11 + Bluetooth earbuds. **T4/T5 pass; T1/T2/T3/T6/T7/T8 fail; T9 −13%.** Dominant issue: continuous mix quality collapses under lock (and degrades with interaction) while layers keep playing; `clockGapMs` grows to ~1.7e6 ms; PSS ~500–600 MB. Log: `docs/spikes/logs/pixel11-2026-11-23.jsonl`. Details in `docs/briefs/BS1-report.md`. Status remains **Proposed**.
 
 ## Consequences
 - UI never imports `react-native-audio-api` (ESLint `no-restricted-imports`).
