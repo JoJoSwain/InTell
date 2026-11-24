@@ -1,0 +1,24 @@
+2026-11-24T14:37:17.4751537-07:00 INTERACTIVE_START T3-T4-T6-T7-T5 appPid=28763
+2026-11-24T14:39:40.8154542-07:00 T3_DONE ducking_ok click_on_narration_uncertain_fixture_vs_engine
+2026-11-24T14:47:06.0678853-07:00 T4_RESULT
+unplug: paused (correct)
+reconnect: stayed paused (correct); notification play stayed DISABLED
+lock_screen_play: blocked by phone auth/sign-in (could not test cleanly)
+earbud_play: no effect (no resumeAfterFade observed expected)
+spike_start_full_mix: works as recovery
+play_after_reconnect: FAIL for remote/earbud; only Start full mix recovers
+2026-11-24T14:50:39.3433848-07:00 T6_RESULT
+other_app_began: PASS fadeMasterAndSuspend via interruption began (logged twice shouldResume=false)
+YTM_pause_or_close: no interruption ended / no resumeAfterFade
+Start_full_mix_disabled_after_suspend: same as T4; Stop+Start recovers
+T6: partial — pause OK, resume FAIL
+2026-11-24T14:54:18.7964775-07:00 T7_RESULT
+metadata: PASS 'InTell audio spike'
+pause_button: FAIL — not shown on lock/notification
+play_button: blocked by phone auth; did not resume mix (no clean remote play proof)
+audio_quality_while_playing: PASS clean (vs B·S1 distortion)
+2026-11-24T15:01:24.3943716-07:00 T5_RESULT
+call_began: PASS fade/pause
+call_ended: FAIL no resume (same resume gap as T6)
+audio_quality: clean while playing
+INTERACTIVE_COMPLETE

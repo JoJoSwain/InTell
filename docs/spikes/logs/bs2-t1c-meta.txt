@@ -1,0 +1,6 @@
+2026-11-24T12:16:49.6367529-07:00 T1C_LOCK_CONFIRMED device=adb-67090DLKY005KL-AldORp._adb-tls-connect._tcp pid=26433 streamBed=true
+2026-11-24T12:16:54.6323013-07:00 min=0 pid=26433 file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-t1c-0.txt
+2026-11-24T12:21:55.4913637-07:00 min=5 pid=26433 file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-t1c-5.txt
+2026-11-24T12:26:55.6451533-07:00 min=10 pid=26433 file=c:\dev\intell-lanes\b\docs\spikes\logs\bs2-adb-t1c-10.txt
+2026-11-24T12:26:55.6491547-07:00 T1C_10_COMPLETE
+2026-11-24T12:28:44.3078871-07:00 PAUSED_FOR_MEETING force-stopped T1c leak pid was 26433; resume at T3 after clean spike launch

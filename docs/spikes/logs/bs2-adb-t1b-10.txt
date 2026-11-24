@@ -1,0 +1,387 @@
+=== T1b minute=10 wall=2026-11-24T12:12:13.7233921-07:00 pid=26433 ===
+--- meminfo ---
+Applications Memory Usage (in Kilobytes):
+Uptime: 88574830 Realtime: 141599983
+
+** MEMINFO in pid 26433 [org.replaceplace.intell] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    98966    98960        0        8   101732   111252   100019     6418
+  Dalvik Heap     6313     4020     2192       10    10636   262144     5294   256850
+ Dalvik Other     1269     1044       12        0     2124                           
+        Stack     1252     1252        0        0     1260                           
+    Other dev       16        4       12        0      336                           
+     .so mmap     2714      188      440       12    44092                           
+    .jar mmap      752        0       24        0    43668                           
+    .apk mmap    22914      712    21804        0    25972                           
+    .ttf mmap      397        0      176        0     1260                           
+    .dex mmap     7049        0     7044        0     7832                           
+    .oat mmap      161        0        0        0    12912                           
+    .art mmap     3922     3536      196        4    25508                           
+   Other mmap      187        4       64        0     1496                           
+    GL mtrack    15000    15000        0        0    15000                           
+        Memfd       77        0        0        0     1052                           
+      Unknown    12841    12644      196        4    13636                           
+        TOTAL   173868   137364    32160       38   308516   373396   105313   263268
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:     7752                          36144
+         Native Heap:    98960                         101732
+                Code:    30388                         136144
+               Stack:     1252                           1260
+            Graphics:    15000                          15000
+       Private Other:    16172
+              System:     4344
+             Unknown:                                   18236
+ 
+           TOTAL PSS:   173868            TOTAL RSS:   308516       TOTAL SWAP PSS:       38
+ 
+ Objects
+               Views:       52         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       40        AssetManagers:        0
+       Local Binders:       25        Proxy Binders:       71
+       Parcel memory:       14         Parcel count:       56
+    Death Recipients:        2             WebViews:        0
+ 
+ Native Allocations
+                         Count                       Total(kB)
+                        ------                         ------
+    Other (malloced):      653                             60
+ Other (nonmalloced):      107                             78
+ 
+ Mapped Bitmaps
+                         Count                       Size(KB)
+                        ------                         ------
+              Mapped:        0                              0
+              Unique:        0                              0
+ 
+ SQL
+         MEMORY_USED:      250
+  PAGECACHE_OVERFLOW:       84          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4      104            111     4    35     6  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb
+         4        8                    0     0     0    (attached) temp
+         4      104             32     4    18     3  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb (2)
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+              8            57             9  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb
+ 
+
+--- media.audio_flinger ---
+
+>  26433  10384  org.replaceplace.intell
+  Global session refs:
+    session  cnt     pid    uid  name
+>     13001    1   26433  10384  org.replaceplace.intell
+      13025    1    1957  10288  android.uid.systemui
+  Hardware status: 0
+>             numTracks=1 writeErrors=0 underruns=80 overruns=1158
+              sampleRate=48000 frameCount=480 measuredWarmup=25 ms, warmupCycles=7
+              mixPeriod=10.00 ms latency=280.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=448
+    5 Tracks of which 0 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+      F4 S   4159     no    1957/  10288   13025    5848 S  0x600 00000001 00000001  48000  1   d  4  -inf    -6    -6 
+    0          -12       true 000016C1   5825       0 f         0        0      false        false   unavail
+      F1 S     55     no    1367/   1000      49      34 A  0x681 00000001 00000001  48000  1   d  4   -24    -6    -6 
+    0          -18      false 00029667    969       0 F         0        0      false        false   41.00 t
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 10:12:25.509 AT::remove    (0xb400007528a18718) F2 S   4139     no    1957/  10288   12865    5828 S  0x600 
+00000001 00000001  48000  1   d  4  -inf    -6    -6     0          -12       true 000012FC   4860       0 f         0 
+       0      false        false   unavail
+     11-24 10:12:28.481 threadLoop_standby: framesWritten:197167680  suspendedFrames:0  monoPipeWritten:197167680  
+monoPipeLeft:1440
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    1 Tracks of which 1 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+             4156    yes   26433/  10384   13001    5845 A  0x000 00000005 00000003  48000  3   1  2     0     0     0 
+    0            0      false 030D47B4  13454   10679 A      6348        0      false        false  561.95 t
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 08:29:17.876 AT::add       (0xb400007528a1ffd8)        3994     no   32630/  10254   11617    5606 A  0x000 
+00000001 00000003  48000  3   1  2  -inf  -1.1  -1.1     0            0      false 00000000  24000       0 f         0 
+       0      false        false       new
+     11-24 08:29:18.004 AT::remove    (0xb400007528a24648)        3990     no   32630/  10254   11617    5595 T  0x600 
+00000001 00000003  48000  3   1  2  -inf     0     0     0            0      false 00017700  24000   22080 f         0 
+       0      false        false  800.36 k
+>             numTracks=1 writeErrors=0 underruns=17 overruns=23
+              sampleRate=48000 frameCount=480 measuredWarmup=68.9 ms, warmupCycles=10
+              mixPeriod=10.00 ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.868 threadLoop_standby
+     11-22 20:52:20.915 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=0 writeErrors=0 underruns=0 overruns=0
+              sampleRate=0 frameCount=0 measuredWarmup=0 ms, warmupCycles=0
+              mixPeriod=nan ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.917 threadLoop_standby
+     11-22 20:52:20.950 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=1 writeErrors=0 underruns=1 overruns=0
+              sampleRate=48000 frameCount=480 measuredWarmup=40.4 ms, warmupCycles=7
+              mixPeriod=10.00 ms latency=40.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    1 Tracks of which 0 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+             2964     no    1957/  10288    7809    3851 S  0x604 00000001 00000001  48000  0   2  4   -20   -20   -20 
+    0            0      false 00002C83  24000       0 f         0        0      false        false   86.56 k
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.955 threadLoop_standby
+     11-22 20:52:21.001 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=0 writeErrors=0 underruns=0 overruns=0
+              sampleRate=0 frameCount=0 measuredWarmup=0 ms, warmupCycles=0
+              mixPeriod=nan ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:21.031 threadLoop_standby
+     11-22 20:52:21.068 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x10000 
+(AUDIO_DEVICE_OUT_TELEPHONY_TX)
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    1 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 09:38:44.007 threadLoop_standby
+     11-24 09:38:44.081 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x80 
+(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)
+>   Track-3665:  start: 12:01:36.521 (active) uid: 10384 org.replaceplace.intell  sessions: 10  actual_seconds: 
+7024.958267 { 26433 } { frozen-while-active: 1  last: 11:52:30.676 } 
+  
+  Power Clients: (some snapshots quantized in time)
+>   (active) uid: 10384 org.replaceplace.intell  sessions: 10  actual_seconds: 7024.958483 { 26433 } { 
+frozen-while-active: 1  last: 11:52:30.676 } { { 09:57:09.402, 10:02:25.383} { 10:08:55.324, ~:58.425} { 10:12:24.597, 
+11:43:54.505} { 11:45:35.945, ~:41.557} { ~:45:44.506, ~:46:21.517} { ~:46:52.372, ~:47:08.380} { ~:52:19.359, 
+~:31.111} { ~:52:31.316, ~:53:49.313} { 11:54:18.862, 12:01:26.044} { 12:01:36.521, ~} }
+      Sum:    11-24 09:57:09.402 duration_boottime: 7024.959473 duration_monotonic: 7024.961426
+      Max:    11-24 10:12:24.597 duration_boottime: 5489.908203 duration_monotonic: 5489.908203
+
+
+
+--- top -H ---
+Threads: 55 total,   0 running,  55 sleeping,   0 stopped,   0 zombie
+  Mem:    11647M total,    10676M used,      970M free,        8M buffers
+ Swap:     5823M total,     3004M used,     2819M free,     3003M cached
+700%cpu  43%user   7%nice  33%sys 610%idle   0%iow   3%irq   3%sirq   0%host
+  TID USER         PR  NI VIRT  RES  SHR S[%CPU] %MEM     TIME+ THREAD          PROCESS
+26489 u0_a384       4 -16  22G 286M 133M S 20.0   2.4   3:28.71 AudioTrack      org.replaceplace.intell
+26460 u0_a384      16  -4  22G 286M 133M S 10.0   2.4   0:11.84 mqt_v_js        org.replaceplace.intell
+26466 u0_a384      20   0  22G 286M 133M S  6.6   2.4   0:03.27 ncFunctionQueue org.replaceplace.intell
+26609 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.07 binder:26433_7  org.replaceplace.intell
+26499 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 binder:26433_6  org.replaceplace.intell
+26495 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.03 mqt_v_js        org.replaceplace.intell
+26493 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.07 mqt_v_js        org.replaceplace.intell
+26491 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.21 mqt_v_js        org.replaceplace.intell
+26492 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.09 mqt_v_js        org.replaceplace.intell
+26494 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.06 mqt_v_js        org.replaceplace.intell
+26490 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.01 binder:26433_1  org.replaceplace.intell
+26487 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.27 mqt_v_js        org.replaceplace.intell
+26484 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.04 binder:26433_4  org.replaceplace.intell
+26488 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.08 mqt_v_js        org.replaceplace.intell
+26486 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.01 binder:26433_5  org.replaceplace.intell
+26482 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 SurfaceSyncGrou org.replaceplace.intell
+26480 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 AudioPortEventH org.replaceplace.intell
+26479 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.44 mqt_v_js        org.replaceplace.intell
+26478 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.14 mqt_v_js        org.replaceplace.intell
+26477 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 ConnectivityThr org.replaceplace.intell
+26475 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 kolibri-cleaner org.replaceplace.intell
+26476 u0_a384      29   9  22G 286M 133M S  0.0   2.4   0:00.00 GoogleApiHandle org.replaceplace.intell
+26474 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 hades           org.replaceplace.intell
+26462 u0_a384      30  10  22G 286M 133M S  0.0   2.4   0:00.06 android.bg      org.replaceplace.intell
+26468 u0_a384       0  -2  22G 286M 133M S  0.0   2.4   0:00.00 hwuiTask1       org.replaceplace.intell
+26463 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.08 hades           org.replaceplace.intell
+26464 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 ProtoLogBackgro org.replaceplace.intell
+26465 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 Expo JNI deallo org.replaceplace.intell
+26470 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 DefaultDispatch org.replaceplace.intell
+26467 u0_a384       0  -2  22G 286M 133M S  0.0   2.4   0:00.00 hwuiTask0       org.replaceplace.intell
+26469 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 DefaultDispatch org.replaceplace.intell
+26461 u0_a384      16  -4  22G 286M 133M S  0.0   2.4   0:00.34 mqt_v_native    org.replaceplace.intell
+26457 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.08 HybridData Dest org.replaceplace.intell
+26453 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 vk_tlsem4_bg    org.replaceplace.intell
+26454 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 vk_sparse_queue org.replaceplace.intell
+26455 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 vk_tlsem4_bg    org.replaceplace.intell
+26456 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 vk_sparse_queue org.replaceplace.intell
+26459 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.01 pool-3-thread-1 org.replaceplace.intell
+26452 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 vkmem_free      org.replaceplace.intell
+26450 u0_a384      10 -10  22G 286M 133M S  0.0   2.4   0:00.00 TracingMuxer    org.replaceplace.intell
+26449 u0_a384       0  -4  22G 286M 133M S  0.0   2.4   0:00.49 RenderThread    org.replaceplace.intell
+26448 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 WM.task-2       org.replaceplace.intell
+26446 u0_a384      29   9  22G 286M 133M S  0.0   2.4   0:00.09 Profile Saver   org.replaceplace.intell
+26447 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 WM.task-1       org.replaceplace.intell
+26442 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 binder:26433_1  org.replaceplace.intell
+26443 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.00 binder:26433_2  org.replaceplace.intell
+26444 u0_a384      20   0  22G 286M 133M S  0.0   2.4   0:00.13 binder:26433_3  org.replaceplace.intell
+26439 u0_a384      24   4  22G 286M 133M S  0.0   2.4   0:00.11 ReferenceQueueD org.replaceplace.intell
+26441 u0_a384      24   4  22G 286M 133M S  0.0   2.4   0:00.01 FinalizerWatchd org.replaceplace.intell
+26435 u0_a384       0 -20  22G 286M 133M S  0.0   2.4   0:00.00 Signal Catcher  org.replaceplace.intell
+26433 u0_a384       0   0  22G 286M 133M S  0.0   2.4   0:05.79 aceplace.intell org.replaceplace.intell
+26436 u0_a384       0 -20  22G 286M 133M S  0.0   2.4   0:00.00 perfetto_hprof_ org.replaceplace.intell
+26437 u0_a384      29   9  22G 286M 133M S  0.0   2.4   0:00.31 Jit thread pool org.replaceplace.intell
+26438 u0_a384      24   4  22G 286M 133M S  0.0   2.4   0:00.78 HeapTaskDaemon  org.replaceplace.intell
+26440 u0_a384      24   4  22G 286M 133M S  0.0   2.4   0:00.01 FinalizerDaemon org.replaceplace.intell
+
+--- activity processes ---
+ACTIVITY MANAGER RUNNING PROCESSES (dumpsys activity processes)
+  All known processes:
+  *APP* UID 10384 ProcessRecord{38ece7c 26433:org.replaceplace.intell/u0a384}
+    user #0 uid=10384 gids={3003, 50384, 20384, 9997}
+    mRequiredAbi=arm64-v8a instructionSet=arm64
+    class=org.replaceplace.intell.MainApplication
+    dir=/data/app/~~diMoqWsIXAY8K126nPjwcA==/org.replaceplace.intell-bN_wqNmRann2XqUx6QuM2Q==/base.apk publicDir=/data/app/~~diMoqWsIXAY8K126nPjwcA==/org.replaceplace.intell-bN_wqNmRann2XqUx6QuM2Q==/base.apk data=/data/user/0/org.replaceplace.intell
+    packageList={org.replaceplace.intell}
+    compat={420dpi}
+    thread=com.android.server.am.ApplicationThreadDeferred@4d56119
+    pid=26433
+    lastActivityTime=-10m58s781ms    startUpTime=-17m59s543ms    startElapsedTime=-17m59s543ms
+    startSeq=770 lruSeq=126958
+    mountMode=DEFAULT
+    pendingUiClean=true
+    lastRssTime=-6m42s253ms rssProcState=4 rssStatType=0 nextRssTime=-4m27s397ms
+    lastRss=282MB lastCachedRss=0.00
+    trimMemoryLevel=0
+    procStateMemTracker: best=1 (1=1 3.375x)
+    lastRequestedGc=-17m59s524ms lastLowMemory=-17m59s524ms reportLowMemory=false
+    currentHostingComponentTypes=0x180 historicalHostingComponentTypes=0x180
+    reportedInteraction=false fgInteractionTime=-10m33s365ms
+    adjSeq=217409
+    oom adj: max=1001 curRaw=200 setRaw=200 cur=200 set=200
+    mCurSchedGroup=2 setSchedGroup=2 systemNoUi=false
+    curProcState=4 mRepProcState=4 setProcState=4 lastStateTime=-17m59s524ms
+    curCapability=---NFUATI setCapability=---NFUATI
+    curCpuTimeReasons=0x1 setCpuTimeReasons=0x1 curImplicitCpuTimeReasons=0x1 setImplicitCpuTimeReasons=0x1
+
+    hasShownUi=true
+    cached=false empty=false
+    foregroundActivities=true (rep=true)
+    lastTopTime=-10m33s365ms
+    lastInvisibleTime=2026-11-24 19:01:44.785 (-10m33s366ms)
+    hasStartedServices=true
+    mHasForegroundServices=true forcingToImportant=null
+    Services:
+      - ServiceRecord{214a133 u0 org.replaceplace.intell/com.swmansion.audioapi.system.CentralizedForegroundService c:org.replaceplace.intell}
+    scheduleServiceTimeoutPending=false
+    Published Providers:
+      - androidx.startup.InitializationProvider
+        -> ContentProviderRecord{4c625de u0 org.replaceplace.intell/androidx.startup.InitializationProvider}
+      - expo.modules.filesystem.FileSystemFileProvider
+        -> ContentProviderRecord{f9bf3bf u0 org.replaceplace.intell/expo.modules.filesystem.FileSystemFileProvider}
+    Connected Providers:
+      - 296afb4/com.android.providers.settings/.SettingsProvider->26433:org.replaceplace.intell/u0a384 s1/1 u0/0 +17m59s513ms
+    mIsReceivingBroadcast=false
+    mBroadcastReceiverSchedGroup=-2147483648
+    mReceivers:
+      - ReceiverList{56ef61a 26433 org.replaceplace.intell/10384/u0 remote:1f29cc5}
+    lastCompactTime=0 lastCompactProfile=null
+    hasPendingCompaction=false    isPendingFreeze=false isFrozen=false
+    earliestFreezableTimeMs=--
+    Activities:
+      - ActivityRecord{172598390 u0 org.replaceplace.intell/.MainActivity t3308}
+    Recent Tasks:
+      - Task{abb2a77 #3308 type=standard A=10384:org.replaceplace.intell}
+     Configuration={1.0 311mcc480mnc [en_US] ldltr sw411dp w411dp h923dp 420dpi nrml long compactNeeded hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2424) mAppBounds=Rect(0, 0 - 1080, 2424) mMaxBounds=Rect(0, 0 - 1080, 2424) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.3 s.15261 fontWeightAdjustment=0}
+     OverrideConfiguration={1.0 311mcc480mnc [en_US] ldltr sw411dp w411dp h923dp 420dpi nrml long compactNeeded hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2424) mAppBounds=Rect(0, 0 - 1080, 2424) mMaxBounds=Rect(0, 0 - 1080, 2424) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.3 s.2 fontWeightAdjustment=0}
+     mLastReportedConfiguration={1.0 311mcc480mnc [en_US] ldltr sw411dp w411dp h923dp 420dpi nrml long compactNeeded hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2424) mAppBounds=Rect(0, 0 - 1080, 2424) mMaxBounds=Rect(0, 0 - 1080, 2424) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.3 s.15261 fontWeightAdjustment=0}
+
+  OOM levels:
+    -900: SYSTEM_ADJ (   73,728K)
+    -800: PERSISTENT_PROC_ADJ (   73,728K)
+    -700: PERSISTENT_SERVICE_ADJ (   73,728K)
+      0: FOREGROUND_APP_ADJ (   73,728K)
+     100: VISIBLE_APP_ADJ (   92,160K)
+     200: PERCEPTIBLE_APP_ADJ (  110,592K)
+     225: PERCEPTIBLE_MEDIUM_APP_ADJ (  129,024K)
+     250: PERCEPTIBLE_LOW_APP_ADJ (  129,024K)
+     300: BACKUP_APP_ADJ (  221,184K)
+     400: HEAVY_WEIGHT_APP_ADJ (  221,184K)
+     500: SERVICE_ADJ (  221,184K)
+     600: HOME_APP_ADJ (  221,184K)
+     700: PREVIOUS_APP_ADJ (  221,184K)
+     800: SERVICE_B_ADJ (  221,184K)
+     900: CACHED_APP_MIN_ADJ (  221,184K)
+     999: CACHED_APP_MAX_ADJ (  322,560K)
+
+  Process OOM control (150 total, non-act at 11, non-svc at 11):
+    Proc #0: prcp     F/A/FGS  ---NFUATI  t: 0 26433:org.replaceplace.intell/u0a384 (fg-service)
+        oom: max=1001 curRaw=200 setRaw=200 cur=200 set=200
+        state: cur=FGS  set=FGS  lastRss=282MB lastCachedRss=0.00
+        cached=false empty=false hasAboveClient=false
+
+  mHomeProcess: ProcessRecord{a57a6df 25639:com.google.android.apps.nexuslauncher/u0a271}
+  mPreviousProcess: ProcessRecord{10b5e2f 16309:com.google.android.apps.messaging/u0a192}
+
+  Raw LRU list (dumpsys activity lru):
+    Activities:
+    #149: prcp     FGS  ---NFUATI 26433:org.replaceplace.intell/u0a384 act:activities|recents
+
+  Process LRU list (sorted by oom_adj, 150 total, non-act at 11, non-svc at 11):
+    Proc #0: prcp     F/A/FGS  ---NFUATI  t: 0 26433:org.replaceplace.intell/u0a384 (fg-service)
+
+  PID mappings:
+    PID #26433: ProcessRecord{38ece7c 26433:org.replaceplace.intell/u0a384}
+
+  All Active App Child Processes:
+    proc #0: PhantomProcessRecord {ce9d7dd 2843:2785:virtmgr_d.appsearch.apk/u0a301}
+      user #0 uid=10301 pid=2843 ppid=2785 knownSince=-1d15h19m45s861ms killed=false
+      lastCpuTime=10 timeUsed=+4s230ms oom adj=-700 seq=960
+    proc #1: PhantomProcessRecord {1446f52 2919:2785:crosvm_isolated_storage_service_vm/u0a301}
+      user #0 uid=10301 pid=2919 ppid=2785 knownSince=-1d15h19m45s861ms killed=false
+      lastCpuTime=30 timeUsed=+9m39s850ms oom adj=-700 seq=960
+    proc #2: PhantomProcessRecord {e652a8c 27238:1367:perfetto/1000}
+      user #0 uid=1000 pid=27238 ppid=1367 knownSince=-6m37s438ms killed=false
+      lastCpuTime=0 oom adj=-900 seq=960
+  mDeviceIdleAllowlist=[1000, 1001, 2000, 10105, 10106, 10111, 10147, 10148, 10156, 10159, 10162, 10163, 10166, 10175, 10182, 10198, 10199, 10200, 10259, 10298, 10311, 10313, 10319, 10320, 10384]
+  mDeviceIdleExceptIdleAllowlist=[1000, 1001, 2000, 10103, 10105, 10106, 10111, 10120, 10147, 10148, 10154, 10155, 10156, 10159, 10162, 10163, 10166, 10175, 10180, 10182, 10186, 10198, 10199, 10200, 10206, 10208, 10214, 10259, 10298, 10299, 10311, 10313, 10319, 10320, 10384]
+  mDeviceIdleTempAllowlist=[]
+  mFgsStartTempAllowList:
+  mForceBackgroundCheck=false
+
+--- recent spike ---
+11-24 12:06:40.911 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"oneshotDropped","reason":"budget","seq":74,"atSec":1027.0826666666667,"wallClockMs":1795547200911}'
+11-24 12:06:40.914 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":742047,"activeVoices":40,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[11.333333333311657,11.333333333311657,11.333333333311657],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":731088,"wallElapsedMs":304388,"clockGapMs":326.66666666668607,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":287986.6666666667,"pendingOneShots":36,"nodesCreated":275,"nodesReleased":234,"missedEnded":5,"oneshotDropped":0,"clockRate":1.0004093780772505,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":9,"trigger":"minute","wallClockMs":1795547200914}'
+11-24 12:06:45.967 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"oneshotDropped","reason":"budget","seq":75,"atSec":1035.0826666666667,"wallClockMs":1795547205967}'
+11-24 12:07:41.186 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":802318,"activeVoices":39,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[12240.66666666664,12240.66666666664,12240.66666666664],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":791317.3333333333,"wallElapsedMs":364659,"clockGapMs":368.33333333337214,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":291762.6666666666,"pendingOneShots":35,"nodesCreated":293,"nodesReleased":253,"missedEnded":5,"oneshotDropped":0,"clockRate":0.9996059036739771,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":60271,"trigger":"voiceEnded","wallClockMs":1795547261186}'
+11-24 12:07:41.198 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"oneshotDropped","reason":"budget","seq":82,"atSec":1091.0826666666667,"wallClockMs":1795547261198}'
+11-24 12:07:41.212 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":802345,"activeVoices":40,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[12328.66666666672,12328.66666666672,12328.66666666672],"maxStemDriftMs":null}],"narrationPositionMs":64.00000000007822,"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":791405.3333333334,"wallElapsedMs":364686,"clockGapMs":307.3333333332557,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":291677.3333333333,"pendingOneShots":35,"nodesCreated":294,"nodesReleased":253,"missedEnded":5,"oneshotDropped":0,"clockRate":0.9996059036739771,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":26,"trigger":"minute","wallClockMs":1795547261211}'
+11-24 12:08:41.569 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":862701,"activeVoices":38,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[8606.000000000051,8606.000000000051,8606.000000000051],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":851682.6666666667,"wallElapsedMs":425042,"clockGapMs":385.9999999999418,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":295397.3333333333,"pendingOneShots":34,"nodesCreated":313,"nodesReleased":274,"missedEnded":5,"oneshotDropped":0,"clockRate":0.9996059036739771,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":60358,"trigger":"voiceEnded","wallClockMs":1795547321569}'
+11-24 12:08:41.577 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":862711,"activeVoices":38,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[8637.999999999976,8637.999999999976,8637.999999999976],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":851714.6666666666,"wallElapsedMs":425052,"clockGapMs":364,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":295365.3333333333,"pendingOneShots":34,"nodesCreated":313,"nodesReleased":274,"missedEnded":5,"oneshotDropped":0,"clockRate":0.9996059036739771,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":8,"trigger":"minute","wallClockMs":1795547321577}'
+11-24 12:09:41.728 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":922856,"activeVoices":38,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[4853.999999999985,4853.999999999985,4853.999999999985],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":911930.6666666666,"wallElapsedMs":485197,"clockGapMs":293,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":291152.00000000006,"pendingOneShots":34,"nodesCreated":332,"nodesReleased":293,"missedEnded":5,"oneshotDropped":0,"clockRate":0.9996059036739771,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":60147,"trigger":"voiceEnded","wallClockMs":1795547381724}'
+11-24 12:09:41.741 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":922874,"activeVoices":39,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[4853.999999999985,4853.999999999985,4853.999999999985],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":911930.6666666666,"wallElapsedMs":485215,"clockGapMs":311,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":299152.00000000006,"pendingOneShots":35,"nodesCreated":333,"nodesReleased":293,"missedEnded":5,"oneshotDropped":0,"clockRate":1.0003296317311068,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":16,"trigger":"minute","wallClockMs":1795547381740}'
+11-24 12:10:41.994 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":983125,"activeVoices":38,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[1094.000000000051,1094.000000000051,1094.000000000051],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":972170.6666666666,"wallElapsedMs":545466,"clockGapMs":322,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":286909.3333333334,"pendingOneShots":33,"nodesCreated":351,"nodesReleased":312,"missedEnded":5,"oneshotDropped":0,"clockRate":1.0003296317311068,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":60252,"trigger":"voiceEnded","wallClockMs":1795547441994}'
+11-24 12:10:42.016 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":983148,"activeVoices":40,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[1115.3333333334103,1115.3333333334103,1115.3333333334103],"maxStemDriftMs":null}],"narrationPositionMs":0,"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":972192,"wallElapsedMs":545489,"clockGapMs":323.66666666662786,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":294890.6666666667,"pendingOneShots":34,"nodesCreated":353,"nodesReleased":312,"missedEnded":5,"oneshotDropped":0,"clockRate":1.0003296317311068,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":23,"trigger":"minute","wallClockMs":1795547442015}'
+11-24 12:11:42.368 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":1043499,"activeVoices":39,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[13384.666666666817,13384.666666666817,13384.666666666817],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":1032461.3333333334,"wallElapsedMs":605840,"clockGapMs":405.3333333332557,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":290618.66666666674,"pendingOneShots":35,"nodesCreated":372,"nodesReleased":332,"missedEnded":5,"oneshotDropped":0,"clockRate":1.0003296317311068,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":60353,"trigger":"voiceEnded","wallClockMs":1795547502368}'
+11-24 12:11:42.382 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"diagnostics","uptimeMs":1043514,"activeVoices":40,"loopGroups":[{"id":"loop-5","stemPositionsMs":[0,0,0],"maxStemDriftMs":null},{"id":"loop-139","stemPositionsMs":[13432.666666666819,13432.666666666819,13432.666666666819],"maxStemDriftMs":null}],"route":"bluetooth","decodedBytes":60734000,"cacheEvictions":0,"contextTimeMs":1032509.3333333334,"wallElapsedMs":605855,"clockGapMs":372.3333333332557,"contextState":"running","appState":"background","notificationVisible":true,"scheduledAheadMs":298568,"pendingOneShots":36,"nodesCreated":373,"nodesReleased":332,"missedEnded":5,"oneshotDropped":0,"clockRate":0.999157293281279,"focusHeld":true,"audioHealth":"ok","jsTickGapMs":13,"trigger":"minute","wallClockMs":1795547502381}'
+11-24 12:11:52.340 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"oneshotDropped","reason":"budget","seq":113,"atSec":1339.0826666666667,"wallClockMs":1795547512340}'
+

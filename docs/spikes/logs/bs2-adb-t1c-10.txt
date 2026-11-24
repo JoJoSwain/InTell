@@ -1,0 +1,692 @@
+=== T1c minute=10 wall=2026-11-24T12:26:49.7168628-07:00 pid=26433 ===
+--- meminfo ---
+Applications Memory Usage (in Kilobytes):
+Uptime: 89438429 Realtime: 142476484
+
+** MEMINFO in pid 26433 [org.replaceplace.intell] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap  1017989  1017980        0       10  1020728  2333400  2307160     5658
+  Dalvik Heap     5900     3604     2192       11    10220   262144     5282   256862
+ Dalvik Other     1440     1172       12        0     2336                           
+        Stack    22392    22392        0        0    22400                           
+       Ashmem     3194        0        0        0    12912                           
+    Other dev       57        4       52        0      392                           
+     .so mmap     7897      784     4188       14    49768                           
+    .jar mmap      782        0       12        0    43888                           
+    .apk mmap    22888      712    21804        0    25732                           
+    .ttf mmap      262        0       64        0     1048                           
+    .dex mmap     6718        0     6712        0     7500                           
+    .oat mmap      179        0        0        0    12988                           
+    .art mmap     3943     3544      196        4    25508                           
+   Other mmap      198        4       64        0     1480                           
+    GL mtrack    15068    15068        0        0    15068                           
+        Memfd       98        0        0        0     1152                           
+      Unknown    14737    14572      164        4    15520                           
+        TOTAL  1123785  1079836    35460       43  1268640  2595544  2312442   262520
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:     7344                          35728
+         Native Heap:  1017980                        1020728
+                Code:    34288                         141428
+               Stack:    22392                          22400
+            Graphics:    15068                          15068
+       Private Other:    18224
+              System:     8489
+             Unknown:                                   33288
+ 
+           TOTAL PSS:  1123785            TOTAL RSS:  1268640       TOTAL SWAP PSS:       43
+ 
+ Objects
+               Views:       52         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       40        AssetManagers:        0
+       Local Binders:       26        Proxy Binders:     1102
+       Parcel memory:      196         Parcel count:      786
+    Death Recipients:        2             WebViews:        0
+ 
+ Native Allocations
+                         Count                       Total(kB)
+                        ------                         ------
+    Other (malloced):      658                             61
+ Other (nonmalloced):      108                             78
+ 
+ Mapped Bitmaps
+                         Count                       Size(KB)
+                        ------                         ------
+              Mapped:        0                              0
+              Unique:        0                              0
+ 
+ SQL
+         MEMORY_USED:      250
+  PAGECACHE_OVERFLOW:       84          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4      104            111     4    50     6  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb
+         4        8                    0     0     0    (attached) temp
+         4      104             32     4    27     3  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb (2)
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+              8            81             9  /data/user/0/org.replaceplace.intell/no_backup/androidx.work.workdb
+ 
+
+--- media.audio_flinger ---
+
+>  26433  10384  org.replaceplace.intell
+  Global session refs:
+    session  cnt     pid    uid  name
+>     13001    1   26433  10384  org.replaceplace.intell
+      13073    1    1957  10288  android.uid.systemui
+  Hardware status: 0
+>             numTracks=1 writeErrors=0 underruns=80 overruns=1164
+              sampleRate=48000 frameCount=480 measuredWarmup=24.8 ms, warmupCycles=7
+              mixPeriod=10.00 ms latency=280.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=448
+    5 Tracks of which 0 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+      F1 S     55     no    1367/   1000      49      34 A  0x681 00000001 00000001  48000  1   d  4   -24    -6    -6 
+    0          -18      false 00029667    969       0 F         0        0      false        false   41.00 t
+      F3 S    561     no    1367/   1000    1969     791 A  0x681 00000001 00000001  48000  1   d  4   -24    -6    -6 
+    0          -18      false 0000626A    969       0 F         0        0      false        false   60.00 t
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 11:38:26.208 AT::remove    (0xb400007528a24648) F2 S   4145     no    1957/  10288   12913    5834 S  0x600 
+00000001 00000001  48000  1   d  4  -inf    -6    -6     0          -12       true 000012FC   4860       0 f         0 
+       0      false        false   unavail
+     11-24 11:38:29.181 threadLoop_standby: framesWritten:198122880  suspendedFrames:0  monoPipeWritten:198122880  
+monoPipeLeft:1440
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    1 Tracks of which 1 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+             4156    yes   26433/  10384   13001    5845 A  0x000 00000005 00000003  48000  3   1  2     0     0     0 
+    0            0      false 05489934  13454   11241 A      6348        0      false        false  574.04 t
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 08:37:24.333 AT::remove    (0xb400007528a18718)        4003     no   32630/  10254   11617    5629 P  0x400 
+00000001 00000003  48000  3   1  2  -inf  -1.1  -1.1     0            0      false 0131FA00  24000   24000 A         0 
+       0      false        false  819.17 k
+     11-24 08:37:26.974 threadLoop_standby
+>             numTracks=1 writeErrors=0 underruns=17 overruns=23
+              sampleRate=48000 frameCount=480 measuredWarmup=68.9 ms, warmupCycles=10
+              mixPeriod=10.00 ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.868 threadLoop_standby
+     11-22 20:52:20.915 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=0 writeErrors=0 underruns=0 overruns=0
+              sampleRate=0 frameCount=0 measuredWarmup=0 ms, warmupCycles=0
+              mixPeriod=nan ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.917 threadLoop_standby
+     11-22 20:52:20.950 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=1 writeErrors=0 underruns=1 overruns=0
+              sampleRate=48000 frameCount=480 measuredWarmup=40.4 ms, warmupCycles=7
+              mixPeriod=10.00 ms latency=40.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    1 Tracks of which 0 are active
+>     Type     Id Active Client(pid/uid) Session Port Id S  Flags   Format Chn mask  SRate ST Usg CT  G db  L dB  R dB 
+ VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns  Flushed BitPerfect InternalMute   Latency
+             2964     no    1957/  10288    7809    3851 S  0x604 00000001 00000001  48000  0   2  4   -20   -20   -20 
+    0            0      false 00002C83  24000       0 f         0        0      false        false   86.56 k
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:20.955 threadLoop_standby
+     11-22 20:52:21.001 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x2 
+(AUDIO_DEVICE_OUT_SPEAKER)
+>             numTracks=0 writeErrors=0 underruns=0 overruns=0
+              sampleRate=0 frameCount=0 measuredWarmup=0 ms, warmupCycles=0
+              mixPeriod=nan ms latency=0.00 ms
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    0 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-22 20:52:21.031 threadLoop_standby
+     11-22 20:52:21.068 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x10000 
+(AUDIO_DEVICE_OUT_TELEPHONY_TX)
+>   Normal mixer raw underrun counters: partial=0 empty=0
+    0 Tracks
+    1 Effect Chains
+>                                                          Type     Id Active Client(pid/uid) Session Port Id S  Flags 
+  Format Chn mask  SRate ST Usg CT  G db  L dB  R dB  VS dB  PortVol dB  PortMuted   Server FrmCnt  FrmRdy F Underruns 
+ Flushed BitPerfect InternalMute   Latency
+     11-24 09:38:44.007 threadLoop_standby
+     11-24 09:38:44.081 CFG_EVENT_CREATE_AUDIO_PATCH: old device  (Empty device types) new device 0x80 
+(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)
+>   Track-3674:  start: 12:17:08.497 (active) uid: 10384 org.replaceplace.intell  sessions: 13  actual_seconds: 
+7806.893301 { 26433 } { frozen-while-active: 1  last: 11:52:30.676 } 
+  
+  Power Clients: (some snapshots quantized in time)
+>   (active) uid: 10384 org.replaceplace.intell  sessions: 13  actual_seconds: 7806.893818 { 26433 } { 
+frozen-while-active: 1  last: 11:52:30.676 } { { 11:45:35.945, ~:41.557} { ~:45:44.506, ~:46:21.517} { ~:46:52.372, 
+~:47:08.380} { ~:52:19.359, ~:31.111} { ~:52:31.316, ~:53:49.313} { 11:54:18.862, 12:01:26.044} { 12:01:36.521, 
+~:14:26.460} { ~:14:47.513, ~:15:52.347} { ~:16:11.348, ~:13.655} { ~:17:08.497, ~} }
+      Sum:    11-24 09:57:09.402 duration_boottime: 7806.896484 duration_monotonic: 7806.896484
+      Max:    11-24 10:12:24.597 duration_boottime: 5489.908203 duration_monotonic: 5489.908203
+
+
+
+--- top -H ---
+Threads: 471 total,  10 running, 461 sleeping,   0 stopped,   0 zombie
+  Mem:    11647M total,    11163M used,      483M free,        8M buffers
+ Swap:     5823M total,     2866M used,     2957M free,     2650M cached
+700%cpu  53%user   3%nice  87%sys 510%idle   0%iow  43%irq   3%sirq   0%host
+  TID USER         PR  NI VIRT  RES  SHR S[%CPU] %MEM     TIME+ THREAD          PROCESS
+26460 u0_a384      16  -4  32G 1.1G 150M R 13.3  10.5   0:38.44 mqt_v_js        org.replaceplace.intell
+30340 u0_a384       4 -16  32G 1.1G 150M S  6.6  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+26489 u0_a384       4 -16  32G 1.1G 150M S  6.6  10.5   5:05.80 AudioTrack      org.replaceplace.intell
+30048 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.32 mqt_v_js        org.replaceplace.intell
+29863 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.54 mqt_v_js        org.replaceplace.intell
+29577 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.69 mqt_v_js        org.replaceplace.intell
+29498 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.76 mqt_v_js        org.replaceplace.intell
+29387 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.93 mqt_v_js        org.replaceplace.intell
+29380 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:00.99 mqt_v_js        org.replaceplace.intell
+29333 u0_a384      16  -4  32G 1.1G 150M R  3.3  10.5   0:01.00 mqt_v_js        org.replaceplace.intell
+29236 u0_a384      16  -4  32G 1.1G 150M S  3.3  10.5   0:01.06 mqt_v_js        org.replaceplace.intell
+30348 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.03 mqt_v_js        org.replaceplace.intell
+30309 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.09 mqt_v_js        org.replaceplace.intell
+30307 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30306 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.01 mqt_v_js        org.replaceplace.intell
+30304 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+30303 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.10 mqt_v_js        org.replaceplace.intell
+30301 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+30300 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.07 mqt_v_js        org.replaceplace.intell
+30298 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+30295 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.06 mqt_v_js        org.replaceplace.intell
+30293 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+30292 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.11 mqt_v_js        org.replaceplace.intell
+30290 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+30289 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.06 mqt_v_js        org.replaceplace.intell
+30287 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+30286 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.11 mqt_v_js        org.replaceplace.intell
+30284 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.16 NDK MediaCodec_ org.replaceplace.intell
+30283 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.13 mqt_v_js        org.replaceplace.intell
+30281 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+30280 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.05 mqt_v_js        org.replaceplace.intell
+30278 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.02 NDK MediaCodec_ org.replaceplace.intell
+30277 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.14 mqt_v_js        org.replaceplace.intell
+30275 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+30274 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.09 mqt_v_js        org.replaceplace.intell
+30270 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+30269 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.13 mqt_v_js        org.replaceplace.intell
+30267 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.16 NDK MediaCodec_ org.replaceplace.intell
+30139 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.15 mqt_v_js        org.replaceplace.intell
+30137 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+30136 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.16 mqt_v_js        org.replaceplace.intell
+30134 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30132 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.15 mqt_v_js        org.replaceplace.intell
+30130 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+30128 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.12 mqt_v_js        org.replaceplace.intell
+30126 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+30125 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.20 mqt_v_js        org.replaceplace.intell
+30123 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+30122 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.13 mqt_v_js        org.replaceplace.intell
+30120 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+30119 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.17 mqt_v_js        org.replaceplace.intell
+30117 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+30115 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.20 mqt_v_js        org.replaceplace.intell
+30113 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30112 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.13 mqt_v_js        org.replaceplace.intell
+30110 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+30106 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.21 mqt_v_js        org.replaceplace.intell
+30104 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+30103 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.17 mqt_v_js        org.replaceplace.intell
+30101 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+30099 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.21 mqt_v_js        org.replaceplace.intell
+30097 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.16 NDK MediaCodec_ org.replaceplace.intell
+30096 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.23 mqt_v_js        org.replaceplace.intell
+30094 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30093 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.16 mqt_v_js        org.replaceplace.intell
+30091 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+30090 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.24 mqt_v_js        org.replaceplace.intell
+30088 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30087 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.19 mqt_v_js        org.replaceplace.intell
+30085 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+30084 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.21 mqt_v_js        org.replaceplace.intell
+30082 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.15 NDK MediaCodec_ org.replaceplace.intell
+30081 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.26 mqt_v_js        org.replaceplace.intell
+30079 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+30078 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.19 mqt_v_js        org.replaceplace.intell
+30076 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+30075 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.26 mqt_v_js        org.replaceplace.intell
+30073 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+30070 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.27 mqt_v_js        org.replaceplace.intell
+30068 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.18 NDK MediaCodec_ org.replaceplace.intell
+30067 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.21 mqt_v_js        org.replaceplace.intell
+30065 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+30064 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.28 mqt_v_js        org.replaceplace.intell
+30062 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+30061 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.22 mqt_v_js        org.replaceplace.intell
+30059 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+30058 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.28 mqt_v_js        org.replaceplace.intell
+30056 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+30055 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.29 mqt_v_js        org.replaceplace.intell
+30053 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+30051 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.24 mqt_v_js        org.replaceplace.intell
+30049 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+30046 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.26 NDK MediaCodec_ org.replaceplace.intell
+30045 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.29 mqt_v_js        org.replaceplace.intell
+30043 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+30042 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.28 mqt_v_js        org.replaceplace.intell
+30040 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+30039 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.33 mqt_v_js        org.replaceplace.intell
+30037 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+30036 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.26 mqt_v_js        org.replaceplace.intell
+30034 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+30032 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.35 mqt_v_js        org.replaceplace.intell
+30030 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+30029 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.31 mqt_v_js        org.replaceplace.intell
+30027 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.15 NDK MediaCodec_ org.replaceplace.intell
+30026 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.32 mqt_v_js        org.replaceplace.intell
+30024 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+30023 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.36 mqt_v_js        org.replaceplace.intell
+30021 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+30020 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.30 mqt_v_js        org.replaceplace.intell
+30018 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+30017 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.36 mqt_v_js        org.replaceplace.intell
+30013 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+30011 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.37 mqt_v_js        org.replaceplace.intell
+30009 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+30008 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.31 mqt_v_js        org.replaceplace.intell
+30006 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+30005 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.39 mqt_v_js        org.replaceplace.intell
+30003 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+30002 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.32 mqt_v_js        org.replaceplace.intell
+29999 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+29998 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.34 mqt_v_js        org.replaceplace.intell
+29996 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29994 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.36 mqt_v_js        org.replaceplace.intell
+29992 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29991 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.41 mqt_v_js        org.replaceplace.intell
+29989 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29988 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.33 mqt_v_js        org.replaceplace.intell
+29986 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.02 NDK MediaCodec_ org.replaceplace.intell
+29984 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.42 mqt_v_js        org.replaceplace.intell
+29982 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29980 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.39 mqt_v_js        org.replaceplace.intell
+29978 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.16 NDK MediaCodec_ org.replaceplace.intell
+29976 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.37 mqt_v_js        org.replaceplace.intell
+29973 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.09 NDK MediaCodec_ org.replaceplace.intell
+29972 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.45 mqt_v_js        org.replaceplace.intell
+29970 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29969 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.36 mqt_v_js        org.replaceplace.intell
+29967 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29966 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.44 mqt_v_js        org.replaceplace.intell
+29963 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29962 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.42 mqt_v_js        org.replaceplace.intell
+29956 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29955 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.40 mqt_v_js        org.replaceplace.intell
+29953 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29952 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.47 mqt_v_js        org.replaceplace.intell
+29950 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29949 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.41 mqt_v_js        org.replaceplace.intell
+29929 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29911 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.43 mqt_v_js        org.replaceplace.intell
+29908 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.12 NDK MediaCodec_ org.replaceplace.intell
+29905 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.47 mqt_v_js        org.replaceplace.intell
+29903 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+29902 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:00.42 mqt_v_js        org.replaceplace.intell
+29900 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+29897 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.49 mqt_v_js        org.replaceplace.intell
+29895 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29894 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.46 mqt_v_js        org.replaceplace.intell
+29892 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29888 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.46 mqt_v_js        org.replaceplace.intell
+29886 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29884 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.52 mqt_v_js        org.replaceplace.intell
+29882 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29881 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.43 mqt_v_js        org.replaceplace.intell
+29879 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29878 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.52 mqt_v_js        org.replaceplace.intell
+29876 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+29875 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.48 mqt_v_js        org.replaceplace.intell
+29873 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29872 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.49 mqt_v_js        org.replaceplace.intell
+29870 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29869 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.55 mqt_v_js        org.replaceplace.intell
+29867 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29866 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.46 mqt_v_js        org.replaceplace.intell
+29864 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29861 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29853 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:00.56 mqt_v_js        org.replaceplace.intell
+29851 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29850 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.47 mqt_v_js        org.replaceplace.intell
+29848 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29846 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.57 mqt_v_js        org.replaceplace.intell
+29844 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29843 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.52 mqt_v_js        org.replaceplace.intell
+29841 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.12 NDK MediaCodec_ org.replaceplace.intell
+29837 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.55 mqt_v_js        org.replaceplace.intell
+29835 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29832 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.58 mqt_v_js        org.replaceplace.intell
+29830 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29828 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.51 mqt_v_js        org.replaceplace.intell
+29826 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29823 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.59 mqt_v_js        org.replaceplace.intell
+29821 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29819 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.52 mqt_v_js        org.replaceplace.intell
+29817 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.09 NDK MediaCodec_ org.replaceplace.intell
+29816 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.52 mqt_v_js        org.replaceplace.intell
+29814 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+29796 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.59 mqt_v_js        org.replaceplace.intell
+29794 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+29790 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.53 mqt_v_js        org.replaceplace.intell
+29786 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.30 binder:26433_E  org.replaceplace.intell
+29784 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29763 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.61 mqt_v_js        org.replaceplace.intell
+29761 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.18 NDK MediaCodec_ org.replaceplace.intell
+29638 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.57 mqt_v_js        org.replaceplace.intell
+29633 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.15 NDK MediaCodec_ org.replaceplace.intell
+29632 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.55 mqt_v_js        org.replaceplace.intell
+29625 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+29622 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.64 mqt_v_js        org.replaceplace.intell
+29620 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29619 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.55 mqt_v_js        org.replaceplace.intell
+29616 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+29615 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.62 mqt_v_js        org.replaceplace.intell
+29612 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+29611 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.64 mqt_v_js        org.replaceplace.intell
+29609 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+29608 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.56 mqt_v_js        org.replaceplace.intell
+29606 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29605 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.67 mqt_v_js        org.replaceplace.intell
+29603 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29602 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.63 mqt_v_js        org.replaceplace.intell
+29600 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29599 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.61 mqt_v_js        org.replaceplace.intell
+29597 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+29596 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.66 mqt_v_js        org.replaceplace.intell
+29594 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29593 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.60 mqt_v_js        org.replaceplace.intell
+29591 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+29590 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.68 mqt_v_js        org.replaceplace.intell
+29588 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29586 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.65 mqt_v_js        org.replaceplace.intell
+29584 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29582 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.65 mqt_v_js        org.replaceplace.intell
+29580 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.12 NDK MediaCodec_ org.replaceplace.intell
+29575 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29574 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.65 mqt_v_js        org.replaceplace.intell
+29571 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+29570 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.69 mqt_v_js        org.replaceplace.intell
+29568 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29567 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.63 mqt_v_js        org.replaceplace.intell
+29565 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29564 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.71 mqt_v_js        org.replaceplace.intell
+29562 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+29561 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.63 mqt_v_js        org.replaceplace.intell
+29559 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29558 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.73 mqt_v_js        org.replaceplace.intell
+29556 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29555 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.67 mqt_v_js        org.replaceplace.intell
+29553 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.09 NDK MediaCodec_ org.replaceplace.intell
+29552 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.72 mqt_v_js        org.replaceplace.intell
+29550 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29549 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.75 mqt_v_js        org.replaceplace.intell
+29547 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29546 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.67 mqt_v_js        org.replaceplace.intell
+29544 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29543 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.76 mqt_v_js        org.replaceplace.intell
+29541 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+29540 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.72 mqt_v_js        org.replaceplace.intell
+29538 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29537 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.71 mqt_v_js        org.replaceplace.intell
+29535 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29533 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:00.79 mqt_v_js        org.replaceplace.intell
+29531 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29529 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.71 mqt_v_js        org.replaceplace.intell
+29527 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+29525 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:00.77 mqt_v_js        org.replaceplace.intell
+29523 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29521 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.78 mqt_v_js        org.replaceplace.intell
+29519 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+29508 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.72 mqt_v_js        org.replaceplace.intell
+29504 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+29501 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.81 mqt_v_js        org.replaceplace.intell
+29499 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29496 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.12 NDK MediaCodec_ org.replaceplace.intell
+29495 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.79 mqt_v_js        org.replaceplace.intell
+29493 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29492 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.81 mqt_v_js        org.replaceplace.intell
+29490 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29489 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.74 mqt_v_js        org.replaceplace.intell
+29487 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29484 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.84 mqt_v_js        org.replaceplace.intell
+29482 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29480 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.82 mqt_v_js        org.replaceplace.intell
+29478 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29477 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.79 mqt_v_js        org.replaceplace.intell
+29474 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.12 NDK MediaCodec_ org.replaceplace.intell
+29472 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.85 mqt_v_js        org.replaceplace.intell
+29470 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29469 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.77 mqt_v_js        org.replaceplace.intell
+29467 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29465 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.86 mqt_v_js        org.replaceplace.intell
+29463 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29461 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.86 mqt_v_js        org.replaceplace.intell
+29459 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.20 NDK MediaCodec_ org.replaceplace.intell
+29458 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.79 mqt_v_js        org.replaceplace.intell
+29455 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+29453 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.88 mqt_v_js        org.replaceplace.intell
+29450 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29449 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.84 mqt_v_js        org.replaceplace.intell
+29447 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.09 NDK MediaCodec_ org.replaceplace.intell
+29446 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.88 mqt_v_js        org.replaceplace.intell
+29444 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.18 NDK MediaCodec_ org.replaceplace.intell
+29442 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.90 mqt_v_js        org.replaceplace.intell
+29440 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29439 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.81 mqt_v_js        org.replaceplace.intell
+29437 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29429 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.94 mqt_v_js        org.replaceplace.intell
+29415 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29414 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.88 mqt_v_js        org.replaceplace.intell
+29412 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29411 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.89 mqt_v_js        org.replaceplace.intell
+29409 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29406 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.96 mqt_v_js        org.replaceplace.intell
+29404 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29403 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.86 mqt_v_js        org.replaceplace.intell
+29401 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29400 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.95 mqt_v_js        org.replaceplace.intell
+29398 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29397 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.92 mqt_v_js        org.replaceplace.intell
+29396 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.55 binder:26433_D  org.replaceplace.intell
+29394 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29393 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.88 mqt_v_js        org.replaceplace.intell
+29391 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.10 NDK MediaCodec_ org.replaceplace.intell
+29390 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.95 mqt_v_js        org.replaceplace.intell
+29388 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.24 NDK MediaCodec_ org.replaceplace.intell
+29385 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29384 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.95 mqt_v_js        org.replaceplace.intell
+29381 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29378 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.23 NDK MediaCodec_ org.replaceplace.intell
+29377 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:00.91 mqt_v_js        org.replaceplace.intell
+29375 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+29374 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:01.02 mqt_v_js        org.replaceplace.intell
+29372 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29371 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.97 mqt_v_js        org.replaceplace.intell
+29369 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29366 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.98 mqt_v_js        org.replaceplace.intell
+29364 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.13 NDK MediaCodec_ org.replaceplace.intell
+29363 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.00 mqt_v_js        org.replaceplace.intell
+29361 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+29360 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.93 mqt_v_js        org.replaceplace.intell
+29358 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29357 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.03 mqt_v_js        org.replaceplace.intell
+29355 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29354 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.99 mqt_v_js        org.replaceplace.intell
+29352 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.15 NDK MediaCodec_ org.replaceplace.intell
+29351 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.00 mqt_v_js        org.replaceplace.intell
+29349 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29345 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.07 mqt_v_js        org.replaceplace.intell
+29343 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29342 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.97 mqt_v_js        org.replaceplace.intell
+29340 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29339 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.04 mqt_v_js        org.replaceplace.intell
+29337 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.21 NDK MediaCodec_ org.replaceplace.intell
+29336 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.02 mqt_v_js        org.replaceplace.intell
+29334 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29331 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29329 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.01 mqt_v_js        org.replaceplace.intell
+29327 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.14 NDK MediaCodec_ org.replaceplace.intell
+29326 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.03 mqt_v_js        org.replaceplace.intell
+29324 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.15 NDK MediaCodec_ org.replaceplace.intell
+29323 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.00 mqt_v_js        org.replaceplace.intell
+29321 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+29320 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.05 mqt_v_js        org.replaceplace.intell
+29318 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29317 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.09 mqt_v_js        org.replaceplace.intell
+29315 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+29314 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.01 mqt_v_js        org.replaceplace.intell
+29312 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29311 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.10 mqt_v_js        org.replaceplace.intell
+29309 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29308 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.05 mqt_v_js        org.replaceplace.intell
+29306 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.11 NDK MediaCodec_ org.replaceplace.intell
+29305 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.07 mqt_v_js        org.replaceplace.intell
+29303 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29302 u0_a384      16  -4  32G 1.1G 150M R  0.0  10.5   0:01.13 mqt_v_js        org.replaceplace.intell
+29300 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.25 NDK MediaCodec_ org.replaceplace.intell
+29299 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.05 mqt_v_js        org.replaceplace.intell
+29297 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.04 NDK MediaCodec_ org.replaceplace.intell
+29294 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.17 mqt_v_js        org.replaceplace.intell
+29292 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.22 NDK MediaCodec_ org.replaceplace.intell
+29283 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.14 mqt_v_js        org.replaceplace.intell
+29281 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.19 NDK MediaCodec_ org.replaceplace.intell
+29280 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.10 mqt_v_js        org.replaceplace.intell
+29278 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.97 binder:26433_B  org.replaceplace.intell
+29279 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.99 binder:26433_C  org.replaceplace.intell
+29276 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.09 NDK MediaCodec_ org.replaceplace.intell
+29267 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.12 mqt_v_js        org.replaceplace.intell
+29262 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.17 NDK MediaCodec_ org.replaceplace.intell
+29259 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.07 mqt_v_js        org.replaceplace.intell
+29257 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+29256 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.08 mqt_v_js        org.replaceplace.intell
+29254 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+29253 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.06 mqt_v_js        org.replaceplace.intell
+29251 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.07 NDK MediaCodec_ org.replaceplace.intell
+29250 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.08 mqt_v_js        org.replaceplace.intell
+29248 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.05 NDK MediaCodec_ org.replaceplace.intell
+29247 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.07 mqt_v_js        org.replaceplace.intell
+29245 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+29234 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.01 NDK MediaCodec_ org.replaceplace.intell
+29200 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.30 binder:26433_A  org.replaceplace.intell
+28667 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.02 binder:26433_9  org.replaceplace.intell
+28654 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.32 binder:26433_8  org.replaceplace.intell
+28642 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.12 mqt_v_js        org.replaceplace.intell
+28640 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.02 NDK MediaCodec_ org.replaceplace.intell
+28609 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.15 mqt_v_js        org.replaceplace.intell
+28606 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.06 NDK MediaCodec_ org.replaceplace.intell
+28600 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.16 mqt_v_js        org.replaceplace.intell
+28598 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.03 NDK MediaCodec_ org.replaceplace.intell
+28597 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.14 mqt_v_js        org.replaceplace.intell
+28595 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.02 NDK MediaCodec_ org.replaceplace.intell
+28585 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.13 mqt_v_js        org.replaceplace.intell
+28581 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.00 NDK MediaCodec_ org.replaceplace.intell
+28510 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:01.16 mqt_v_js        org.replaceplace.intell
+28508 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.02 NDK MediaCodec_ org.replaceplace.intell
+28471 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.08 NDK MediaCodec_ org.replaceplace.intell
+28470 u0_a384       4 -16  32G 1.1G 150M S  0.0  10.5   0:00.00 NDK MediaCodec_ org.replaceplace.intell
+28469 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.02 CCodecWatchdog  org.replaceplace.intell
+28216 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 GPU completion  org.replaceplace.intell
+28213 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 HWC release     org.replaceplace.intell
+26609 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.19 binder:26433_7  org.replaceplace.intell
+26499 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.41 binder:26433_6  org.replaceplace.intell
+26495 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.07 mqt_v_js        org.replaceplace.intell
+26493 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.09 mqt_v_js        org.replaceplace.intell
+26491 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.32 mqt_v_js        org.replaceplace.intell
+26492 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.28 mqt_v_js        org.replaceplace.intell
+26494 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.08 mqt_v_js        org.replaceplace.intell
+26490 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.02 binder:26433_1  org.replaceplace.intell
+26487 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.45 mqt_v_js        org.replaceplace.intell
+26484 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.06 binder:26433_4  org.replaceplace.intell
+26488 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.14 mqt_v_js        org.replaceplace.intell
+26486 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.44 binder:26433_5  org.replaceplace.intell
+26482 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 SurfaceSyncGrou org.replaceplace.intell
+26480 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.02 AudioPortEventH org.replaceplace.intell
+26479 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:03.46 mqt_v_js        org.replaceplace.intell
+26478 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.44 mqt_v_js        org.replaceplace.intell
+26476 u0_a384      29   9  32G 1.1G 150M S  0.0  10.5   0:00.00 GoogleApiHandle org.replaceplace.intell
+26475 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 kolibri-cleaner org.replaceplace.intell
+26477 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.01 ConnectivityThr org.replaceplace.intell
+26474 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 hades           org.replaceplace.intell
+26466 u0_a384      20   0  32G 1.1G 150M R  0.0  10.5   0:06.41 ncFunctionQueue org.replaceplace.intell
+26464 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 ProtoLogBackgro org.replaceplace.intell
+26470 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.01 DefaultDispatch org.replaceplace.intell
+26465 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.03 Expo JNI deallo org.replaceplace.intell
+26469 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.01 DefaultDispatch org.replaceplace.intell
+26462 u0_a384      30  10  32G 1.1G 150M S  0.0  10.5   0:00.09 android.bg      org.replaceplace.intell
+26467 u0_a384       0  -2  32G 1.1G 150M S  0.0  10.5   0:00.00 hwuiTask0       org.replaceplace.intell
+26468 u0_a384       0  -2  32G 1.1G 150M S  0.0  10.5   0:00.00 hwuiTask1       org.replaceplace.intell
+26463 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.11 hades           org.replaceplace.intell
+26455 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 vk_tlsem4_bg    org.replaceplace.intell
+26459 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.01 pool-3-thread-1 org.replaceplace.intell
+26461 u0_a384      16  -4  32G 1.1G 150M S  0.0  10.5   0:00.67 mqt_v_native    org.replaceplace.intell
+26454 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 vk_sparse_queue org.replaceplace.intell
+26456 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 vk_sparse_queue org.replaceplace.intell
+26457 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.18 HybridData Dest org.replaceplace.intell
+26453 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 vk_tlsem4_bg    org.replaceplace.intell
+26450 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 TracingMuxer    org.replaceplace.intell
+26452 u0_a384      10 -10  32G 1.1G 150M S  0.0  10.5   0:00.00 vkmem_free      org.replaceplace.intell
+26449 u0_a384       0  -4  32G 1.1G 150M S  0.0  10.5   0:00.96 RenderThread    org.replaceplace.intell
+26447 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 WM.task-1       org.replaceplace.intell
+26446 u0_a384      29   9  32G 1.1G 150M S  0.0  10.5   0:00.13 Profile Saver   org.replaceplace.intell
+26448 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.00 WM.task-2       org.replaceplace.intell
+26442 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:00.91 binder:26433_1  org.replaceplace.intell
+26443 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.77 binder:26433_2  org.replaceplace.intell
+26444 u0_a384      20   0  32G 1.1G 150M S  0.0  10.5   0:01.37 binder:26433_3  org.replaceplace.intell
+26441 u0_a384      24   4  32G 1.1G 150M S  0.0  10.5   0:00.05 FinalizerWatchd org.replaceplace.intell
+26435 u0_a384       0 -20  32G 1.1G 150M S  0.0  10.5   0:00.00 Signal Catcher  org.replaceplace.intell
+26440 u0_a384      24   4  32G 1.1G 150M S  0.0  10.5   0:00.04 FinalizerDaemon org.replaceplace.intell
+26439 u0_a384      24   4  32G 1.1G 150M S  0.0  10.5   0:00.26 ReferenceQueueD org.replaceplace.intell
+26438 u0_a384      24   4  32G 1.1G 150M S  0.0  10.5   0:03.28 HeapTaskDaemon  org.replaceplace.intell
+26437 u0_a384      29   9  32G 1.1G 150M S  0.0  10.5   0:00.40 Jit thread pool org.replaceplace.intell
+26436 u0_a384       0 -20  32G 1.1G 150M S  0.0  10.5   0:00.00 perfetto_hprof_ org.replaceplace.intell
+26433 u0_a384       0   0  32G 1.1G 150M S  0.0  10.5   0:09.24 aceplace.intell org.replaceplace.intell
+
+--- recent spike ---
+11-24 12:26:25.915 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548385914}'
+11-24 12:26:29.733 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548389733}'
+11-24 12:26:30.978 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548390978}'
+11-24 12:26:35.983 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548395983}'
+11-24 12:26:38.268 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548398268}'
+11-24 12:26:41.031 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548401030}'
+11-24 12:26:45.584 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548405583}'
+11-24 12:26:46.070 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548406070}'
+11-24 12:26:51.319 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548411319}'
+11-24 12:26:51.848  1367  2550 I ActivityManager: Process android.process.media (pid 4324) has died: cch  +95 CEM 
+11-24 12:26:51.859  1367  2551 I ActivityManager: Process com.google.android.adservices.api (pid 26718) has died: cch  +95 CEM 
+11-24 12:26:51.923  1367  2551 I ActivityManager: Process com.google.android.GoogleCamera:recovery (pid 9556) has died: cch  +95 CEM 
+11-24 12:26:51.948  1367  2308 I ActivityManager: Process com.google.android.videos (pid 28058) has died: cch  +95 CEM 
+11-24 12:26:51.954  1367  5253 I ActivityManager: Process com.android.externalstorage (pid 28621) has died: cch  +95 CEM 
+11-24 12:26:52.059  1367  2135 I ActivityManager: Process com.fitbit.FitbitMobile (pid 12901) has died: cch  +95 CEM 
+11-24 12:26:52.062  1367  5244 I ActivityManager: Process com.google.android.safetycore (pid 10225) has died: cch  +95 CEM 
+11-24 12:26:52.075  1367  5253 I ActivityManager: Process com.android.DeviceAsWebcam (pid 21799) has died: cch  +95 CEM 
+11-24 12:26:52.112  1367  2551 I ActivityManager: Process com.google.android.packageinstaller (pid 27865) has died: cch  +95 CEM 
+11-24 12:26:52.195  1367  2138 I ActivityManager: Process system:ui (pid 607) has died: cch  +95 CEM 
+11-24 12:26:54.424 26433 26460 I ReactNativeJS: '[audio-spike-log]', '{"type":"streamBedReady","uri":"file:///sdcard/Android/data/org.replaceplace.intell/files/spikes/probe-bed-2min-stereo.m4a","wallClockMs":1795548414424}'
+

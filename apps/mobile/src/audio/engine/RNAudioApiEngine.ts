@@ -8,6 +8,8 @@ import {
   type NowPlayingMeta,
   type VoiceHandle,
   DuckingPolicy,
+  VoiceLedger,
+  type VoiceLedgerStats,
   dbToGain,
   equalPowerCrossfade,
 } from "@intell/shared";
@@ -15,14 +17,17 @@ import {
   AudioContext,
   AudioManager,
   PlaybackNotificationManager,
+  decodeAudioData,
   type AudioBuffer,
   type AudioBufferSourceNode,
   type AudioEventSubscription,
   type GainNode,
+  type StereoPannerNode,
 } from "react-native-audio-api";
 import { AppState, type AppStateStatus, Platform } from "react-native";
 import { BufferLruCache } from "./lruCache";
 import { classifyRoute, isSpeakerLike } from "./routeMap";
+import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
 
 type RouteChangeEvent = {
   reason:
@@ -38,16 +43,19 @@ type RouteChangeEvent = {
 
 type Unsubscribe = () => void;
 
+type VoiceKind = "narration" | "oneshot" | "bed" | "stem" | "heartbeat";
+
 interface InternalBuffer extends BufferHandle {
   buffer: AudioBuffer;
 }
 
 interface VoiceState {
   id: string;
-  kind: "narration" | "oneshot" | "bed";
+  kind: VoiceKind;
   bus: BusId;
   source: AudioBufferSourceNode;
   gain: GainNode;
+  panner?: StereoPannerNode;
   startedAtContextTime: number;
   offsetSec: number;
   durationMs: number;
@@ -58,21 +66,25 @@ interface VoiceState {
   loopStartSec: number;
   loopEndSec: number;
   looping: boolean;
+  playbackRate: number;
+  /** Fade stop scheduled; release on natural or faded onEnded. */
+  pendingReleaseReason?: "ended" | "cancelled";
 }
 
 interface LoopGroupState {
   id: string;
   bus: BusId;
   stemCount: number;
-  stems: {
-    source: AudioBufferSourceNode;
-    gain: GainNode;
-    buffer: AudioBuffer;
-    loopStartSec: number;
-    loopEndSec: number;
-  }[];
+  stemVoiceIds: string[];
   startedAtContextTime: number;
 }
+
+const MIN_AUDIBLE_FADE_MS = 20;
+const HEARTBEAT_LEAD_SEC = 5;
+const HEARTBEAT_COUNT = 2;
+const DEFAULT_VOICE_BUDGET = 12;
+const TOUR_NARRATION_PERIOD_SEC = 180;
+const CLOCK_WINDOW_MS = 120_000;
 
 let nextId = 1;
 function id(prefix: string): string {
@@ -80,26 +92,23 @@ function id(prefix: string): string {
   return `${prefix}-${nextId}`;
 }
 
-function rampGain(
-  param: GainNode["gain"],
-  context: AudioContext,
-  target: number,
-  rampMs: number,
-): void {
-  const now = context.currentTime;
-  const safe = Math.max(target, 0.0001);
-  param.cancelScheduledValues(now);
-  param.setValueAtTime(Math.max(param.value, 0.0001), now);
-  if (rampMs <= 0) {
-    param.setValueAtTime(safe, now);
-    return;
-  }
-  param.linearRampToValueAtTime(safe, now + rampMs / 1000);
+function enforceMinFade(fadeMs: number): number {
+  return Math.max(fadeMs, MIN_AUDIBLE_FADE_MS);
+}
+
+type AudioManagerExtras = typeof AudioManager & {
+  activelyReclaimSession?: (enabled: boolean) => void;
+};
+
+function requestAudioFocus(): void {
+  AudioManager.observeAudioInterruptions("gain");
+  const mgr = AudioManager as AudioManagerExtras;
+  mgr.activelyReclaimSession?.(true);
 }
 
 /**
- * Mobile AudioEngine backed by react-native-audio-api (M1 spike).
- * UI code must import this only through the AudioEngine interface.
+ * Mobile AudioEngine backed by react-native-audio-api (M1 spike, B·S2 stability).
+ * UI code must import this only through the AudioEngine interface (plus spike helpers).
  */
 export class RNAudioApiEngine implements AudioEngine {
   private context: AudioContext | null = null;
@@ -109,6 +118,7 @@ export class RNAudioApiEngine implements AudioEngine {
   private voices = new Map<string, VoiceState>();
   private loops = new Map<string, LoopGroupState>();
   private buffers = new Map<string, InternalBuffer>();
+  private readonly ledger = new VoiceLedger();
 
   private route: AudioRoute = "unknown";
   private appState: AppStateStatus =
@@ -118,6 +128,7 @@ export class RNAudioApiEngine implements AudioEngine {
   private mixWallStartMs: number | null = null;
   private mixContextStartSec: number | null = null;
   private initWallMs = 0;
+  private mixActive = false;
 
   private routeSubs = new Set<(r: AudioRoute) => void>();
   private interruptionSubs = new Set<(e: "began" | "ended") => void>();
@@ -132,19 +143,46 @@ export class RNAudioApiEngine implements AudioEngine {
   private voiceEndedSubs = new Set<
     (e: {
       voiceId: string;
-      kind: VoiceState["kind"];
+      kind: VoiceKind;
       appState: string;
       reason: "ended" | "cancelled";
     }) => void
   >();
-  /** Voice ids stopped via stop() / cancelScheduledOneShots (not natural end). */
-  private cancelledVoiceIds = new Set<string>();
+  private tickSubs = new Set<(ctxTimeSec: number) => void>();
 
   private systemSubs: AudioEventSubscription[] = [];
   private notifSubs: AudioEventSubscription[] = [];
   private appStateSub: { remove: () => void } | null = null;
-  private progressTimer: ReturnType<typeof setInterval> | null = null;
   private disposed = false;
+
+  private silentBuffer: AudioBuffer | null = null;
+  private heartbeatIds = new Set<string>();
+  private voiceBudget = DEFAULT_VOICE_BUDGET;
+  private oneshotDropped = 0;
+  private focusHeld = false;
+
+  private interruptionBegan = false;
+  private suspendPending = false;
+  /** After Stop all: emit one settled diag once only heartbeats remain. */
+  private settledPending = false;
+  private settledEmitted = false;
+  private settledSubs = new Set<
+    (d: ReturnType<RNAudioApiEngine["getDiagnostics"]>) => void
+  >();
+
+  private tourNarrationTemplate: {
+    h: BufferHandle;
+    meta: NowPlayingMeta;
+  } | null = null;
+  private lastTourNarrationStartSec = 0;
+
+  private clockWindowWallStartMs: number | null = null;
+  private clockWindowContextStartSec: number | null = null;
+  private clockRate: number | undefined;
+  private clockRateLowWindows = 0;
+  private audioHealth: "ok" | "degraded" = "ok";
+
+  private ticking = false;
 
   /** Last raw getDevicesInfo payload (logged on routeChange). */
   lastDevicesInfo: unknown = null;
@@ -156,7 +194,7 @@ export class RNAudioApiEngine implements AudioEngine {
     AudioManager.setSystemOptions({
       ios: { category: "playback", mode: "default" },
     });
-    AudioManager.observeAudioInterruptions("gain");
+    requestAudioFocus();
 
     if (Platform.OS === "android") {
       try {
@@ -182,10 +220,17 @@ export class RNAudioApiEngine implements AudioEngine {
       buses[bus] = g;
     }
 
+    const silent = context.createBuffer(
+      1,
+      Math.max(1, Math.floor(context.sampleRate * 0.05)),
+      context.sampleRate,
+    );
+
     this.context = context;
     this.master = master;
     this.buses = buses;
     this.cache = new BufferLruCache(context.sampleRate);
+    this.silentBuffer = silent;
     this.initWallMs = Date.now();
     this.disposed = false;
 
@@ -201,28 +246,136 @@ export class RNAudioApiEngine implements AudioEngine {
         void this.onInterruptionEvent(e);
       })!,
     );
+    // Library gap (1.0.1): AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK (-3) is logged
+    // natively but never emitted as a JS `duck` event. The subsequent GAIN
+    // often arrives as interruption `ended` with shouldResume=false and no
+    // matching `began` — we treat that unpaired ended as a no-op (below).
+    this.systemSubs.push(
+      AudioManager.addSystemEventListener("duck", (e) => {
+        console.log("[audio-spike] duck", e);
+        this.tick();
+      })!,
+    );
 
     this.wireRemoteCommands();
 
     this.appStateSub = AppState.addEventListener("change", (next) => {
       this.appState = next;
       for (const cb of this.appStateSubs) cb(next);
+      this.tick();
     });
-
-    this.progressTimer = setInterval(() => this.emitNarrationProgress(), 500);
   }
 
   /**
-   * Call once at the start of a full-mix run: resume if suspended, then reset
-   * the wall/context clock baseline so clockGapMs is not carried over.
+   * Call once at the start of a full-mix run: wait out any pending suspend,
+   * resume if needed, restore master gain (stop-all leaves it near zero),
+   * then reset the wall/context clock baseline so clockGapMs is not carried over.
    */
   async prepareMixStart(): Promise<void> {
     const ctx = this.requireContext();
+    const master = this.master;
+    // stop-all schedules suspend on a silent source's onended; don't race it.
+    const deadline = Date.now() + 2000;
+    while (this.suspendPending && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 20));
+    }
     if (ctx.state === "suspended") {
-      await ctx.resume();
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("[audio-spike] prepareMixStart resume failed", err);
+      }
+    }
+    // fadeMasterAndSuspend ramps master to ~0; resume alone leaves that mute.
+    if (master) {
+      const now = ctx.currentTime;
+      rampGainHeld(master.gain, now, 1, 0);
     }
     this.mixWallStartMs = Date.now();
     this.mixContextStartSec = ctx.currentTime;
+    this.mixActive = true;
+    this.clockWindowWallStartMs = Date.now();
+    this.clockWindowContextStartSec = ctx.currentTime;
+    this.clockRateLowWindows = 0;
+    this.audioHealth = "ok";
+    this.requestFocus();
+    this.ensureHeartbeats();
+    this.tick();
+  }
+
+  startHeartbeats(): void {
+    this.ensureHeartbeats();
+  }
+
+  ensureHeartbeats(): void {
+    const ctx = this.context;
+    if (!ctx || !this.master || !this.silentBuffer) return;
+    const now = ctx.currentTime;
+    while (this.heartbeatIds.size < HEARTBEAT_COUNT) {
+      const slot =
+        this.heartbeatIds.size === 0 ? HEARTBEAT_LEAD_SEC : HEARTBEAT_LEAD_SEC * 2;
+      const endSec = now + slot;
+      this.scheduleHeartbeat(endSec);
+    }
+  }
+
+  onTick(cb: (ctxTimeSec: number) => void): Unsubscribe {
+    this.tickSubs.add(cb);
+    return () => this.tickSubs.delete(cb);
+  }
+
+  setVoiceBudget(n: number): void {
+    this.voiceBudget = Math.max(1, Math.floor(n));
+  }
+
+  getVoiceBudget(): number {
+    return this.voiceBudget;
+  }
+
+  canAcceptOneShot(): boolean {
+    const ctx = this.context;
+    if (!ctx) return false;
+    return (
+      this.ledger.liveOrPendingSources(ctx.currentTime, true) < this.voiceBudget
+    );
+  }
+
+  getLedgerStats(): VoiceLedgerStats {
+    return this.ledger.getStats();
+  }
+
+  requestFocus(): void {
+    requestAudioFocus();
+    this.focusHeld = true;
+  }
+
+  async stopAllMix(fadeMs = 500): Promise<void> {
+    this.mixActive = false;
+    this.settledEmitted = false;
+    this.settledPending = true;
+    const ctx = this.context;
+    if (!ctx || !this.master) return;
+
+    const fade = enforceMinFade(fadeMs);
+    for (const voice of [...this.voices.values()]) {
+      if (voice.kind === "heartbeat") continue;
+      this.stop({ id: voice.id }, fade);
+    }
+    for (const group of [...this.loops.values()]) {
+      this.stop({ id: group.id, stemCount: group.stemCount }, fade);
+    }
+    this.cancelScheduledOneShots();
+    // Keep heartbeats through the fade so tick() can emit "settled"
+    // once only heartbeats remain, then suspend.
+    this.ensureHeartbeats();
+    await this.fadeMasterAndSuspend(fade, "stop-all");
+  }
+
+  onSettled(
+    cb: (d: ReturnType<RNAudioApiEngine["getDiagnostics"]>) => void,
+  ): Unsubscribe {
+    this.settledSubs.add(cb);
+    return () => this.settledSubs.delete(cb);
   }
 
   onAppStateChange(cb: (state: AppStateStatus) => void): Unsubscribe {
@@ -239,7 +392,7 @@ export class RNAudioApiEngine implements AudioEngine {
   onVoiceEnded(
     cb: (e: {
       voiceId: string;
-      kind: VoiceState["kind"];
+      kind: VoiceKind;
       appState: string;
       reason: "ended" | "cancelled";
     }) => void,
@@ -258,24 +411,55 @@ export class RNAudioApiEngine implements AudioEngine {
 
   /** Stop every one-shot voice (pending future starts and in-flight). */
   cancelScheduledOneShots(): void {
+    const ctx = this.requireContext();
+    const now = ctx.currentTime;
     for (const voice of [...this.voices.values()]) {
       if (voice.kind !== "oneshot") continue;
-      this.cancelledVoiceIds.add(voice.id);
+      const start = voice.startedAtContextTime;
+      if (start > now + 0.001) {
+        try {
+          voice.source.stop();
+        } catch {
+          // never started
+        }
+        this.releaseVoice(voice.id, "cancelled", { missedSweep: false });
+        continue;
+      }
+      const fadeMs = enforceMinFade(20);
+      rampGainHeld(voice.gain.gain, now, 0.0001, fadeMs);
+      voice.pendingReleaseReason = "cancelled";
+      const stopAt = now + fadeMs / 1000 + 0.02;
+      this.ledger.setExpectedEnd(voice.id, stopAt);
       try {
-        voice.source.stop();
+        voice.source.stop(stopAt);
       } catch {
-        // Never started or already stopped — emit cancelled immediately.
-        this.voices.delete(voice.id);
-        this.emitVoiceEnded(voice.id, voice.kind);
+        this.releaseVoice(voice.id, "cancelled", { missedSweep: false });
       }
     }
+    this.tick();
   }
 
-  async load(sha: string, uri: string): Promise<BufferHandle> {
+  /** Drop a cached decode so the next `load` re-decodes. */
+  invalidateBuffer(sha: string): void {
+    this.cache?.delete(sha);
+    this.buffers.delete(sha);
+  }
+
+  /**
+   * Decode and cache a buffer. Pass `sampleRate` to resample on decode
+   * (e.g. 24000 for T1 narration). Call `invalidateBuffer` before toggling
+   * rates so a file-rate reload does not hit a prior 24 kHz entry.
+   */
+  async load(
+    sha: string,
+    uri: string,
+    sampleRate?: number,
+  ): Promise<BufferHandle> {
     this.requireContext();
     const cache = this.requireCache();
+
     const cached = cache.get(sha);
-    if (cached) {
+    if (cached && sampleRate == null) {
       const handle: InternalBuffer = {
         sha,
         durationMs: cached.duration * 1000,
@@ -284,10 +468,15 @@ export class RNAudioApiEngine implements AudioEngine {
       this.buffers.set(sha, handle);
       return { sha, durationMs: handle.durationMs };
     }
+    if (sampleRate != null) {
+      cache.delete(sha);
+      this.buffers.delete(sha);
+    }
 
-    // uri may be a file path, remote URL, or Metro asset module id (number as string).
     const input: string | number = /^\d+$/.test(uri) ? Number(uri) : uri;
-    const buffer = await this.context!.decodeAudioData(input);
+    // Standalone decodeAudioData accepts an optional sampleRate; context.decode
+    // always uses context.sampleRate.
+    const buffer = await decodeAudioData(input, sampleRate);
     cache.set(sha, buffer);
     const handle: InternalBuffer = {
       sha,
@@ -298,6 +487,18 @@ export class RNAudioApiEngine implements AudioEngine {
     return { sha, durationMs: handle.durationMs };
   }
 
+  /** Native AudioContext for spike helpers (MediaElement bed). */
+  getNativeContext(): AudioContext {
+    return this.requireContext();
+  }
+
+  /** Bus gain node for attaching external sources (MediaElement). */
+  getBusNode(bus: BusId): GainNode {
+    const node = this.buses[bus];
+    if (!node) throw new Error(`bus ${bus} missing`);
+    return node;
+  }
+
   playNarration(
     h: BufferHandle,
     meta: NowPlayingMeta,
@@ -305,7 +506,7 @@ export class RNAudioApiEngine implements AudioEngine {
   ): VoiceHandle {
     const ctx = this.requireContext();
     const internal = this.requireBuffer(h.sha);
-    this.stopNarrationInternal(0);
+    this.stopNarrationInternal(enforceMinFade(0));
 
     const gain = ctx.createGain();
     gain.gain.value = 1;
@@ -317,10 +518,14 @@ export class RNAudioApiEngine implements AudioEngine {
 
     const offsetSec = Math.max(0, (startAtMs ?? 0) / 1000);
     const when = ctx.currentTime;
+    const durationSec = internal.buffer.duration / Math.max(source.playbackRate.value, 0.01);
+    const expectedEnd = when + durationSec - offsetSec;
+
     source.start(when, offsetSec);
 
+    const voiceId = id("narration");
     const voice: VoiceState = {
-      id: id("narration"),
+      id: voiceId,
       kind: "narration",
       bus: "story",
       source,
@@ -335,31 +540,42 @@ export class RNAudioApiEngine implements AudioEngine {
       loopStartSec: 0,
       loopEndSec: internal.buffer.duration,
       looping: false,
+      playbackRate: 1,
     };
-    this.voices.set(voice.id, voice);
+    this.voices.set(voiceId, voice);
+    this.ledger.create(voiceId, "narration", expectedEnd);
+    this.ledger.markStarted(voiceId, when);
+
     this.narrationActive = true;
     this.applyDucking(DuckingPolicy.DUCK_ATTACK_MS);
     void this.showNotification(meta, "playing", offsetSec * 1000, internal.durationMs);
+    this.requestFocus();
+
+    if (this.mixActive) {
+      this.tourNarrationTemplate = { h, meta };
+      this.lastTourNarrationStartSec = when;
+      console.log("[audio-spike] tourNarrationStart", { whenSec: when });
+    }
 
     source.onended = () => {
-      this.voices.delete(voice.id);
-      this.emitVoiceEnded(voice.id, voice.kind);
+      this.releaseVoice(voiceId, "ended", { missedSweep: false });
       if (![...this.voices.values()].some((v) => v.kind === "narration")) {
         this.narrationActive = false;
         this.applyDucking(DuckingPolicy.DUCK_RELEASE_MS);
       }
+      this.tick();
     };
 
-    return { id: voice.id };
+    this.tick();
+    return { id: voiceId };
   }
 
   pauseNarration(): void {
-    // Lock-screen / API pause suspends the whole AudioContext (review §6.5).
-    void this.suspendMix("pause");
+    void this.fadeMasterAndSuspend(250, "pause");
   }
 
   resumeNarration(): void {
-    void this.resumeMix("play");
+    void this.resumeAfterFade(300, "play");
   }
 
   playOneShot(
@@ -373,6 +589,15 @@ export class RNAudioApiEngine implements AudioEngine {
     },
   ): VoiceHandle {
     const ctx = this.requireContext();
+    if (!this.canAcceptOneShot()) {
+      this.oneshotDropped += 1;
+      console.warn("[audio-spike] oneshotDropped", {
+        n: this.oneshotDropped,
+        budget: this.voiceBudget,
+      });
+      return { id: `dropped-${this.oneshotDropped}` };
+    }
+
     const internal = this.requireBuffer(h.sha);
     const bus = this.buses[p.bus];
     if (!bus) throw new Error(`Unknown bus ${p.bus}`);
@@ -391,30 +616,43 @@ export class RNAudioApiEngine implements AudioEngine {
 
     const when =
       p.whenSec != null ? Math.max(p.whenSec, ctx.currentTime) : ctx.currentTime;
+    const rate = Math.max(p.rate, 0.01);
+    const durationSec = internal.buffer.duration / rate;
+    const expectedEnd = when + durationSec;
+
     source.start(when);
 
+    const voiceId = id("oneshot");
     const voice: VoiceState = {
-      id: id("oneshot"),
+      id: voiceId,
       kind: "oneshot",
       bus: p.bus,
       source,
       gain,
+      panner,
       startedAtContextTime: when,
       offsetSec: 0,
-      durationMs: internal.durationMs / Math.max(p.rate, 0.01),
+      durationMs: internal.durationMs / rate,
       paused: false,
       pauseOffsetSec: 0,
       buffer: internal.buffer,
       loopStartSec: 0,
       loopEndSec: internal.buffer.duration,
       looping: false,
+      playbackRate: rate,
     };
-    this.voices.set(voice.id, voice);
+    this.voices.set(voiceId, voice);
+    this.ledger.create(voiceId, "oneshot", expectedEnd);
+    this.ledger.markStarted(voiceId, when);
+
     source.onended = () => {
-      this.voices.delete(voice.id);
-      this.emitVoiceEnded(voice.id, voice.kind);
+      const reason = voice.pendingReleaseReason ?? "ended";
+      this.releaseVoice(voiceId, reason, { missedSweep: false });
+      this.tick();
     };
-    return { id: voice.id };
+
+    this.tick();
+    return { id: voiceId };
   }
 
   startLoopGroup(
@@ -432,9 +670,10 @@ export class RNAudioApiEngine implements AudioEngine {
 
     const when = ctx.currentTime + 0.05;
     const groupId = id("loop");
-    const stemStates: LoopGroupState["stems"] = [];
+    const stemVoiceIds: string[] = [];
 
-    for (const stem of stems) {
+    for (let i = 0; i < stems.length; i += 1) {
+      const stem = stems[i]!;
       const internal = this.requireBuffer(stem.h.sha);
       const gain = ctx.createGain();
       gain.gain.value = dbToGain(stem.gainDb);
@@ -446,27 +685,48 @@ export class RNAudioApiEngine implements AudioEngine {
       source.loopStart = stem.loopStartMs / 1000;
       source.loopEnd = stem.loopEndMs / 1000;
       source.connect(gain);
-      // Shared startTime keeps stems sample-aligned.
       source.start(when, stem.loopStartMs / 1000);
 
-      stemStates.push({
+      const voiceId = `${groupId}-stem-${i}`;
+      const voice: VoiceState = {
+        id: voiceId,
+        kind: "stem",
+        bus,
         source,
         gain,
+        startedAtContextTime: when,
+        offsetSec: stem.loopStartMs / 1000,
+        durationMs: internal.durationMs,
+        paused: false,
+        pauseOffsetSec: 0,
         buffer: internal.buffer,
         loopStartSec: stem.loopStartMs / 1000,
         loopEndSec: stem.loopEndMs / 1000,
-      });
+        looping: true,
+        playbackRate: 1,
+      };
+      this.voices.set(voiceId, voice);
+      stemVoiceIds.push(voiceId);
+      this.ledger.create(voiceId, "stem", null);
+      this.ledger.markStarted(voiceId, when);
+
+      source.onended = () => {
+        const reason = voice.pendingReleaseReason ?? "ended";
+        this.releaseVoice(voiceId, reason, { missedSweep: false });
+        this.tick();
+      };
     }
 
     const group: LoopGroupState = {
       id: groupId,
       bus,
-      stemCount: stemStates.length,
-      stems: stemStates,
+      stemCount: stemVoiceIds.length,
+      stemVoiceIds,
       startedAtContextTime: when,
     };
     this.loops.set(groupId, group);
-    return { id: groupId, stemCount: stemStates.length };
+    this.tick();
+    return { id: groupId, stemCount: stemVoiceIds.length };
   }
 
   crossfadeBed(
@@ -486,6 +746,7 @@ export class RNAudioApiEngine implements AudioEngine {
     const internal = this.requireBuffer(to.sha);
 
     const gain = ctx.createGain();
+    const toLinear = dbToGain(p.gainDb);
     gain.gain.value = 0.0001;
     gain.connect(busNode);
 
@@ -499,45 +760,72 @@ export class RNAudioApiEngine implements AudioEngine {
     const when = ctx.currentTime;
     source.start(when, p.loopStartMs / 1000);
 
-    const fadeSec = Math.max(p.fadeMs, 1) / 1000;
-    const steps = 32;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const { fromGain, toGain } = equalPowerCrossfade(t);
-      const at = when + fadeSec * t;
-      gain.gain.linearRampToValueAtTime(
-        Math.max(0.0001, toGain * dbToGain(p.gainDb)),
-        at,
+    const fadeSec = Math.max(enforceMinFade(p.fadeMs), 1) / 1000;
+    const gainParam = gain.gain;
+    if (typeof gainParam.setValueCurveAtTime === "function") {
+      if (typeof gainParam.cancelAndHoldAtTime === "function") {
+        gainParam.cancelAndHoldAtTime(when);
+      } else {
+        gainParam.cancelScheduledValues(when);
+      }
+      gainParam.setValueCurveAtTime(
+        equalPowerCurve(0.0001, toLinear),
+        when,
+        fadeSec,
       );
-      if (from) {
-        const fromVoice = this.voices.get(from.id);
-        if (fromVoice) {
-          fromVoice.gain.gain.linearRampToValueAtTime(
-            Math.max(0.0001, fromGain * fromVoice.gain.gain.value),
-            at,
-          );
-        }
+    } else {
+      const steps = 32;
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const { toGain } = equalPowerCrossfade(t);
+        const at = when + fadeSec * t;
+        rampGainHeld(gainParam, at, Math.max(0.0001, toGain * toLinear), 0);
       }
     }
 
     if (from) {
       const fromVoice = this.voices.get(from.id);
       if (fromVoice) {
+        const fromLinear = Math.max(0.0001, fromVoice.gain.gain.value);
+        const fromParam = fromVoice.gain.gain;
+        if (typeof fromParam.setValueCurveAtTime === "function") {
+          if (typeof fromParam.cancelAndHoldAtTime === "function") {
+            fromParam.cancelAndHoldAtTime(when);
+          } else {
+            fromParam.cancelScheduledValues(when);
+          }
+          fromParam.setValueCurveAtTime(
+            equalPowerCurve(fromLinear, 0.0001),
+            when,
+            fadeSec,
+          );
+        } else {
+          const steps = 32;
+          for (let i = 0; i <= steps; i += 1) {
+            const t = i / steps;
+            const { fromGain } = equalPowerCrossfade(t);
+            rampGainHeld(
+              fromParam,
+              when + fadeSec * t,
+              Math.max(0.0001, fromGain * fromLinear),
+              0,
+            );
+          }
+        }
         const stopAt = when + fadeSec + 0.05;
+        fromVoice.pendingReleaseReason = "ended";
+        this.ledger.setExpectedEnd(from.id, stopAt);
         try {
           fromVoice.source.stop(stopAt);
         } catch {
-          // already stopped
+          this.releaseVoice(from.id, "ended", { missedSweep: false });
         }
-        setTimeout(
-          () => this.voices.delete(from.id),
-          p.fadeMs + 100,
-        );
       }
     }
 
+    const voiceId = id("bed");
     const voice: VoiceState = {
-      id: id("bed"),
+      id: voiceId,
       kind: "bed",
       bus,
       source,
@@ -551,9 +839,20 @@ export class RNAudioApiEngine implements AudioEngine {
       loopStartSec: p.loopStartMs / 1000,
       loopEndSec: p.loopEndMs / 1000,
       looping: true,
+      playbackRate: 1,
     };
-    this.voices.set(voice.id, voice);
-    return { id: voice.id };
+    this.voices.set(voiceId, voice);
+    this.ledger.create(voiceId, "bed", null);
+    this.ledger.markStarted(voiceId, when);
+
+    source.onended = () => {
+      const reason = voice.pendingReleaseReason ?? "ended";
+      this.releaseVoice(voiceId, reason, { missedSweep: false });
+      this.tick();
+    };
+
+    this.tick();
+    return { id: voiceId };
   }
 
   setGain(
@@ -563,26 +862,30 @@ export class RNAudioApiEngine implements AudioEngine {
   ): void {
     const ctx = this.requireContext();
     const linear = dbToGain(gainDb);
+    const ramp = enforceMinFade(rampMs);
 
     if (typeof target === "string") {
       const bus = this.buses[target];
       if (!bus) throw new Error(`Unknown bus ${target}`);
-      rampGain(bus.gain, ctx, linear, rampMs);
+      rampGainHeld(bus.gain, ctx.currentTime, linear, ramp);
       return;
     }
 
     if ("stemCount" in target) {
       const group = this.loops.get(target.id);
       if (!group) return;
-      for (const stem of group.stems) {
-        rampGain(stem.gain.gain, ctx, linear, rampMs);
+      for (const stemId of group.stemVoiceIds) {
+        const voice = this.voices.get(stemId);
+        if (voice) {
+          rampGainHeld(voice.gain.gain, ctx.currentTime, linear, ramp);
+        }
       }
       return;
     }
 
     const voice = this.voices.get(target.id);
     if (!voice) return;
-    rampGain(voice.gain.gain, ctx, linear, rampMs);
+    rampGainHeld(voice.gain.gain, ctx.currentTime, linear, ramp);
   }
 
   setStemGain(
@@ -594,44 +897,76 @@ export class RNAudioApiEngine implements AudioEngine {
     const ctx = this.requireContext();
     const g = this.loops.get(group.id);
     if (!g) return;
-    const stem = g.stems[index];
-    if (!stem) return;
-    rampGain(stem.gain.gain, ctx, dbToGain(gainDb), rampMs);
+    const stemId = g.stemVoiceIds[index];
+    if (!stemId) return;
+    const voice = this.voices.get(stemId);
+    if (!voice) return;
+    rampGainHeld(
+      voice.gain.gain,
+      ctx.currentTime,
+      dbToGain(gainDb),
+      enforceMinFade(rampMs),
+    );
   }
 
   stop(target: VoiceHandle | LoopGroupHandle, fadeMs: number): void {
     const ctx = this.requireContext();
+    const fade = enforceMinFade(fadeMs);
+
     if ("stemCount" in target) {
       const group = this.loops.get(target.id);
       if (!group) return;
       const when = ctx.currentTime;
-      for (const stem of group.stems) {
-        rampGain(stem.gain.gain, ctx, 0, fadeMs);
+      const stopAt = when + fade / 1000 + 0.05;
+      for (const stemId of group.stemVoiceIds) {
+        const voice = this.voices.get(stemId);
+        if (!voice) continue;
+        rampGainHeld(voice.gain.gain, when, 0.0001, fade);
+        voice.pendingReleaseReason = "cancelled";
+        this.ledger.setExpectedEnd(stemId, stopAt);
         try {
-          stem.source.stop(when + fadeMs / 1000 + 0.05);
+          voice.source.stop(stopAt);
         } catch {
-          // ignore
+          this.releaseVoice(stemId, "cancelled", { missedSweep: false });
         }
       }
-      setTimeout(() => this.loops.delete(target.id), fadeMs + 100);
+      const pending = group.stemVoiceIds.filter((sid) => this.voices.has(sid));
+      if (pending.length === 0) {
+        this.loops.delete(target.id);
+      } else {
+        const lastStem = pending[pending.length - 1];
+        const v = lastStem ? this.voices.get(lastStem) : undefined;
+        if (v) {
+          const prevOnEnded = v.source.onended;
+          v.source.onended = (ev) => {
+            prevOnEnded?.(ev);
+            if (!group.stemVoiceIds.some((sid) => this.voices.has(sid))) {
+              this.loops.delete(target.id);
+            }
+          };
+        }
+      }
+      this.tick();
       return;
     }
 
     const voice = this.voices.get(target.id);
     if (!voice) return;
-    this.cancelledVoiceIds.add(voice.id);
-    rampGain(voice.gain.gain, ctx, 0, fadeMs);
+    const reason = voice.kind === "oneshot" ? "cancelled" : "cancelled";
+    rampGainHeld(voice.gain.gain, ctx.currentTime, 0.0001, fade);
+    voice.pendingReleaseReason = reason;
+    const stopAt = ctx.currentTime + fade / 1000 + 0.05;
+    this.ledger.setExpectedEnd(target.id, stopAt);
     try {
-      voice.source.stop(ctx.currentTime + fadeMs / 1000 + 0.05);
+      voice.source.stop(stopAt);
     } catch {
-      this.voices.delete(voice.id);
-      this.emitVoiceEnded(voice.id, voice.kind);
+      this.releaseVoice(target.id, reason, { missedSweep: false });
     }
     if (voice.kind === "narration") {
       this.narrationActive = false;
       this.applyDucking(DuckingPolicy.DUCK_RELEASE_MS);
     }
-    setTimeout(() => this.voices.delete(target.id), fadeMs + 100);
+    this.tick();
   }
 
   onRouteChange(cb: (route: AudioRoute) => void): Unsubscribe {
@@ -680,21 +1015,20 @@ export class RNAudioApiEngine implements AudioEngine {
     }
 
     const loopGroups = [...this.loops.values()].map((g) => {
-      const stemPositionsMs = g.stems.map((stem) => {
-        if (!ctx) return 0;
+      const stemPositionsMs = g.stemVoiceIds.map((stemId) => {
+        const stem = this.voices.get(stemId);
+        if (!stem || !ctx) return 0;
         const elapsed = Math.max(0, ctx.currentTime - g.startedAtContextTime);
         const loopLen = Math.max(
           0.001,
           stem.loopEndSec - stem.loopStartSec,
         );
-        const pos =
-          stem.loopStartSec + (elapsed % loopLen);
+        const pos = stem.loopStartSec + (elapsed % loopLen);
         return pos * 1000;
       });
       return {
         id: g.id,
         stemPositionsMs,
-        // Web Audio has no per-source playback position — not measurable.
         maxStemDriftMs: null as number | null,
       };
     });
@@ -710,15 +1044,16 @@ export class RNAudioApiEngine implements AudioEngine {
       clockGapMs = wallElapsedMs - contextElapsedMs;
     }
 
+    const stats = this.ledger.getStats();
+    const pendingOneShots = ctx
+      ? this.ledger.pendingOneShotCount(ctx.currentTime)
+      : 0;
+
     return {
       uptimeMs,
-      activeVoices: this.voices.size + [...this.loops.values()].reduce(
-        (n, g) => n + g.stemCount,
-        0,
-      ),
+      activeVoices: this.countActiveVoices(),
       loopGroups,
       narrationPositionMs,
-      // underruns: library exposes no signal (review §6.8)
       route: this.route,
       decodedBytes: this.cache?.decodedBytes ?? 0,
       cacheEvictions: this.cache?.cacheEvictions ?? 0,
@@ -729,15 +1064,20 @@ export class RNAudioApiEngine implements AudioEngine {
       appState: this.appState,
       notificationVisible: this.notificationVisible,
       scheduledAheadMs: this.computeScheduledAheadMs(ctx),
+      pendingOneShots,
+      nodesCreated: stats.created,
+      nodesReleased: stats.released,
+      missedEnded: stats.missedEnded,
+      oneshotDropped: this.oneshotDropped,
+      clockRate: this.clockRate,
+      focusHeld: this.focusHeld,
+      audioHealth: this.audioHealth,
     };
   }
 
   async dispose(): Promise<void> {
     this.disposed = true;
-    if (this.progressTimer) {
-      clearInterval(this.progressTimer);
-      this.progressTimer = null;
-    }
+    this.mixActive = false;
     this.appStateSub?.remove();
     this.appStateSub = null;
     for (const sub of this.systemSubs) sub.remove();
@@ -751,24 +1091,11 @@ export class RNAudioApiEngine implements AudioEngine {
     }
     this.setNotificationVisible(false);
 
-    for (const voice of this.voices.values()) {
-      try {
-        voice.source.stop();
-      } catch {
-        // ignore
-      }
-    }
-    this.voices.clear();
-    for (const group of this.loops.values()) {
-      for (const stem of group.stems) {
-        try {
-          stem.source.stop();
-        } catch {
-          // ignore
-        }
-      }
+    for (const voiceId of [...this.voices.keys()]) {
+      this.releaseVoice(voiceId, "cancelled", { missedSweep: false });
     }
     this.loops.clear();
+    this.heartbeatIds.clear();
     this.cache?.clear();
     this.cache = null;
     this.buffers.clear();
@@ -783,9 +1110,218 @@ export class RNAudioApiEngine implements AudioEngine {
     this.context = null;
     this.master = null;
     this.buses = {};
+    this.silentBuffer = null;
   }
 
   // --- internals -----------------------------------------------------------
+
+  private countActiveVoices(): number {
+    let n = 0;
+    for (const v of this.voices.values()) {
+      if (v.kind !== "heartbeat") n += 1;
+    }
+    return n;
+  }
+
+  private scheduleHeartbeat(endSec: number): void {
+    const ctx = this.requireContext();
+    const master = this.master!;
+    const buffer = this.silentBuffer!;
+    const dur = buffer.duration;
+    const startSec = Math.max(ctx.currentTime, endSec - dur);
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    gain.connect(master);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gain);
+    source.start(startSec, 0, dur);
+
+    const voiceId = id("hb");
+    const voice: VoiceState = {
+      id: voiceId,
+      kind: "heartbeat",
+      bus: "ui",
+      source,
+      gain,
+      startedAtContextTime: startSec,
+      offsetSec: 0,
+      durationMs: dur * 1000,
+      paused: false,
+      pauseOffsetSec: 0,
+      buffer,
+      loopStartSec: 0,
+      loopEndSec: dur,
+      looping: false,
+      playbackRate: 1,
+    };
+    this.voices.set(voiceId, voice);
+    this.heartbeatIds.add(voiceId);
+    this.ledger.create(voiceId, "heartbeat", endSec);
+    this.ledger.markStarted(voiceId, startSec);
+
+    source.onended = () => {
+      this.heartbeatIds.delete(voiceId);
+      this.releaseVoice(voiceId, "ended", { missedSweep: false });
+      this.tick();
+    };
+  }
+
+  private tick(): void {
+    if (this.ticking || this.disposed) return;
+    this.ticking = true;
+    try {
+      const ctx = this.context;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      const stale = this.ledger.releaseIfPast(now, 0.5);
+      for (const voiceId of stale) {
+        this.releaseVoice(voiceId, "ended", { missedSweep: true });
+      }
+
+      this.emitNarrationProgress();
+      this.updateClockDiagnostics(now);
+      this.maybeRunTourLoop(now);
+      this.maybeEmitSettled();
+
+      for (const cb of this.tickSubs) cb(now);
+
+      if (this.mixActive || this.settledPending) {
+        this.ensureHeartbeats();
+      }
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  /** Non-heartbeat live voices remaining (audible mix). */
+  private nonHeartbeatLiveCount(): number {
+    let n = 0;
+    for (const v of this.voices.values()) {
+      if (v.kind !== "heartbeat") n += 1;
+    }
+    return n;
+  }
+
+  private maybeEmitSettled(): void {
+    if (!this.settledPending || this.settledEmitted) return;
+    if (this.nonHeartbeatLiveCount() > 0) return;
+    this.settledEmitted = true;
+    this.settledPending = false;
+    const d = this.getDiagnostics();
+    console.log("[audio-spike] settled", {
+      activeVoices: d.activeVoices,
+      nodesCreated: d.nodesCreated,
+      nodesReleased: d.nodesReleased,
+      heartbeats: this.heartbeatIds.size,
+    });
+    for (const cb of this.settledSubs) cb(d);
+  }
+
+  private maybeRunTourLoop(nowSec: number): void {
+    if (!this.mixActive || !this.tourNarrationTemplate) return;
+    if (nowSec - this.lastTourNarrationStartSec < TOUR_NARRATION_PERIOD_SEC) {
+      return;
+    }
+    const template = this.tourNarrationTemplate;
+    console.log("[audio-spike] tourNarrationRestart", { atSec: nowSec });
+    this.playNarration(template.h, template.meta, 0);
+  }
+
+  private updateClockDiagnostics(nowSec: number): void {
+    const wallNow = Date.now();
+    if (
+      this.clockWindowWallStartMs == null ||
+      this.clockWindowContextStartSec == null
+    ) {
+      this.clockWindowWallStartMs = wallNow;
+      this.clockWindowContextStartSec = nowSec;
+      return;
+    }
+    const wallDelta = wallNow - this.clockWindowWallStartMs;
+    if (wallDelta < CLOCK_WINDOW_MS) return;
+
+    const ctxDelta = nowSec - this.clockWindowContextStartSec;
+    if (wallDelta > 0 && ctxDelta >= 0) {
+      const rate = (ctxDelta * 1000) / wallDelta;
+      this.clockRate = rate;
+      if (rate < 0.98) {
+        this.clockRateLowWindows += 1;
+      } else {
+        this.clockRateLowWindows = 0;
+      }
+      if (this.clockRateLowWindows >= 2) {
+        this.audioHealth = "degraded";
+        console.warn("[audio-spike] audioHealth: degraded", { clockRate: rate });
+      } else {
+        this.audioHealth = "ok";
+      }
+    }
+    this.clockWindowWallStartMs = wallNow;
+    this.clockWindowContextStartSec = nowSec;
+  }
+
+  /**
+   * Idempotent voice teardown: disconnect nodes, ledger release, single voiceEnded.
+   */
+  private releaseVoice(
+    voiceId: string,
+    reason: "ended" | "cancelled",
+    opts: { missedSweep: boolean },
+  ): void {
+    const voice = this.voices.get(voiceId);
+    if (!voice) {
+      this.ledger.markReleased(voiceId);
+      return;
+    }
+
+    const marked = this.ledger.markReleased(voiceId);
+    if (!marked) {
+      return;
+    }
+    if (opts.missedSweep) {
+      this.ledger.recordMissedEnded(1);
+    }
+
+    voice.source.onended = null;
+    try {
+      voice.source.stop();
+    } catch {
+      // already stopped / never started
+    }
+    try {
+      voice.source.disconnect();
+    } catch {
+      // ignore
+    }
+    try {
+      voice.gain.disconnect();
+    } catch {
+      // ignore
+    }
+    if (voice.panner) {
+      try {
+        voice.panner.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+
+    this.voices.delete(voiceId);
+    if (voice.kind === "heartbeat") {
+      this.heartbeatIds.delete(voiceId);
+    }
+
+    const emitReason = reason === "cancelled" ? "cancelled" : "ended";
+    const payload = {
+      voiceId,
+      kind: voice.kind,
+      appState: this.appState,
+      reason: emitReason as "ended" | "cancelled",
+    };
+    for (const cb of this.voiceEndedSubs) cb(payload);
+  }
 
   private requireContext(): AudioContext {
     if (!this.context || this.disposed) {
@@ -823,18 +1359,6 @@ export class RNAudioApiEngine implements AudioEngine {
     for (const cb of this.notificationSubs) cb(visible);
   }
 
-  private emitVoiceEnded(voiceId: string, kind: VoiceState["kind"]): void {
-    const reason = this.cancelledVoiceIds.has(voiceId) ? "cancelled" : "ended";
-    this.cancelledVoiceIds.delete(voiceId);
-    const payload = {
-      voiceId,
-      kind,
-      appState: this.appState,
-      reason: reason as "ended" | "cancelled",
-    };
-    for (const cb of this.voiceEndedSubs) cb(payload);
-  }
-
   private computeScheduledAheadMs(ctx: AudioContext | null): number {
     if (!ctx) return 0;
     let maxWhen = 0;
@@ -854,10 +1378,12 @@ export class RNAudioApiEngine implements AudioEngine {
       narrationActive: this.narrationActive,
       route: this.route,
     });
+    const ramp = enforceMinFade(rampMs);
+    const now = this.context.currentTime;
     for (const bus of Object.keys(levels.busDb) as BusId[]) {
       const node = this.buses[bus];
       if (!node) continue;
-      rampGain(node.gain, this.context, dbToGain(levels.busDb[bus]), rampMs);
+      rampGainHeld(node.gain, now, dbToGain(levels.busDb[bus]), ramp);
     }
   }
 
@@ -893,18 +1419,18 @@ export class RNAudioApiEngine implements AudioEngine {
       raw: this.lastDevicesInfo,
     });
 
-    // Wildlife-safety / platform norm: pause on headphone/BT unplug (review §6.6).
     const lostExternal =
       e.reason === "OldDeviceUnavailable" ||
       (prev !== "speaker" &&
         prev !== "unknown" &&
         isSpeakerLike(next));
     if (lostExternal && (next === "speaker" || next === "unknown")) {
-      await this.suspendMix("route-unplug");
+      await this.fadeMasterAndSuspend(250, "route-unplug");
     }
 
     this.applyDucking(300);
     for (const cb of this.routeSubs) cb(next);
+    this.tick();
   }
 
   private async onInterruptionEvent(e: {
@@ -914,20 +1440,39 @@ export class RNAudioApiEngine implements AudioEngine {
     console.log("[audio-spike] interruption", e);
     for (const cb of this.interruptionSubs) cb(e.type);
     if (e.type === "began") {
-      await this.suspendMix("interruption");
+      this.interruptionBegan = true;
+      await this.fadeMasterAndSuspend(250, "interruption");
+      this.tick();
       return;
     }
     if (e.shouldResume) {
-      setTimeout(() => {
-        void this.resumeMix("interruption-ended");
-      }, 1000);
+      if (this.interruptionBegan) {
+        this.interruptionBegan = false;
+        await this.resumeAfterFade(1000, "interruption-ended");
+      } else {
+        // Includes GAIN after a silent CAN_DUCK (-3) that never emitted `duck`.
+        console.warn("[audio-spike] interruptionUnpaired", e);
+      }
+    } else if (!this.interruptionBegan) {
+      console.warn("[audio-spike] interruptionUnpaired", e);
     }
+    this.tick();
   }
 
-  private async suspendMix(reason: string): Promise<void> {
+  private async fadeMasterAndSuspend(
+    fadeMs: number,
+    reason: string,
+  ): Promise<void> {
     const ctx = this.context;
-    if (!ctx) return;
-    console.log("[audio-spike] suspend", reason);
+    const master = this.master;
+    if (!ctx || !master || this.suspendPending) return;
+    this.suspendPending = true;
+
+    console.log("[audio-spike] fadeMasterAndSuspend", { reason, fadeMs });
+    const fade = enforceMinFade(fadeMs);
+    const now = ctx.currentTime;
+    const end = now + fade / 1000;
+
     const narration = [...this.voices.values()].find(
       (v) => v.kind === "narration",
     );
@@ -937,11 +1482,9 @@ export class RNAudioApiEngine implements AudioEngine {
         (ctx.currentTime - narration.startedAtContextTime);
       narration.paused = true;
     }
-    try {
-      await ctx.suspend();
-    } catch (err) {
-      console.warn("[audio-spike] suspend failed", err);
-    }
+
+    rampGainHeld(master.gain, now, 0.0001, fade);
+    this.scheduleSuspendAt(end);
     const positionMs = narration
       ? narration.pauseOffsetSec * 1000
       : this.getDiagnostics().narrationPositionMs ?? 0;
@@ -953,16 +1496,68 @@ export class RNAudioApiEngine implements AudioEngine {
     );
   }
 
-  private async resumeMix(reason: string): Promise<void> {
+  private scheduleSuspendAt(endSec: number): void {
     const ctx = this.context;
-    if (!ctx) return;
-    console.log("[audio-spike] resume", reason);
+    const master = this.master;
+    const buffer = this.silentBuffer;
+    if (!ctx || !master || !buffer) return;
+
+    const dur = buffer.duration;
+    const startSec = Math.max(ctx.currentTime, endSec - dur);
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    gain.connect(master);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gain);
+    source.start(startSec, 0, dur);
+
+    source.onended = () => {
+      try {
+        gain.disconnect();
+        source.disconnect();
+      } catch {
+        // ignore
+      }
+      // Fades should have finished with this silent source. Release any
+      // non-heartbeat that missed onEnded before we freeze the clock.
+      if (this.settledPending) {
+        for (const voice of [...this.voices.values()]) {
+          if (voice.kind === "heartbeat") continue;
+          this.releaseVoice(voice.id, "ended", { missedSweep: true });
+        }
+        this.maybeEmitSettled();
+      }
+      void ctx.suspend().finally(() => {
+        this.suspendPending = false;
+        this.tick();
+      });
+    };
+  }
+
+  private async resumeAfterFade(
+    fadeMs: number,
+    reason: string,
+  ): Promise<void> {
+    const ctx = this.context;
+    const master = this.master;
+    if (!ctx || !master) return;
+
+    console.log("[audio-spike] resumeAfterFade", { reason, fadeMs });
     try {
       await ctx.resume();
     } catch (err) {
       console.warn("[audio-spike] resume failed", err);
     }
-    // Suspend/resume keeps scheduled sources; do not recreate nodes.
+
+    const now = ctx.currentTime;
+    rampGainHeld(master.gain, now, 0.0001, 0);
+    requestAudioFocus();
+    this.focusHeld = true;
+
+    const fade = enforceMinFade(fadeMs);
+    rampGainHeld(master.gain, now, 1, fade);
+
     const narration = [...this.voices.values()].find(
       (v) => v.kind === "narration",
     );
@@ -977,10 +1572,12 @@ export class RNAudioApiEngine implements AudioEngine {
       (narration?.pauseOffsetSec ?? 0) * 1000,
       narration?.durationMs ?? 0,
     );
+    this.requestFocus();
+    this.tick();
   }
 
   private wireRemoteCommands(): void {
-    const map: {
+    const entries: {
       event:
         | "playbackNotificationPlay"
         | "playbackNotificationPause"
@@ -996,11 +1593,12 @@ export class RNAudioApiEngine implements AudioEngine {
       { event: "playbackNotificationNextTrack", cmd: "next" },
     ];
 
-    for (const { event, cmd } of map) {
+    for (const { event, cmd } of entries) {
       const sub = PlaybackNotificationManager.addEventListener(event, () => {
-        if (cmd === "play") void this.resumeMix("remote");
-        if (cmd === "pause") void this.suspendMix("remote");
+        if (cmd === "play") void this.resumeAfterFade(300, "remote");
+        if (cmd === "pause") void this.fadeMasterAndSuspend(250, "remote");
         for (const cb of this.remoteSubs) cb(cmd);
+        this.tick();
       });
       this.notifSubs.push(sub);
     }
