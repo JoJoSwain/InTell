@@ -38,7 +38,7 @@ No database reset. No `apps/mobile` edits.
 ```
 pnpm lint          # green (admin hook warnings only)
 pnpm typecheck     # green
-pnpm test          # green (admin 55 tests; includes 17 new Simulator/engine)
+pnpm test          # green (admin 58 tests)
 ```
 
 No local `db reset`.
@@ -46,15 +46,18 @@ No local `db reset`.
 ## Dependency
 - `h3-js` on `@intell/admin` (TECH_SPEC-allowed) for H3 overlay geometry
 
+## Review fixes (A5-P2b-review.md)
+
+1. **Real grove content.** `preview` accepts `{ groveId }`, builds a working-row overlay (`loadGroveWorkingOverlay`), assembles GrovePack + RegionPack via the same builders and strict schemas, and returns signed asset URLs. `worldFromPacks` maps packs → SimulatorWorld. PackBuildErrors surface as readable messages (`CODE: message (fix this entity…)`). Demo world remains for tests and a UI “Demo world” switch / empty-grove fallback.
+2. **Real audio.** Engine `tryLoad` lazy-decodes by sha through signed URLs within the LRU cap; missing/undecodable assets add a rail warning and stay silent (no crash). Motif / resolve / teaser / beacon oneshots use those URLs.
+3. **Landcover `sha`.** Additive migration `20261124140000_a5p2b_landcover_sha.sql`; upload action sets `sha`; `buildRegionPack` / `assembleRegionPackObject` copies the grid to `public-media/landcover/{sha}.{ext}` and packs `landcover.gridSha`. Pack-integration test covers sha → rebuild → public object.
+4. **Tests.** `worldFromPacks.test.ts` (fixture preview → world); `tryLoad` missing-asset degradation; harness tests still on demoWorld.
+5. **CI.** Both jobs green on the final commit (this push).
+
 ## Not in this PR
 - Phone playback / ADR 0001 mobile verdict (Lane B / M6–M7)
 - Binary NLCD builder in `tools/landcover` (still a stub; JSON upload covers admin UX)
-- `landcover_grids.sha` column — pack builder still looks for `sha`; upload records `sha:` in `source` and content-addressed path. Additive column can follow if Claude wants pack landcover shipping from admin uploads.
-
-## Open questions
-1. Should `landcover_grids` get an explicit `sha text` column so `buildRegionPack` picks up admin uploads without parsing `source` / path?
-2. Staging path for landcover JSON vs copying into `public-media/landcover/` at publish time?
 
 ## For Jordan
 - Staging legacy-key dashboard step from P2a still applies after that merge (not re-done here).
-- No db reset requested or performed.
+- No db reset requested or performed. Additive migration only — CI/`supabase start` applies it; local stacks that were already up need `supabase migration up` (or a reset if you choose).

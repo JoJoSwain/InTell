@@ -123,4 +123,19 @@ describe("WebAudioEngine", () => {
     expect(stops.length).toBeGreaterThan(0);
     await engine.dispose();
   });
+
+  it("degrades gracefully when an asset is missing", async () => {
+    const ctx = mockContext();
+    const engine = new WebAudioEngine({ createContext: () => ctx });
+    await engine.init({ mixWithOthers: false });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 404 }) as Response),
+    );
+    const result = await engine.tryLoad("deadbeef".padEnd(64, "0"), "https://example.test/missing.m4a");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/404|missing|load failed/i);
+    await engine.dispose();
+    vi.unstubAllGlobals();
+  });
 });

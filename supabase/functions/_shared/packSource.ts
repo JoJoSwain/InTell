@@ -111,3 +111,113 @@ export async function projectEntity(
   }
   return data;
 }
+
+/**
+ * Full working-row overlay for one grove (Simulator / staff preview without a
+ * release). Includes the grove, its fragments and current revisions, linked
+ * characters and portraits, grove-bound music cues, and the region's sound
+ * entities so unreleased edits reach the pack assembler.
+ */
+export async function loadGroveWorkingOverlay(
+  supabase: SupabaseClient,
+  groveId: string,
+): Promise<ReleaseOverlay> {
+  const overlay: ReleaseOverlay = {
+    releaseId: "00000000-0000-4000-8000-000000000000",
+    items: new Set(),
+    revisionByFragment: new Map(),
+    groveIds: new Set([groveId]),
+  };
+  overlay.items.add(itemKey("grove", groveId));
+
+  const { data: grove } = await supabase
+    .from("groves")
+    .select("region_id")
+    .eq("id", groveId)
+    .maybeSingle();
+  const regionId = grove?.region_id ? String(grove.region_id) : null;
+
+  const { data: frags } = await supabase
+    .from("fragments")
+    .select("id")
+    .eq("grove_id", groveId);
+  for (const f of frags ?? []) {
+    const fid = String(f.id);
+    overlay.items.add(itemKey("fragment", fid));
+    const { data: revId } = await supabase.rpc("fn_current_revision", {
+      p_fragment_id: fid,
+    });
+    if (revId) {
+      const rid = String(revId);
+      overlay.items.add(itemKey("revision", rid));
+      overlay.revisionByFragment.set(fid, rid);
+    }
+  }
+
+  const characterIds = new Set<string>();
+  const fragIds = (frags ?? []).map((f) => f.id);
+  if (fragIds.length) {
+    const { data: links } = await supabase
+      .from("fragment_characters")
+      .select("character_id, fragment_id")
+      .in("fragment_id", fragIds);
+    for (const link of links ?? []) {
+      characterIds.add(String(link.character_id));
+    }
+  }
+  for (const cid of characterIds) {
+    overlay.items.add(itemKey("character", cid));
+    const { data: ch } = await supabase
+      .from("characters")
+      .select("portrait_image_id")
+      .eq("id", cid)
+      .maybeSingle();
+    if (ch?.portrait_image_id) {
+      overlay.items.add(itemKey("image", String(ch.portrait_image_id)));
+    }
+  }
+
+  const { data: groveCues } = await supabase
+    .from("music_cues")
+    .select("id")
+    .eq("grove_id", groveId);
+  for (const c of groveCues ?? []) {
+    overlay.items.add(itemKey("music_cue", String(c.id)));
+  }
+
+  if (regionId) {
+    const { data: zones } = await supabase
+      .from("ambience_zones")
+      .select("id")
+      .eq("region_id", regionId);
+    for (const z of zones ?? []) {
+      overlay.items.add(itemKey("ambience_zone", String(z.id)));
+    }
+    const { data: profiles } = await supabase
+      .from("ambience_profiles")
+      .select("id")
+      .eq("region_id", regionId);
+    for (const p of profiles ?? []) {
+      overlay.items.add(itemKey("ambience_profile", String(p.id)));
+    }
+    const { data: mzones } = await supabase
+      .from("music_zones")
+      .select("id")
+      .eq("region_id", regionId);
+    for (const z of mzones ?? []) {
+      overlay.items.add(itemKey("music_zone", String(z.id)));
+    }
+    const zoneIds = (mzones ?? []).map((z) => z.id);
+    if (zoneIds.length) {
+      const { data: zoneCues } = await supabase
+        .from("music_cues")
+        .select("id")
+        .in("music_zone_id", zoneIds);
+      for (const c of zoneCues ?? []) {
+        overlay.items.add(itemKey("music_cue", String(c.id)));
+      }
+    }
+  }
+
+  return overlay;
+}

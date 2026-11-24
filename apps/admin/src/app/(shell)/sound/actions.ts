@@ -577,17 +577,28 @@ export async function registerLandcoverGrid(
   const version = (existing?.version ?? 0) + 1;
   const sourceLabel = sha ? `${source} sha:${sha.slice(0, 12)}` : source;
 
-  const { error } = await supabase.from("landcover_grids").upsert(
-    {
-      region_id: regionId,
-      h3_resolution: h3Resolution,
-      source: sourceLabel,
-      file_path: filePath,
-      version,
-      generated_at: new Date().toISOString(),
-    },
-    { onConflict: "region_id" },
-  );
+  const row: {
+    region_id: string;
+    h3_resolution: number;
+    source: string;
+    file_path: string;
+    version: number;
+    generated_at: string;
+    sha?: string;
+  } = {
+    region_id: regionId,
+    h3_resolution: h3Resolution,
+    source: sourceLabel,
+    file_path: filePath,
+    version,
+    generated_at: new Date().toISOString(),
+  };
+  if (/^[0-9a-f]{64}$/i.test(sha)) {
+    row.sha = sha.toLowerCase();
+  }
+  const { error } = await supabase
+    .from("landcover_grids")
+    .upsert(row, { onConflict: "region_id" });
   if (error) return serverActionError(error.message);
   revalidatePath("/sound/landcover");
   return { ok: true, href: saveHref("/sound/landcover") };

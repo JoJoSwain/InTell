@@ -148,32 +148,73 @@ export class WebAudioEngine implements AudioEngine {
   }
 
   async load(sha: string, uri: string): Promise<BufferHandle> {
-    this.requireContext();
+    const result = await this.tryLoad(sha, uri);
+    if (!result.ok) throw new Error(result.error);
+    return result.handle;
+  }
+
+  /**
+   * Lazy decode within the LRU cap. Missing / undecodable assets return
+   * `{ ok: false }` so the Simulator can warn and stay silent.
+   */
+  async tryLoad(
+    sha: string,
+    uri: string,
+  ): Promise<
+    | { ok: true; handle: BufferHandle }
+    | { ok: false; error: string }
+  > {
+    try {
+      this.requireContext();
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "engine not init",
+      };
+    }
     const existing = this.buffers.get(sha);
     if (existing) {
       this.accounting.touch(sha);
-      return { sha: existing.sha, durationMs: existing.durationMs };
+      return {
+        ok: true,
+        handle: { sha: existing.sha, durationMs: existing.durationMs },
+      };
     }
-    const res = await fetch(uri);
-    if (!res.ok) throw new Error(`load failed ${res.status}`);
-    const bytes = await res.arrayBuffer();
-    const buffer = await this.context!.decodeAudioData(bytes.slice(0));
-    const pcmBytes = estimateDecodedPcmBytesAtRate(
-      buffer.duration,
-      buffer.sampleRate,
-      buffer.numberOfChannels,
-    );
-    for (const evicted of this.accounting.put(sha, pcmBytes)) {
-      this.buffers.delete(evicted);
+    if (!uri) {
+      return { ok: false, error: `missing url for ${sha.slice(0, 12)}` };
     }
-    const handle: InternalBuffer = {
-      sha,
-      durationMs: Math.round(buffer.duration * 1000),
-      buffer,
-      bytes: pcmBytes,
-    };
-    this.buffers.set(sha, handle);
-    return { sha, durationMs: handle.durationMs };
+    try {
+      const res = await fetch(uri);
+      if (!res.ok) {
+        return { ok: false, error: `load failed ${res.status} (${sha.slice(0, 12)})` };
+      }
+      const bytes = await res.arrayBuffer();
+      const buffer = await this.context!.decodeAudioData(bytes.slice(0));
+      const pcmBytes = estimateDecodedPcmBytesAtRate(
+        buffer.duration,
+        buffer.sampleRate,
+        buffer.numberOfChannels,
+      );
+      for (const evicted of this.accounting.put(sha, pcmBytes)) {
+        this.buffers.delete(evicted);
+      }
+      const handle: InternalBuffer = {
+        sha,
+        durationMs: Math.round(buffer.duration * 1000),
+        buffer,
+        bytes: pcmBytes,
+      };
+      this.buffers.set(sha, handle);
+      return { ok: true, handle: { sha, durationMs: handle.durationMs } };
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : `undecodable ${sha.slice(0, 12)}`,
+      };
+    }
   }
 
   /** Test helper: load a pre-decoded buffer without fetch. */

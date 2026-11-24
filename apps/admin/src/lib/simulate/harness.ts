@@ -679,3 +679,5 @@ export type {
   StoryState,
   TimeWindow,
 };
+
+// SimulatorWorld already exported above as type

@@ -335,6 +335,52 @@ describe.sequential("M3a pack integration", () => {
     expect(parsed.landcover).toBeNull();
   });
 
+  it("region pack carries landcover.gridSha after sha upload + rebuild", async () => {
+    const gridJson = JSON.stringify({
+      h3Resolution: 9,
+      cells: { "8928308280fffff": 90 },
+    });
+    const gridSha = createHash("sha256").update(gridJson, "utf8").digest("hex");
+    const objectPath = `landcover/wasatch-front/${gridSha}.json`;
+    const { error: upErr } = await svc.storage
+      .from("staging-audio")
+      .upload(objectPath, new TextEncoder().encode(gridJson), {
+        contentType: "application/json",
+        upsert: true,
+      });
+    expect(upErr).toBeNull();
+
+    const { error: updErr } = await svc
+      .from("landcover_grids")
+      .update({
+        sha: gridSha,
+        file_path: `staging-audio/${objectPath}`,
+        source: "pack-integration landcover sha test",
+        version: 1,
+        generated_at: new Date().toISOString(),
+      })
+      .eq("region_id", DEMO.regionId);
+    expect(updErr).toBeNull();
+
+    const rebuild = await invoke("build-pack", {
+      region_id: DEMO.regionId,
+      reason: "landcover-sha",
+    });
+    expect(rebuild.ok).toBe(true);
+    await drainJobs();
+
+    const { pack } = await fetchLiveRegionPack();
+    const parsed = RegionPack.parse(pack);
+    expect(parsed.landcover?.gridSha).toBe(gridSha);
+    expect(parsed.landcover?.h3Resolution).toBe(9);
+
+    const { data: pub, error: pubErr } = await anon.storage
+      .from("public-media")
+      .download(`landcover/${gridSha}.json`);
+    expect(pubErr).toBeNull();
+    expect(pub).toBeTruthy();
+  }, 120_000);
+
   it("get_pack_index lists only live groves with opening points", async () => {
     const { data, error } = await anon.rpc("get_pack_index");
     expect(error).toBeNull();
