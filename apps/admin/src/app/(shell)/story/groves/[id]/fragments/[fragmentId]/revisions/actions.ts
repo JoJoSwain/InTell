@@ -14,6 +14,7 @@ import {
   serverActionError,
 } from "@/lib/server-action-result";
 import { parseCommaSeparatedInts } from "@/lib/sound/helpers";
+import { normalizeTimingMsList } from "@/lib/sound/validate";
 
 type TimeWindow = "day" | "night";
 type ChangeKind = "contingency" | "correction";
@@ -128,6 +129,26 @@ async function syncVersions(
     if (!data.narration_asset_id) {
       return serverActionError(`${window}: narration asset required`);
     }
+    const { data: narration, error: narrErr } = await supabase
+      .from("audio_assets")
+      .select("duration_ms")
+      .eq("id", data.narration_asset_id)
+      .maybeSingle();
+    if (narrErr) return serverActionError(narrErr.message);
+    const durationMs = Number(narration?.duration_ms ?? 0);
+    const breath = normalizeTimingMsList(
+      data.breath_points_ms,
+      durationMs,
+      `${window} breath points`,
+    );
+    if (!Array.isArray(breath)) return serverActionError(breath.error);
+    const swell = normalizeTimingMsList(
+      data.swell_cues_ms,
+      durationMs,
+      `${window} swell cues`,
+    );
+    if (!Array.isArray(swell)) return serverActionError(swell.error);
+
     // Transcript may be empty in draft; checklist blocks publish (NO_TRANSCRIPT).
     if (data.version_id) {
       const { error } = await supabase
@@ -139,8 +160,8 @@ async function syncVersions(
           other_time_hint: asL10nOrEmpty(data.other_time_hint),
           language: "en",
           time_window: window,
-          breath_points_ms: data.breath_points_ms,
-          swell_cues_ms: data.swell_cues_ms,
+          breath_points_ms: breath,
+          swell_cues_ms: swell,
         })
         .eq("id", data.version_id);
       if (error) return serverActionError(error.message);
@@ -153,8 +174,8 @@ async function syncVersions(
         transcript: data.transcript,
         vtt: data.vtt,
         other_time_hint: asL10nOrEmpty(data.other_time_hint),
-        breath_points_ms: data.breath_points_ms,
-        swell_cues_ms: data.swell_cues_ms,
+        breath_points_ms: breath,
+        swell_cues_ms: swell,
       });
       if (error) return serverActionError(error.message);
     }

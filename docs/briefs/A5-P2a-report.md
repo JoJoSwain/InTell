@@ -55,8 +55,28 @@ pnpm test       # green
 ## Not done / deferred to P2b or follow-ups
 
 - Web Audio `AudioEngine`, Listening Simulator, GPX replay, Simulator integration tests (P2b)
-- Landcover **admin file upload** UI — grids still produced via `tools/landcover`; page is inventory + class mapping
-- Full wavesurfer markers overlaid on revision waveforms (Suggest + editable ms lists ship; overlay polish can follow)
-- Playwright for every new form (unit + existing save-twice e2e patterns; brief allows unit coverage)
+- Landcover **admin file upload** UI and H3 overlay — moved to P2b with the Simulator map (P2a review)
+- Breath/swell **waveform markers** (draggable) — moved to P2b; editable ms lists remain
 
 Lane A did not edit `apps/mobile`.
+
+## Review fixes (Claude · A5-P2a-review)
+
+### 1. DB CI failure (run 45429496797)
+
+**Root cause:** migration `20261124103000_a5_admin_zone_boundary.sql` correctly grants `EXECUTE` on security-definer `fn_admin_set_zone_boundary` to `authenticated` (staff call it from admin), but `supabase/tests/110_definer_grants.test.sql` still used the pre-A5 allowlist. pgTAP compared grant sets and failed:
+
+`have` included `fn_admin_set_zone_boundary(...)`; `want` did not.
+
+**Fix:** add that signature to the allowlist (same pattern as `fn_admin_upsert_region`). No change to the migration grants.
+
+### 2. Sound action tests
+
+- `lib/sound/validate.ts` — zone GeoJSON (helpers), heardAll ids, growth ≤4 / grove+window, `minDepthM ≥ 0`, stems ≤4, `music_moment` / `beacon` kinds, `BED_MONO` mono beds, breath/swell sorted+unique+within duration
+- Wired into `sound/actions.ts` and revision version sync
+- `sound/actions.test.ts` — anon redirect, non-staff refusal, GeoJSON / stems / BED_MONO / asset kind / heardAll mocks
+- Save-twice: `save-twice-guard.test.ts` asserts sound forms use `ServerActionForm` + pending-disabled submit (M3h e2e still runs in CI for existing story forms; dedicated sound e2e rows deferred)
+
+### 3. CI
+
+Confirm both `check` and `db` jobs green on the final push of this review-fix commit. No db reset.

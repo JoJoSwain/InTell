@@ -22,6 +22,12 @@ import {
   parsePolygonGeoJson,
   stemsOverMaxMessage,
 } from "@/lib/sound/helpers";
+import {
+  groveCueAssetKindError,
+  refuseMonoBed,
+  resolveAssetKindError,
+  validateMusicConditionAdmin,
+} from "@/lib/sound/validate";
 
 type SoundAuth = {
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -133,6 +139,28 @@ export async function saveLayerAssetWeights(
   const assetIds = formData.getAll("asset_id").map((v) => String(v));
   const weights = formData.getAll("weight").map((v) => Number(v));
 
+  const uniqueAssetIds = [
+    ...new Set(assetIds.map((a) => a.trim()).filter(Boolean)),
+  ];
+  if (uniqueAssetIds.length) {
+    const { data: assets, error: aErr } = await supabase
+      .from("audio_assets")
+      .select("id, kind, channels")
+      .in("id", uniqueAssetIds);
+    if (aErr) return serverActionError(aErr.message);
+    const byId = new Map(
+      ((assets ?? []) as { id: string; kind: string; channels: number }[]).map(
+        (a) => [a.id, a],
+      ),
+    );
+    for (const id of uniqueAssetIds) {
+      const asset = byId.get(id);
+      if (!asset) return serverActionError(`asset ${id} not found`);
+      const mono = refuseMonoBed(asset.kind, asset.channels);
+      if (mono) return serverActionError(mono);
+    }
+  }
+
   await supabase.from("ambience_layer_assets").delete().eq("layer_id", layerId);
 
   for (let i = 0; i < assetIds.length; i++) {
@@ -221,6 +249,91 @@ export async function saveMusicZone(formData: FormData): Promise<ServerActionRes
   return { ok: true, href: saveHref("/sound/zones") };
 }
 
+async function assertCueConditions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  cueId: string,
+  condition: MusicCondition,
+): Promise<string | null> {
+  const { data: cue, error } = await supabase
+    .from("music_cues")
+    .select("id, grove_id, time_window, conditions")
+    .eq("id", cueId)
+    .maybeSingle();
+  if (error) return error.message;
+  if (!cue) return "cue not found";
+
+  const fragmentIds = [
+    ...(condition.heardAll ?? []),
+    ...(condition.heardAny ?? []),
+    ...(condition.notHeard ?? []),
+  ];
+  const existing = new Set<string>();
+  if (fragmentIds.length) {
+    const { data: frags, error: fErr } = await supabase
+      .from("fragments")
+      .select("id")
+      .in("id", fragmentIds);
+    if (fErr) return fErr.message;
+    for (const f of frags ?? []) existing.add(f.id as string);
+  }
+
+  const groveId = cue.grove_id as string | null;
+  const window = cue.time_window as string;
+  let heardAllLengths: number[] = [
+    condition.heardAll?.length ? condition.heardAll.length : 0,
+  ];
+  if (groveId) {
+    const { data: siblings, error: sErr } = await supabase
+      .from("music_cues")
+      .select("id, conditions")
+      .eq("grove_id", groveId)
+      .eq("time_window", window);
+    if (sErr) return sErr.message;
+    heardAllLengths = [];
+    for (const row of siblings ?? []) {
+      const id = row.id as string;
+      const cond =
+        id === cueId
+          ? condition
+          : ((row.conditions ?? {}) as MusicCondition);
+      const n = Array.isArray(cond.heardAll) ? cond.heardAll.length : 0;
+      heardAllLengths.push(n);
+    }
+    if (!(siblings ?? []).some((r) => r.id === cueId)) {
+      heardAllLengths.push(condition.heardAll?.length ? condition.heardAll.length : 0);
+    }
+  }
+
+  return validateMusicConditionAdmin(condition, {
+    existingFragmentIds: existing,
+    heardAllLengthsInWindow: heardAllLengths,
+  });
+}
+
+async function assertResolveKinds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  assetIds: { id: string | null; label: string }[],
+): Promise<string | null> {
+  const ids = assetIds.map((a) => a.id).filter((id): id is string => Boolean(id));
+  if (!ids.length) return null;
+  const { data, error } = await supabase
+    .from("audio_assets")
+    .select("id, kind")
+    .in("id", ids);
+  if (error) return error.message;
+  const byId = new Map(
+    ((data ?? []) as { id: string; kind: string }[]).map((a) => [a.id, a.kind]),
+  );
+  for (const { id, label } of assetIds) {
+    if (!id) continue;
+    const kind = byId.get(id);
+    if (!kind) return `${label}: asset not found`;
+    const err = resolveAssetKindError(kind, label);
+    if (err) return err;
+  }
+  return null;
+}
+
 export async function saveMusicCue(formData: FormData): Promise<ServerActionResult> {
   const auth = await requireSoundEditor();
   if (!auth.ok) return auth;
@@ -237,6 +350,9 @@ export async function saveMusicCue(formData: FormData): Promise<ServerActionResu
     return serverActionError(strict.error.errors[0]?.message ?? "invalid conditions");
   }
 
+  const condErr = await assertCueConditions(supabase, id, strict.data);
+  if (condErr) return serverActionError(condErr);
+
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     priority: Number(formData.get("priority") ?? 0),
@@ -252,6 +368,13 @@ export async function saveMusicCue(formData: FormData): Promise<ServerActionResu
   };
 
   if (!payload.name) return serverActionError("name required");
+
+  const kindErr = await assertResolveKinds(supabase, [
+    { id: payload.resolve_root_asset_id, label: "resolve root" },
+    { id: payload.resolve_branch_asset_id, label: "resolve branch" },
+    { id: payload.resolve_leaf_asset_id, label: "resolve leaf" },
+  ]);
+  if (kindErr) return serverActionError(kindErr);
 
   const { error } = await supabase.from("music_cues").update(payload).eq("id", id);
   if (error) return serverActionError(error.message);
@@ -363,6 +486,33 @@ export async function saveGroveSoundCues(
     "threshold_motif_day",
     "threshold_motif_night",
   ] as const;
+
+  const assetIdsByKind: { kind: (typeof kinds)[number]; assetId: string }[] = [];
+  for (const kind of kinds) {
+    const assetId = String(formData.get(`asset_${kind}`) ?? "").trim();
+    if (assetId) assetIdsByKind.push({ kind, assetId });
+  }
+
+  if (assetIdsByKind.length) {
+    const ids = assetIdsByKind.map((a) => a.assetId);
+    const { data: assets, error: aErr } = await supabase
+      .from("audio_assets")
+      .select("id, kind")
+      .in("id", ids);
+    if (aErr) return serverActionError(aErr.message);
+    const byId = new Map(
+      ((assets ?? []) as { id: string; kind: string }[]).map((a) => [
+        a.id,
+        a.kind,
+      ]),
+    );
+    for (const { kind, assetId } of assetIdsByKind) {
+      const assetKind = byId.get(assetId);
+      if (!assetKind) return serverActionError(`asset ${assetId} not found`);
+      const kindErr = groveCueAssetKindError(kind, assetKind);
+      if (kindErr) return serverActionError(kindErr);
+    }
+  }
 
   for (const kind of kinds) {
     const assetId = String(formData.get(`asset_${kind}`) ?? "").trim();
