@@ -5,11 +5,13 @@
 --   A  first session 2025-01-15 12:00 MST; return 2025-03-01; journal day 2 → contributor+returned
 --   B  first session 2025-01-20; no return; no journal → non-contributor
 --   C  first session 2025-01-10; return 2025-02-01; no journal → non-contributor+returned
+--   D  first session 2025-01-18; second session 4h later the same day → not a return
+--      (return = another session ≥1 day and ≤183 days after the first)
 --
--- Expected Jan 2025 return_6mo:        cohort=3, returned=2, rate=0.6667
+-- Expected Jan 2025 return_6mo:        cohort=4, returned=2, rate=0.5000
 -- Expected Jan 2025 contribution_return:
 --   contributor_n=1, contributor_returned=1, contributor_return_rate=1.0000
---   non_contributor_n=2, non_contributor_returned=1, non_contributor_return_rate=0.5000
+--   non_contributor_n=3, non_contributor_returned=1, non_contributor_return_rate=0.3333
 --
 -- Visits (grove_entered): A,B,C each once on farmington → visit_count=3 for grove 010 in 2025-01
 -- Fragments completed: A completes root+branch; C completes leaf
@@ -34,7 +36,8 @@ values ('bbbbbbbb-bbbb-4ccc-8ddd-310000000001', 'Dash Viewer', 'viewer', true);
 insert into public.devices (id, platform, app_version, ui_language) values
   ('11111111-1111-4111-8111-31000000000a', 'ios', '1.0.0', 'en'),
   ('11111111-1111-4111-8111-31000000000b', 'ios', '1.0.0', 'en'),
-  ('11111111-1111-4111-8111-31000000000c', 'android', '1.0.0', 'en');
+  ('11111111-1111-4111-8111-31000000000c', 'android', '1.0.0', 'en'),
+  ('11111111-1111-4111-8111-31000000000d', 'ios', '1.0.0', 'en');
 
 -- Sessions / grove enters / completions (timestamptz in UTC ≈ Denver winter)
 insert into public.events (
@@ -91,7 +94,14 @@ insert into public.events (
    'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d4', '{}'::jsonb),
   ('11111111-1111-4111-8111-31000000000b', 'aaaaaaaa-bbbb-4ccc-8ddd-3100000000b3',
    'checkin_skipped', '2025-01-20T20:00:00+00', null, null,
-   'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d3', '{}'::jsonb);
+   'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d3', '{}'::jsonb),
+  -- Device D: same-day restart only (must not count as returned)
+  ('11111111-1111-4111-8111-31000000000d', 'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d1',
+   'session_started', '2025-01-18T19:00:00+00', null, null,
+   'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d6', '{}'::jsonb),
+  ('11111111-1111-4111-8111-31000000000d', 'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d2',
+   'session_started', '2025-01-18T23:00:00+00', null, null,
+   'aaaaaaaa-bbbb-4ccc-8ddd-3100000000d7', '{}'::jsonb);
 
 insert into public.journal_entries (
   id, device_id, client_entry_id, grove_id, written_on_site, kind,
@@ -175,8 +185,8 @@ select is(
     from public.v_dash_return_6mo
     where month = '2025-01-01'
   ),
-  '3/2/0.6667',
-  'Jan 2025 return_6mo cohort=3 returned=2 rate=0.6667'
+  '4/2/0.5000',
+  'Jan 2025 return_6mo cohort=4 returned=2 rate=0.5000'
 );
 
 select is(
@@ -193,7 +203,7 @@ select is(
     from public.v_dash_contribution_return
     where month = '2025-01-01'
   ),
-  '1/1/1.0000/2/1/0.5000',
+  '1/1/1.0000/3/1/0.3333',
   'Jan 2025 contribution-return hand numbers'
 );
 

@@ -2,7 +2,11 @@ import JSZip from "jszip";
 import { requireStaffEditor } from "../_shared/auth.ts";
 import { serviceClient } from "../_shared/clients.ts";
 import { json } from "../_shared/http.ts";
-import { handleExportArchive, type ExportFile } from "./handler.ts";
+import {
+  exportAuditInsert,
+  handleExportArchive,
+  type ExportFile,
+} from "./handler.ts";
 
 type Svc = ReturnType<typeof serviceClient>;
 
@@ -263,13 +267,9 @@ Deno.serve(async (req) => {
       return zip.generateAsync({ type: "uint8array" });
     },
     audit: async (scope) => {
-      const { error } = await svc.from("audit_log").insert({
-        actor: gate.userId,
-        action: "export_archive",
-        entity: scope.regionId ? "region" : "story",
-        entity_id: scope.regionId,
-        detail: { scope: scope.regionId ? "region" : "story", v: 1 },
-      });
+      const { error } = await svc
+        .from("audit_log")
+        .insert(exportAuditInsert(gate.userId, scope));
       if (error) return { error: error.message };
     },
   });

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  deleteDeviceRecords,
   formatDeleteLog,
   handleDeleteDeviceData,
+  interpretVoiceRemoval,
   type DeleteDeps,
 } from "../../../supabase/functions/delete-device-data/handler.ts";
 
@@ -80,5 +82,51 @@ describe("delete-device-data handler", () => {
     });
     expect(logs.join("\n")).toContain(DEVICE.slice(0, 8));
     expect(logs.join("\n")).not.toContain(DEVICE.slice(8));
+  });
+
+  it("returns 500 and leaves rows when voice removal fails", async () => {
+    let deleteCalls = 0;
+    let removeCalls = 0;
+    const { deps } = baseDeps({
+      deleteAll: () =>
+        deleteDeviceRecords({
+          voicePaths: ["a.m4a", "b.m4a"],
+          removeVoices: async (paths) => {
+            removeCalls += 1;
+            expect(paths).toEqual(["a.m4a", "b.m4a"]);
+            return { ok: false, error: "storage unavailable" };
+          },
+          deleteRows: async () => {
+            deleteCalls += 1;
+            return {
+              events: 1,
+              journalEntries: 2,
+              checkins: 0,
+              rateLimits: 0,
+            };
+          },
+        }),
+    });
+    const res = await handleDeleteDeviceData({ deviceId: DEVICE }, deps);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "delete failed" });
+    expect(removeCalls).toBe(1);
+    expect(deleteCalls).toBe(0);
+  });
+
+  it("treats a missing voice object as removed", () => {
+    expect(
+      interpretVoiceRemoval(
+        { message: "Object not found" },
+        [{ name: "a.m4a", error: "not found" }],
+        1,
+      ),
+    ).toEqual({ ok: true, removed: 1 });
+  });
+
+  it("rejects a storage error that is not a missing object", () => {
+    expect(
+      interpretVoiceRemoval({ message: "permission denied" }, null, 2).ok,
+    ).toBe(false);
   });
 });

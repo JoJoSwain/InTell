@@ -16,6 +16,77 @@ export function formatDeleteLog(deviceId: string, event: string): string {
   return `delete-device-data ${event} device=${deviceRef(deviceId)}`;
 }
 
+export function voiceObjectPath(voicePath: string): string {
+  return voicePath.replace(/^journal-voice\//, "");
+}
+
+export type StorageRemoveItem = {
+  name?: string;
+  error?: string;
+  message?: string;
+};
+
+function isNotFound(message: string): boolean {
+  return /not[\s_-]*found/i.test(message);
+}
+
+/**
+ * One storage remove() result. A missing object counts as removed.
+ * Any other error fails the delete so rows are left in place.
+ */
+export function interpretVoiceRemoval(
+  error: { message: string } | null,
+  items: StorageRemoveItem[] | null,
+  requested: number,
+): { ok: true; removed: number } | { ok: false; error: string } {
+  for (const item of items ?? []) {
+    const message = item.error ?? item.message;
+    if (message && !isNotFound(message)) {
+      return { ok: false, error: message };
+    }
+  }
+  if (error && !isNotFound(error.message)) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, removed: requested };
+}
+
+export async function deleteDeviceRecords(args: {
+  voicePaths: string[];
+  removeVoices: (
+    paths: string[],
+  ) => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
+  deleteRows: () => Promise<
+    | {
+        events: number;
+        journalEntries: number;
+        checkins: number;
+        rateLimits: number;
+      }
+    | { error: string }
+  >;
+}): Promise<
+  | {
+      events: number;
+      journalEntries: number;
+      checkins: number;
+      voiceFiles: number;
+      rateLimits: number;
+    }
+  | { error: string }
+> {
+  const paths = args.voicePaths.filter((path) => path.length > 0);
+  let voiceFiles = 0;
+  if (paths.length > 0) {
+    const removed = await args.removeVoices(paths);
+    if (!removed.ok) return { error: removed.error };
+    voiceFiles = removed.removed;
+  }
+  const rows = await args.deleteRows();
+  if ("error" in rows) return rows;
+  return { ...rows, voiceFiles };
+}
+
 export type DeleteDeps = {
   deviceExists: (deviceId: string) => Promise<boolean | "error">;
   rateAllow: (deviceId: string) => Promise<boolean | "error">;

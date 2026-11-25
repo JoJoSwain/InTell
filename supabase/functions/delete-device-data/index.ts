@@ -4,8 +4,11 @@ import {
   ENDPOINT,
   LIMIT,
   WINDOW_SECONDS,
+  deleteDeviceRecords,
   formatDeleteLog,
   handleDeleteDeviceData,
+  interpretVoiceRemoval,
+  voiceObjectPath,
 } from "./handler.ts";
 
 Deno.serve(async (req) => {
@@ -63,16 +66,9 @@ Deno.serve(async (req) => {
         .eq("device_id", deviceId);
       if (jErr) return { error: jErr.message };
 
-      let voiceFiles = 0;
-      for (const row of journals ?? []) {
-        if (row.voice_path) {
-          const path = String(row.voice_path).replace(/^journal-voice\//, "");
-          const { error: rmErr } = await svc.storage
-            .from("journal-voice")
-            .remove([path]);
-          if (!rmErr) voiceFiles += 1;
-        }
-      }
+      const voicePaths = (journals ?? [])
+        .map((row) => (row.voice_path ? voiceObjectPath(String(row.voice_path)) : ""))
+        .filter((path) => path.length > 0);
 
       const { count: checkinCount, error: cErr } = await svc
         .from("checkins")
@@ -86,27 +82,41 @@ Deno.serve(async (req) => {
         .eq("device_id", deviceId);
       if (rErr) return { error: rErr.message };
 
-      // Rate limits have no FK cascade — delete explicitly before the device.
-      const { error: rlDel } = await svc
-        .from("device_rate_limits")
-        .delete()
-        .eq("device_id", deviceId);
-      if (rlDel) return { error: rlDel.message };
+      return deleteDeviceRecords({
+        voicePaths,
+        removeVoices: async (paths) => {
+          const { data, error } = await svc.storage
+            .from("journal-voice")
+            .remove(paths);
+          return interpretVoiceRemoval(
+            error,
+            (data ?? null) as { name?: string; error?: string; message?: string }[] | null,
+            paths.length,
+          );
+        },
+        deleteRows: async () => {
+          // Rate limits have no FK cascade — delete explicitly before the device.
+          const { error: rlDel } = await svc
+            .from("device_rate_limits")
+            .delete()
+            .eq("device_id", deviceId);
+          if (rlDel) return { error: rlDel.message };
 
-      // Cascades events, journal_entries (+ entry_links), checkins.
-      const { error: delErr } = await svc
-        .from("devices")
-        .delete()
-        .eq("id", deviceId);
-      if (delErr) return { error: delErr.message };
+          // Cascades events, journal_entries (+ entry_links), checkins.
+          const { error: delErr } = await svc
+            .from("devices")
+            .delete()
+            .eq("id", deviceId);
+          if (delErr) return { error: delErr.message };
 
-      return {
-        events: eventCount ?? 0,
-        journalEntries: journals?.length ?? 0,
-        checkins: checkinCount ?? 0,
-        voiceFiles,
-        rateLimits: rateCount ?? 0,
-      };
+          return {
+            events: eventCount ?? 0,
+            journalEntries: journals?.length ?? 0,
+            checkins: checkinCount ?? 0,
+            rateLimits: rateCount ?? 0,
+          };
+        },
+      });
     },
   });
 });

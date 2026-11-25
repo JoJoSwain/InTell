@@ -231,7 +231,7 @@ Never include coordinates, free text, credit names or audio.
 ---
 
 ## 9. Dashboard (SQL views; America/Denver months)
-- **Visits** (`session_started`) and **fragments completed** per Grove, tier and time window.
+- **Visits:** `grove_entered` per grove, plus overall `session_started` counts. A session can span groves, and `session_started` has no grove. **Fragments completed** per grove, tier and time window.
 - **Depth:** the share of sessions with ≥ 1 branch completed and with ≥ 1 leaf completed (show n).
 - **Return (6 months):** cohort = devices first seen (first `session_started`) in month M with M + 6 ≤ today; returned = another session 1–183 days later. Show `returned/cohort`, captioned "Counts devices, not people."
 - **Participation:** Journal entries by kind, unique contributors, % on site, % read within 14 days, % grown, median days to grown.

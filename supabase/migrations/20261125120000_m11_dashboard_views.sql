@@ -109,7 +109,7 @@ returned as (
   join public.events e
     on e.device_id = f.device_id
    and e.name = 'session_started'
-   and e.occurred_at > f.first_session_at
+   and e.occurred_at >= f.first_session_at + interval '1 day'
    and e.occurred_at <= f.first_session_at + interval '183 days'
 )
 select
@@ -177,7 +177,7 @@ returned as (
   join public.events e
     on e.device_id = f.device_id
    and e.name = 'session_started'
-   and e.occurred_at > f.first_session_at
+   and e.occurred_at >= f.first_session_at + interval '1 day'
    and e.occurred_at <= f.first_session_at + interval '183 days'
 ),
 labeled as (
