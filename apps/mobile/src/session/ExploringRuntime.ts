@@ -887,14 +887,27 @@ export class ExploringRuntime {
       await this.applyCommands(dir.commands);
     }
 
-    // RC6: only the *current* narration voice may end the session's narration.
-    // Replaced voices (interruption remount, Back 10 s) arrive as cancelled and
-    // must not clear playing / stop the new voice. Cancelled while still marked
-    // current (sync onended during playNarration) is also ignored unless we are
-    // ending the exploring session.
+    // RC6: replacements report "cancelled" and must not end the session's
+    // narration (unless we are tearing down the exploring session). Natural
+    // "ended" completes even if narrationVoiceId lagged the engine (sync
+    // onended during playNarration) — the engine contract is that only a true
+    // natural end uses "ended".
     if (e.kind !== "narration" || !this.session.playing) return;
-    if (e.voiceId !== this.narrationVoiceId) return;
-    if (e.reason === "cancelled" && !this.endingSession) return;
+    if (e.reason === "cancelled") {
+      if (!this.endingSession) return;
+      if (
+        this.narrationVoiceId != null &&
+        e.voiceId !== this.narrationVoiceId
+      ) {
+        return;
+      }
+    } else if (
+      this.narrationVoiceId != null &&
+      e.voiceId !== this.narrationVoiceId
+    ) {
+      // Stale "ended" from a swept/replaced id — ignore.
+      return;
+    }
 
     const playedMs = Math.max(
       0,

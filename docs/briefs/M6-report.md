@@ -1,44 +1,36 @@
-# Lane B · M6 report (review 4 F1–F6; engine-side A1/A6/A7/A8)
+# Lane B · M6 report (review 5 RC6 + ear suite)
 
-Branch `b/m6-narration-session` @ `cff8e0d` + follow-up ProGuard keeps. **Stopped for Jordan’s ear checks (A1–A8) and Claude’s verification.**
+Branch `b/m6-narration-session` @ `5957fec` (RC6 + Log.w + out meter + analyser side-tap). **Stopped after A1/A2 engine fail on out level.**
 
-## Review 4 — root cause + fixes
+## Review 5
 
-Silent QR after relaunch was **RC1**: restored `director.lastEmitted` / `suspended` plus session `playing` on an empty engine → no `playNarration`, scan queued forever. Beats (RC2) explained the first pause; missing `FOREGROUND_SERVICE_LOCATION` in the stale native tree (RC3) would have broken the walk.
-
-| Fix | Status |
+| Item | Status |
 |---|---|
-| **F1** Clean start: reset `lastEmitted` + `suspended`; interrupt restored `playing`; clear overlay; test | Done |
-| **F2** Focus-denied `start()` → paused overlay + busy hint; Resume retries `start()` then director play; test | Done |
-| **F3** Filter director `resume` on interruption end (focus owns resume); test | Done |
-| **F4** `expo prebuild --clean --platform android` with walk env; merged release manifest has `FOREGROUND_SERVICE_LOCATION`, `LocationTaskService` type `location`, both intent filters; contract test | Done |
-| **F5** Data screen Audio diagnostics + “Reset session (keep packs)” + native `Log.i` tag `InTellAudio` | Done |
-| **F6** `engine.onRemoteCommand` (incl. `stopExploring`); engine keeps skip-back | Done |
+| Commit `docs: M6 review 5 (Claude)` | `6564539` |
+| **RC6** current engine voice id; ignore replaced `cancelled`; engine narration `onended` uses `pendingReleaseReason`; fake emits `voiceEnded` on replace; tests | `b4b6aa9` |
+| **InTellAudio** → `Log.w` + proguard keep; confirmed `adb logcat -s InTellAudio` shows crumbs | Done |
+| **out=** AnalyserNode RMS on master + Data `out=` + breadcrumb every 5 s | Done (side-tap so analyser is not on the critical path: `5957fec`) |
+| lint / typecheck / test | Green (115 mobile tests) |
+| Push | `5957fec` on origin |
+| Release rebuild + `adb install -r` (packs kept) | Done |
 
-**Extra (post-prebuild):** release minify stripped WorkManager/Room → crash on launch. Added `plugins/withProguardKeeps.ts` (WorkManager/Room + audio-session keeps). Rebuilt + reinstalled.
+## Ear suite (Pixel `67090DLKY005KL`, Beats A2DP, adb scans)
 
-## Engine-side pre-checks (no ear claims)
-
-Pixel `67090DLKY005KL`, release APK after clean prebuild + ProGuard keeps, packs kept via `adb install -r`.
-
-| Check | Engine evidence |
+| Step | Result |
 |---|---|
-| **A1** QR cold start | MediaSession `intell-mix` **active**, `PLAYING`, metadata **Walk 2 QR / InTell**, position advancing; AAudio `state:started` for the app pid |
-| **A6** Second session | Force-stop → QR again → same MediaSession PLAYING Walk 2 QR |
-| **A7** Relaunch mid-story | Force-stop mid-play → relaunch QR → plays again (F1 path); no crash |
-| **A8** Location FGS | `dumpsys activity services`: `LocationTaskService` **isForeground=true**, types location (`0x8`); exploring location notification channel present. Merged manifest declares the service with `foregroundServiceType="location"` |
+| **A1** | **FAIL (engine).** Reset → `adb` `intell://f/WTQR0001` → MediaSession `intell-mix` **PLAYING** “Walk 2 QR”, AAudio **started**, route **bt_a2dp**, InTellAudio: `scan` + `handlePlay:start ok=true`. But **`out=-100 dB` every 5 s**, Data often **`narration: none`** / **`master=0.000`** while overlay still shows Pause / Walk 2 QR. Not meeting out > −40 dB. Jordan ear: treat as not proven. HBO Max Cast session still listed PLAYING (could not fully clear). |
+| **A2** | **FAIL.** Overlay Pause → Resume: master returned to **1.000**, MediaSession still PLAYING, but **`narration: none`** and **`out=-100 dB`** — no audible restore. |
+| **A3–A9** | **Not run** (stopped after A1/A2 fail). |
 
-Jordan still confirms **A1–A8 by ear** (Bluetooth buds connected first per review 4).
+## Open for Claude
+
+1. Why `handlePlay` succeeds and MediaSession advances while `getNarrationDiag()` is `none` and master/out stay silent.
+2. Whether Cast/HBO Max / AudioHardening is still stealing the mix despite bt_a2dp + InTell PLAYING.
+3. Analyser RMS always −100 even with `master=1` — confirm tap vs real render.
+4. Zombie `playing=true` with no narration voice after RC6 `cancelled` ignores.
 
 ## Commands
 
-- `pnpm lint && pnpm typecheck && pnpm test` — green (110 mobile tests)
-- CI `check` + `db` — green on `cff8e0d` (PR #36)
-- `pnpm exec expo prebuild --clean --platform android` (walk env)
-- Release assemble + `adb install -r`
-
-## Still open / next
-
-1. Jordan: Data → **Reset session (keep packs)** if needed, then A1–A8 by ear (BT on for the suite).
-2. Claude: verify F1–F6 + ProGuard keeps.
-3. Then walk steps E–G as before.
+- `pnpm lint && pnpm typecheck && pnpm test` — green  
+- `gradlew :app:assembleRelease` (walk env `EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT=1`) — success  
+- `adb install -r` — success  
