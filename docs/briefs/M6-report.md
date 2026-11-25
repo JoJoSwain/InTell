@@ -1,118 +1,44 @@
-# Lane B · M6 report (review-2 C1–C4 + walk prep W1–W4; pre–Pixel walk)
+# Lane B · M6 report (review 4 F1–F6; engine-side A1/A6/A7/A8)
 
-Branch `b/m6-narration-session`. **Stopped for Claude’s check. Do not publish the walk release until Claude gives the OK and Jordan approves the map.**
+Branch `b/m6-narration-session` @ `cff8e0d` + follow-up ProGuard keeps. **Stopped for Jordan’s ear checks (A1–A8) and Claude’s verification.**
 
-## What’s wired
+## Review 4 — root cause + fixes
 
-| Item | Status |
+Silent QR after relaunch was **RC1**: restored `director.lastEmitted` / `suspended` plus session `playing` on an empty engine → no `playNarration`, scan queued forever. Beats (RC2) explained the first pause; missing `FOREGROUND_SERVICE_LOCATION` in the stale native tree (RC3) would have broken the walk.
+
+| Fix | Status |
 |---|---|
-| Review-1 B1–B8, R3, A7b | Done |
-| **C1** `startSessionClock` / `stopSessionClock` (silent heartbeats; no focus; no tour loop); spike tour gated; tick + afterglow on fixes; fake ticks only after clock start | Done |
-| **C2** Time window recomputed at the start of every `dispatch` | Done |
-| **C3** Local walk layout (two anchors Jordan chose; gitignored) + before-the-walk | Done |
-| **C4** Second session after Stop: `startSessionClock` resumes suspended context (no focus); narration start requests focus, resumes, restores master gain; fake models suspended-after-stopAll; test session 1 → Stop → session 2 | Done |
-| **W1** Release build for the trail (JS baked in; no Metro) | Documented below |
-| **W2** USB `adb reverse` + cleartext localhost only behind `EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT` | Plugin + steps below |
-| **W3** QR encodes `intell://f/WTQR0001`; PNG in gitignored `local/`; QR fragment has **no** prerequisites | Done |
-| **W4** Before-the-walk rewritten as USB click-by-click | Below |
+| **F1** Clean start: reset `lastEmitted` + `suspended`; interrupt restored `playing`; clear overlay; test | Done |
+| **F2** Focus-denied `start()` → paused overlay + busy hint; Resume retries `start()` then director play; test | Done |
+| **F3** Filter director `resume` on interruption end (focus owns resume); test | Done |
+| **F4** `expo prebuild --clean --platform android` with walk env; merged release manifest has `FOREGROUND_SERVICE_LOCATION`, `LocationTaskService` type `location`, both intent filters; contract test | Done |
+| **F5** Data screen Audio diagnostics + “Reset session (keep packs)” + native `Log.i` tag `InTellAudio` | Done |
+| **F6** `engine.onRemoteCommand` (incl. `stopExploring`); engine keeps skip-back | Done |
 
-## Before the walk (Jordan) — USB, click by click
+**Extra (post-prebuild):** release minify stripped WorkManager/Room → crash on launch. Added `plugins/withProguardKeeps.ts` (WorkManager/Room + audio-session keeps). Rebuilt + reinstalled.
 
-Staging has no content. Use Lane A’s **local** Supabase + the **local-only** walk layout (two anchors Jordan chose; coordinates stay on this PC under gitignored `local/` — never commit, log, or paste them). Narration is spoken Windows TTS test audio (~90–110 s), clearly test-only.
+## Engine-side pre-checks (no ear claims)
 
-**Prereqs on the PC:** Lane A’s stack is up (`supabase start` from Lane A only — never reset from Lane B). Walk layout + spoken audio already applied. Admin map approved (or lat/lng fixed). **Do not publish** until Claude says OK.
+Pixel `67090DLKY005KL`, release APK after clean prebuild + ProGuard keeps, packs kept via `adb install -r`.
 
-### A. Bake a local RELEASE build (once, before pack download)
+| Check | Engine evidence |
+|---|---|
+| **A1** QR cold start | MediaSession `intell-mix` **active**, `PLAYING`, metadata **Walk 2 QR / InTell**, position advancing; AAudio `state:started` for the app pid |
+| **A6** Second session | Force-stop → QR again → same MediaSession PLAYING Walk 2 QR |
+| **A7** Relaunch mid-story | Force-stop mid-play → relaunch QR → plays again (F1 path); no crash |
+| **A8** Location FGS | `dumpsys activity services`: `LocationTaskService` **isForeground=true**, types location (`0x8`); exploring location notification channel present. Merged manifest declares the service with `foregroundServiceType="location"` |
 
-A **dev client** loads JS from Metro on this PC and will not work on the trail. Use a **release** APK (ADR 0001).
+Jordan still confirms **A1–A8 by ear** (Bluetooth buds connected first per review 4).
 
-1. Pixel on USB; USB debugging on. In a terminal: `adb devices` — device listed.
-2. From **Lane B** repo root, set env for **this test build only** (do not leave these on for store builds):
-   - `EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`
-   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=` *(Publishable key from `pnpm exec supabase status` — not service role)*
-   - `EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT=1` *(enables cleartext HTTP to localhost / 127.0.0.1 only)*
-   - Keep existing `GOOGLE_MAPS_API_KEY_ANDROID` in `apps/mobile/.env`
-3. In PowerShell (from `apps/mobile`), with those vars in the environment (or temporarily in `.env` for this build, then remove the cleartext flag afterward):
+## Commands
 
-```powershell
-cd apps/mobile
-$env:EXPO_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321"
-$env:EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "<publishable key from supabase status>"
-$env:EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT = "1"
-pnpm exec expo run:android --variant release
-```
+- `pnpm lint && pnpm typecheck && pnpm test` — green (110 mobile tests)
+- CI `check` + `db` — green on `cff8e0d` (PR #36)
+- `pnpm exec expo prebuild --clean --platform android` (walk env)
+- Release assemble + `adb install -r`
 
-4. Wait until the release build installs and launches on the Pixel. Confirm the app opens without Metro.
-5. **After this walk test:** unset `EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT` (and do not ship a store build with it).
+## Still open / next
 
-### B. USB tunnel so the phone hits local Supabase at 127.0.0.1
-
-1. Pixel still on USB. PC: Lane A’s Supabase listening on port **54321**.
-2. Run:
-
-```powershell
-adb reverse tcp:54321 tcp:54321
-```
-
-3. Leave the cable connected for pack download. Manifest and asset URLs use the baked `http://127.0.0.1:54321/...` base, so they go through this reverse (no LAN IP).
-
-### C. Download both walk packs (USB + reverse; before leaving)
-
-**Only after Claude OK + publish + build-pack** (packs must exist in local storage). Until then, skip to map approval / QR printout prep.
-
-1. On the Pixel, open Chrome or the address bar and go to: `intell://dev/data`  
-   (or open the app → Dev → Data if you use that entry).
-2. Tap **Install grove**.
-3. Paste grove id `cccccccc-dddd-4eee-8fff-000000000101` (Walk test 1) → install → wait until **Done**.
-4. Tap **Install grove** again.
-5. Paste grove id `cccccccc-dddd-4eee-8fff-000000000102` (Walk test 2) → install → wait until **Done**.  
-   (Or Sync after the first install so the region pack follows.)
-6. Tap refresh / reload counts on that screen.
-7. Confirm: packs include both walk-test groves (+ region); **assets > 0**.
-8. Do **not** use “Install demo grove” — that fixture is map-only (no real audio).
-
-### D. At-home QR audio check (USB still fine)
-
-1. On the PC, open the gitignored QR image:  
-   `local/m6-walk-test/qr/walk-test-qr.png`  
-   (regenerate with `node local/m6-walk-test/generate-qr.mjs` if missing).  
-   Payload is **`intell://f/WTQR0001`** — not the bare code, not the https link domain.
-2. Display that PNG full-screen on a laptop/second phone, or print it.
-3. On the Pixel, use the camera / app scan path so the phone opens `intell://f/WTQR0001`.
-4. Confirm spoken test narration starts (Walk 2 QR has **no** prerequisites — this is a quick home ear check).
-
-### E. Unplug and confirm offline
-
-1. Unplug USB (`adb reverse` drops — fine; packs are already on disk).
-2. Turn **Wi‑Fi off** (or Airplane mode; keep Bluetooth off if it interferes).
-3. Open the map home: both walk-test groves still show; locked teasers still open.
-4. Optional: scan the same QR again offline — narration should still play from on-device assets.
-
-### F. On the trail
-
-Leave the PC at home. Narration does not need the PC. Map tiles / Embark need network. Never log or store home/origin coordinates.
-
-### G. Admin map (approval — before publish)
-
-`pnpm --filter @intell/admin dev` reads **`C:\dev\intell-lanes\b\apps\admin\.env.local`**. For the interactive map add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` + `NEXT_PUBLIC_GOOGLE_MAP_ID`, then restart.
-
-- Walk test 1: http://localhost:3000/story/groves/cccccccc-dddd-4eee-8fff-000000000101  
-- Walk test 2: http://localhost:3000/story/groves/cccccccc-dddd-4eee-8fff-000000000102  
-
-Drag points off private property / buildings. Draft release id: `cccccccc-dddd-4eee-8fff-0000000001e0` — **publish only after Claude’s OK**.
-
-## Tests / commands
-
-- `pnpm lint && pnpm typecheck && pnpm test` — green (104 mobile tests incl. C1 + C4)
-- Walk layout + TTS audio + QR PNG: gitignored `local/m6-walk-test/`
-- Cleartext: `apps/mobile/plugins/withLocalCleartext.ts` (flag off by default)
-
-## Still open
-
-1. Claude OK → publish walk release + build-pack → Jordan runs §C–§F.
-2. PSS (G7), R3 on-device Stop exploring, R6 resume timing, accuracy retune — on the walk.
-3. No AVD Maestro this pass.
-
-## Next
-
-Claude reviews this push. Then OK → publish → Pixel release install → USB pack download → walk.
+1. Jordan: Data → **Reset session (keep packs)** if needed, then A1–A8 by ear (BT on for the suite).
+2. Claude: verify F1–F6 + ProGuard keeps.
+3. Then walk steps E–G as before.

@@ -10,6 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   plugins.push(["expo-secure-store", { configureAndroidBackup: false }]);
   plugins.push("./plugins/withBackupSplit");
   plugins.push("./plugins/withAudioSession");
+  plugins.push("./plugins/withProguardKeeps");
   // Local USB walk builds only — see plugins/withLocalCleartext.ts
   plugins.push("./plugins/withLocalCleartext");
   plugins.push([
