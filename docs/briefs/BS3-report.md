@@ -1,6 +1,6 @@
 # Lane B · B·S3
 
-`audio-session` Expo Module (Media3 + JS focus machine) on `b/bs3-audio-session`. PR [#35](https://github.com/JoJoSwain/InTell/pull/35). Android **run 3** device protocol completed 2026-11-24 with Jordan (Pixel 11 + Beats Studio Buds+). Review-2 remote-play fix landed; **T6b** setup verified, physical shade Play with Jordan still required for the audible pass (adb cannot inject lock-screen media controls).
+`audio-session` Expo Module (Media3 + JS focus machine) on `b/bs3-audio-session`. PR [#35](https://github.com/JoJoSwain/InTell/pull/35). Android **run 3** device protocol completed 2026-11-24 with Jordan (Pixel 11 + Beats Studio Buds+). Review-2 remote-play fix landed; **T6b pass** on retest 2026-11-24 ~20:50.
 
 ## Commits
 
@@ -33,7 +33,7 @@
 | **T4** | **pass** | BT disconnect → pause; reconnect stays paused; Play from shade resumes (B·S2 gap fixed) |
 | **T5** | **pass** | Call → full mix stops; hang-up → auto-resume |
 | **T6** | **pass*** | YT Music → pause; no auto-resume on close (correct — needs Play). Instagram: first sound **ducked**, second took focus (LOSS). Pixel **AudioHardening** then ignored InTell focus requests → pink “audio busy”. After IG gone, shade Play alone did not restore audible mix; **Start full mix** did. *Duck path observed; fixed in `5fe0906` — see T6b. |
-| **T6b** | **setup / pending Jordan** | After `5fe0906` release: Start full mix → YouTube video hard `LOSS` → `intell-mix` **PAUSED**, lock-screen card shows Play (honest paused). Media button session null after YT; adb taps / `media_session dispatch play` do not reach lock-screen Media3 controls. **Jordan:** press Play on the lock-screen card (phone locked), then again unlocked — pass = audio within ~2 s and shade matches what you hear. |
+| **T6b** | **pass** | Retest after `5fe0906`: Start → YouTube hard `LOSS` → `intell-mix` **PAUSED**, shade/lock card shows Play (honest). Unlocked shade Play → **PLAYING** in ~3.2 s; focus `GAIN` on InTell (`USAGE_MEDIA`/`CONTENT_TYPE_SPEECH`); position advanced. Then pause → sleep/wake → `media_session dispatch play` (media-button session held) → **PLAYING** again in ~3.1 s. No fresh AudioHardening deny on resume. Shade state matched playback. |
 | **T1** (15 min) | **pass** | Same pid `24251`; locked/background; `clockRate` ~0.9998–1.0001; `audioHealth: ok`; `focusHeld: true`; `clockGapMs` ~±30 ms; session still PLAYING at 15 min |
 
 ### T6 AudioHardening (for the report)
@@ -54,6 +54,6 @@ While Instagram held media, Android denied InTell’s re-request. Matches the �
 
 ## Open questions / follow-ups for Claude
 
-1. ~~After “audio busy” / hard LOSS, shade Play set MediaSession to PLAYING but the mix stayed silent.~~ Addressed in `5fe0906` (intent-only + FGS + focus retry). **T6b audible confirm still needs Jordan’s finger on shade Play.**
+1. ~~After “audio busy” / hard LOSS, shade Play silent until Start.~~ Fixed in `5fe0906`; **T6b pass** on retest.
 2. ~~Spike Start stays disabled when mix is dead after denied resume.~~ Spike now forces `paused` on `audioBusy` so Play stays enabled.
 3. Mirror log to external files dir still not writable on release (`ERR_UNEXPECTED`); Share / logcat remain the path. (Not required per review 2.)
