@@ -213,11 +213,13 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
 
     const master = context.createGain();
     master.gain.value = 1;
+    // Side-tap only: never put AnalyserNode on the critical path to destination
+    // (some RN Audio API builds don't pass audio through analyser reliably).
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
+    master.connect(context.destination);
     master.connect(analyser);
-    analyser.connect(context.destination);
 
     const busIds: BusId[] = ["story", "music", "surroundings", "ui"];
     const buses: Partial<Record<BusId, GainNode>> = {};
