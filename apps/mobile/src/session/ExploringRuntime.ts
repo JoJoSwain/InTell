@@ -388,7 +388,15 @@ export class ExploringRuntime {
     const packs = await listPacks(this.deps.db);
     const assets = await listAssets(this.deps.db);
     const assetUris: Record<string, string> = {};
-    for (const asset of assets) assetUris[asset.sha] = asset.local_uri;
+    for (const asset of assets) {
+      const u = asset.local_uri;
+      assetUris[asset.sha] =
+        u.startsWith("file:") || u.startsWith("content:") || u.startsWith("http")
+          ? u
+          : u.startsWith("/")
+            ? `file://${u}`
+            : `file:///${u}`;
+    }
     this.packed = buildPackedSession({
       packs,
       completions,

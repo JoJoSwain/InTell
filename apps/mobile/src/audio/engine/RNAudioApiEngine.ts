@@ -576,7 +576,18 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
       this.buffers.delete(sha);
     }
 
-    const input: string | number = /^\d+$/.test(uri) ? Number(uri) : uri;
+    // Release Android: decodeAudioData treats non-file:// strings as bundled
+    // raw assets → "Could not read asset bytes". Pack local_uri is often a bare path.
+    const input: string | number = /^\d+$/.test(uri)
+      ? Number(uri)
+      : uri.startsWith("file:") ||
+          uri.startsWith("content:") ||
+          uri.startsWith("http:") ||
+          uri.startsWith("https:")
+        ? uri
+        : uri.startsWith("/")
+          ? `file://${uri}`
+          : `file:///${uri}`;
     // Standalone decodeAudioData accepts an optional sampleRate; context.decode
     // always uses context.sampleRate.
     const buffer = await decodeAudioData(input, sampleRate);
