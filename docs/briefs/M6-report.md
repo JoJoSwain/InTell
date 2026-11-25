@@ -29,7 +29,7 @@ Staging has no content. Use the **local** stack and a **local-only** walk layout
 
 ### 3. Walk layout on this PC (approval before leaving)
 
-Local-only script (gitignored `local/m6-walk-test/`) already applied **draft** groves to the local DB (no db reset):
+Local-only script (gitignored `local/m6-walk-test/`) already applied **draft** groves to the local DB (no db reset). Narration is **spoken Windows TTS test audio** (~90–110 s each, AAC mono 96 kbps, -16 LUFS) — clearly labeled test-only, not story content. Seed tones are no longer used for the walk.
 
 | Grove | Slug | What to check |
 |---|---|---|
