@@ -8,6 +8,11 @@ export {
   MusicCondition,
   StemRule,
   StemRulePack,
+  musicConditionFields,
+  musicConditionSchema,
+  stemRulePackSchema,
+  stemRuleSchema,
+  type PackObjMode,
 } from "./schemas/music";
 export {
   AgeGate,
@@ -28,6 +33,7 @@ export {
   GrovePackDevice,
   GrovePackFragment,
   PreviewManifest,
+  PreviewManifestDevice,
   RegionPack,
   RegionPackDevice,
   PackIndexEntry,
