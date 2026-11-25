@@ -60,6 +60,9 @@ export function musicConditionMatches(
   condition: MusicCondition,
   story: StoryState,
 ): boolean {
+  // Device parsers set this when a condition carried unknown keys (A7b).
+  if (condition.neverMatch === true) return false;
+
   if (hasItems(condition.threadIds)) {
     const threads = story.narrationPlaying
       ? [...story.lastThreadIds, ...story.playingThreadIds]

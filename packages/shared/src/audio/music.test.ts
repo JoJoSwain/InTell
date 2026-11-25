@@ -64,6 +64,16 @@ describe("musicConditionMatches", () => {
     ).toBe(true);
   });
 
+  it("never matches when neverMatch is set (device unknown-key marker)", () => {
+    expect(musicConditionMatches({ neverMatch: true }, story())).toBe(false);
+    expect(
+      musicConditionMatches(
+        { neverMatch: true, narrationPlaying: false },
+        story(),
+      ),
+    ).toBe(false);
+  });
+
   it("matches heardAll, heardAny and notHeard", () => {
     const heard = story({ heard: new Set(["a", "b"]) });
     expect(musicConditionMatches({ heardAll: ["a", "b"] }, heard)).toBe(true);
@@ -264,5 +274,72 @@ describe("stemGainDb", () => {
       stemGainDb(stem, story({ narrationPlaying: true, playingTier: "branch" })),
     ).toBe(0);
     expect(stemGainDb(stem, story({ lastTier: "root" }))).toBe(-12);
+  });
+
+  it("skips a neverMatch when and falls through to the next rule or default", () => {
+    const withFuture = {
+      assetSha: "strings",
+      gainDb: -60,
+      stateGains: [
+        { when: { neverMatch: true as const }, gainDb: 0 },
+        { when: { tiers: ["root" as const] }, gainDb: -12 },
+      ],
+    };
+    expect(stemGainDb(withFuture, story({ lastTier: "root" }))).toBe(-12);
+    expect(stemGainDb(withFuture, story({ lastTier: "leaf" }))).toBe(-60);
+  });
+});
+
+describe("device unknown condition keys", () => {
+  it("never selects a cue whose conditions carried an unknown key", () => {
+    const safe = cue({ id: "safe", priority: 50, conditions: {} });
+    const futureRestricted = cue({
+      id: "future",
+      priority: 200,
+      conditions: { neverMatch: true },
+    });
+    expect(
+      selectMusicCue({
+        cues: [safe, futureRestricted],
+        point: center,
+        story: story(),
+        current: null,
+        now,
+      }).cue?.id,
+    ).toBe("safe");
+    expect(
+      selectMusicCue({
+        cues: [futureRestricted],
+        point: center,
+        story: story(),
+        current: null,
+        now,
+      }).cue,
+    ).toBeNull();
+  });
+
+  it("keeps known-only conditions behaving as before", () => {
+    const onlyWhenNarrating = cue({
+      id: "narrating",
+      conditions: { narrationPlaying: true },
+    });
+    expect(
+      selectMusicCue({
+        cues: [onlyWhenNarrating],
+        point: center,
+        story: story({ narrationPlaying: false }),
+        current: null,
+        now,
+      }).cue,
+    ).toBeNull();
+    expect(
+      selectMusicCue({
+        cues: [onlyWhenNarrating],
+        point: center,
+        story: story({ narrationPlaying: true }),
+        current: null,
+        now,
+      }).cue?.id,
+    ).toBe("narrating");
   });
 });
