@@ -18,6 +18,7 @@ type RemoteCmd = "play" | "pause" | "skipForward" | "skipBackward" | "next";
 export class FakeAudioSession {
   started = false;
   stopped = false;
+  focusRequests = 0;
   private remote: ((c: string) => void | Promise<void>) | null = null;
 
   isStarted(): boolean {
@@ -39,6 +40,11 @@ export class FakeAudioSession {
     _state: string,
   ): Promise<void> {
     // no-op
+  }
+
+  async requestFocus(): Promise<boolean> {
+    this.focusRequests += 1;
+    return true;
   }
 
   async userPlay(): Promise<boolean> {
@@ -65,11 +71,17 @@ export class FakeExploringEngine implements ExploringEngine {
   audioSec = 0;
   loads: string[] = [];
   playedNarration: { sha: string; title: string }[] = [];
+  /** Narration attempts refused while still suspended (C4). */
+  refusedNarration = 0;
   stopAllCalls: number[] = [];
   seekCalls: number[] = [];
   /** How many emitTick calls notified subscribers (C1). */
   tickNotifyCount = 0;
+  /** Master gain after stopAll is ~0 until narration restores it (C4). */
+  masterLinear = 1;
   private sessionClock = false;
+  /** Models AudioContext suspended after fadeMasterAndSuspend / stopAll (C4). */
+  private contextSuspended = false;
   private narrationVoiceId: string | null = null;
   private tickSubs = new Set<(t: number) => void>();
   private voiceEndedSubs = new Set<
@@ -104,18 +116,40 @@ export class FakeExploringEngine implements ExploringEngine {
     meta: NowPlayingMeta,
     _startAtMs?: number,
   ): VoiceHandle {
+    // C4 narration start: focus → resume → restore master (prepareMixStart minus spike).
+    void this.session.requestFocus();
+    this.contextSuspended = false;
+    this.masterLinear = 1;
+
     const id = `narr-${this.playedNarration.length + 1}`;
     this.narrationVoiceId = id;
     this.playedNarration.push({ sha: h.sha, title: meta.title });
     return { id };
   }
 
+  /**
+   * Test helper: play without the C4 prepare path. Refuses while suspended /
+   * muted after stopAll (models pre-fix silence).
+   */
+  playNarrationWhileSuspended(
+    h: BufferHandle,
+    meta: NowPlayingMeta,
+  ): VoiceHandle | null {
+    if (this.contextSuspended || this.masterLinear < 0.5) {
+      this.refusedNarration += 1;
+      return null;
+    }
+    return this.playNarration(h, meta);
+  }
+
   pauseNarration(): void {
-    // no-op
+    this.contextSuspended = true;
+    this.masterLinear = 0.0001;
   }
 
   resumeNarration(): void {
-    // no-op
+    this.contextSuspended = false;
+    this.masterLinear = 1;
   }
 
   playOneShot(
@@ -154,6 +188,9 @@ export class FakeExploringEngine implements ExploringEngine {
   async stopAll(fadeMs: number): Promise<void> {
     this.stopAllCalls.push(fadeMs);
     this.narrationVoiceId = null;
+    // fadeMasterAndSuspend: context suspended, master ~0
+    this.contextSuspended = true;
+    this.masterLinear = 0.0001;
   }
 
   seekNarration(positionMs: number): void {
@@ -162,6 +199,8 @@ export class FakeExploringEngine implements ExploringEngine {
 
   startSessionClock(): void {
     this.sessionClock = true;
+    // C4: resume suspended context without focus or master restore
+    this.contextSuspended = false;
   }
 
   stopSessionClock(): void {
@@ -170,6 +209,10 @@ export class FakeExploringEngine implements ExploringEngine {
 
   isSessionClockRunning(): boolean {
     return this.sessionClock;
+  }
+
+  isContextSuspended(): boolean {
+    return this.contextSuspended;
   }
 
   onTick(cb: (ctxTimeSec: number) => void): () => void {
@@ -210,8 +253,8 @@ export class FakeExploringEngine implements ExploringEngine {
       activeVoices: this.narrationVoiceId ? 1 : 0,
       loopGroups: [],
       route: "headphones",
-      contextState: "running",
-      focusHeld: true,
+      contextState: this.contextSuspended ? "suspended" : "running",
+      focusHeld: this.session.focusRequests > 0,
       audioHealth: "ok",
     };
   }
@@ -223,9 +266,10 @@ export class FakeExploringEngine implements ExploringEngine {
   /**
    * Advance the fake audio clock and notify tick subscribers.
    * No-op until `startSessionClock()` (C1) — mirrors production heartbeats.
+   * No-op while context is still suspended after stopAll (C4).
    */
   emitTick(audioSec: number): void {
-    if (!this.sessionClock) return;
+    if (!this.sessionClock || this.contextSuspended) return;
     this.audioSec = audioSec;
     this.tickNotifyCount += 1;
     for (const cb of this.tickSubs) cb(audioSec);

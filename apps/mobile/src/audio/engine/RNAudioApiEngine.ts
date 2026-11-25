@@ -276,25 +276,9 @@ export class RNAudioApiEngine implements AudioEngine {
    * then reset the wall/context clock baseline so clockGapMs is not carried over.
    */
   async prepareMixStart(): Promise<void> {
+    await this.resumeContextIfSuspended();
+    this.restoreMasterGain();
     const ctx = this.requireContext();
-    const master = this.master;
-    // stop-all schedules suspend on a silent source's onended; don't race it.
-    const deadline = Date.now() + 2000;
-    while (this.suspendPending && Date.now() < deadline) {
-      await new Promise<void>((r) => setTimeout(r, 20));
-    }
-    if (ctx.state === "suspended") {
-      try {
-        await ctx.resume();
-      } catch (err) {
-        console.warn("[audio-spike] prepareMixStart resume failed", err);
-      }
-    }
-    // fadeMasterAndSuspend ramps master to ~0; resume alone leaves that mute.
-    if (master) {
-      const now = ctx.currentTime;
-      rampGainHeld(master.gain, now, 1, 0);
-    }
     this.mixWallStartMs = Date.now();
     this.mixContextStartSec = ctx.currentTime;
     this.mixActive = true;
@@ -309,15 +293,20 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   /**
-   * Exploring session audio clock (C1). Schedules silent heartbeats so `onTick`
+   * Exploring session audio clock (C1 / C4). Schedules silent heartbeats so `onTick`
    * keeps firing while exploring — including during afterglow with no narration.
+   * Resumes a suspended context (after Stop / pause) so heartbeats can fire.
    * Does **not** request audio focus (entering a grove must not pause a podcast).
+   * Does **not** restore master gain (narration start does that).
    * Does **not** enable the B·S2 tour loop.
    */
   startSessionClock(): void {
     this.sessionClockActive = true;
-    this.ensureHeartbeats();
-    this.tick();
+    void this.resumeContextIfSuspended().then(() => {
+      if (!this.sessionClockActive || this.disposed) return;
+      this.ensureHeartbeats();
+      this.tick();
+    });
   }
 
   stopSessionClock(): void {
@@ -594,6 +583,10 @@ export class RNAudioApiEngine implements AudioEngine {
     meta: NowPlayingMeta,
     startAtMs?: number,
   ): VoiceHandle {
+    // C4: after Stop, context is suspended and master is ~0 — same as
+    // prepareMixStart minus spike clock / tour bits.
+    this.prepareNarrationStart();
+
     const ctx = this.requireContext();
     const internal = this.requireBuffer(h.sha);
     this.stopNarrationInternal(enforceMinFade(0));
@@ -639,7 +632,6 @@ export class RNAudioApiEngine implements AudioEngine {
     this.narrationActive = true;
     this.applyDucking(DuckingPolicy.DUCK_ATTACK_MS);
     void this.showNotification(meta, "playing", offsetSec * 1000, internal.durationMs);
-    this.requestFocus();
 
     // Tour auto-replay is spike-only (C1). Production never sets spikeMode.
     if (this.spikeMode) {
@@ -1577,6 +1569,45 @@ export class RNAudioApiEngine implements AudioEngine {
     this.duckFactor = db === 0 ? 1 : dbToGain(db);
     const target = Math.max(0.0001, this.unduckedMasterLinear * this.duckFactor);
     rampGainHeld(master.gain, ctx.currentTime, target, 80);
+  }
+
+  /**
+   * C4 narration start: focus first, resume if suspended, restore master gain.
+   * Sync gain restore so the voice is audible as soon as the context runs;
+   * resume is async (stop-all may still be settling).
+   */
+  private prepareNarrationStart(): void {
+    this.requestFocus();
+    void this.resumeContextIfSuspended();
+    this.restoreMasterGain();
+  }
+
+  /** Wait out a pending suspend, then resume — no focus, no master gain. */
+  private async resumeContextIfSuspended(): Promise<void> {
+    const ctx = this.context;
+    if (!ctx) return;
+    // stop-all schedules suspend on a silent source's onended; don't race it.
+    const deadline = Date.now() + 2000;
+    while (this.suspendPending && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 20));
+    }
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("[audio] resumeContextIfSuspended failed", err);
+      }
+    }
+  }
+
+  /** fadeMasterAndSuspend leaves master near 0; resume alone stays muted. */
+  private restoreMasterGain(): void {
+    const ctx = this.context;
+    const master = this.master;
+    if (!ctx || !master) return;
+    this.unduckedMasterLinear = 1;
+    this.duckFactor = 1;
+    rampGainHeld(master.gain, ctx.currentTime, 1, 0);
   }
 
   private async fadeMasterAndSuspend(

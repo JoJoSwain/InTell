@@ -553,6 +553,60 @@ describe("ExploringRuntime session clock (C1)", () => {
   });
 });
 
+describe("ExploringRuntime second session after Stop (C4)", () => {
+  it("session 1 → Stop → session 2 clock ticks and narration plays", async () => {
+    const { engine, runtime } = await setup();
+    const t0 = nowBase();
+
+    // Session 1: exploring + narration
+    await twoFixes(runtime, t0);
+    expect(runtime.getSession().phase).toBe("exploring");
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+    expect(engine.isSessionClockRunning()).toBe(true);
+    engine.emitTick(1);
+    expect(engine.tickNotifyCount).toBe(1);
+    const playsAfterSession1 = engine.playedNarration.length;
+    const focusAfterSession1 = engine.session.focusRequests;
+
+    // Stop exploring → stopAll suspends context and mutes master
+    await runtime.stopExploring();
+    await flush();
+    expect(runtime.getSession().phase).toBe("idle");
+    expect(engine.isSessionClockRunning()).toBe(false);
+    expect(engine.isContextSuspended()).toBe(true);
+    expect(engine.masterLinear).toBeLessThan(0.5);
+    expect(
+      engine.playNarrationWhileSuspended(
+        { sha: SHA1, durationMs: 2_000 },
+        { title: "should-refuse", artist: "test" },
+      ),
+    ).toBeNull();
+    expect(engine.refusedNarration).toBe(1);
+    const ticksAtStop = engine.tickNotifyCount;
+    engine.emitTick(2);
+    expect(engine.tickNotifyCount).toBe(ticksAtStop);
+
+    // Session 2: new exploring session
+    const t1 = nowBase() + 60_000;
+    await twoFixes(runtime, t1);
+    expect(runtime.getSession().phase).toBe("exploring");
+    expect(engine.isSessionClockRunning()).toBe(true);
+    expect(engine.isContextSuspended()).toBe(false);
+
+    // Clock ticks again after resume
+    engine.emitTick(3);
+    expect(engine.tickNotifyCount).toBe(ticksAtStop + 1);
+
+    // Narration audible: master restored, focus requested, another play recorded
+    expect(engine.masterLinear).toBe(1);
+    expect(engine.session.focusRequests).toBeGreaterThan(focusAfterSession1);
+    expect(engine.playedNarration.length).toBeGreaterThan(playsAfterSession1);
+    expect(engine.getDiagnostics().contextState).toBe("running");
+
+    runtime.dispose();
+  });
+});
+
 describe("ExploringRuntime contingency / correction (B8)", () => {
   it("contingency: older completion of f10 plays again", async () => {
     const packed = buildPacked();
