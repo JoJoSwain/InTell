@@ -1,4 +1,4 @@
-import { GrovePack, PackIndexEntry, RegionPack } from "@intell/shared";
+import { GrovePackDevice, PackIndexEntry, RegionPackDevice } from "@intell/shared";
 import { assetObjectPath, publicMediaUrl } from "../api/mediaUrl";
 import type { SqlDriver } from "../db/driver";
 import { getAsset, listAssets, listPacks, upsertAsset, upsertPack } from "../db/repos";
@@ -55,7 +55,8 @@ export async function installPack(args: {
   }
 
   const parsed: unknown = JSON.parse(new TextDecoder().decode(manifestResponse.body));
-  const pack = args.entry.scope === "grove" ? GrovePack.parse(parsed) : RegionPack.parse(parsed);
+  const pack =
+    args.entry.scope === "grove" ? GrovePackDevice.parse(parsed) : RegionPackDevice.parse(parsed);
   const present: string[] = [];
   for (const row of await listAssets(args.db)) {
     if (await args.files.exists(row.local_uri)) present.push(row.sha);

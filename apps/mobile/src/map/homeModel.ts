@@ -1,6 +1,6 @@
 import {
-  GrovePack,
-  RegionPack,
+  GrovePackDevice,
+  RegionPackDevice,
   currentTimeWindow,
   markerState,
   pickL10n,
@@ -16,6 +16,8 @@ import { piecesFromBoundary, ringCentroid, type GrovePiece, type MapPoint } from
 import { accessibilityLabel, markerLocked, markerPulse } from "./markers";
 import { strings } from "../ui/strings";
 import { webStrength, webWeight, type WebTier } from "./web";
+
+type GrovePackData = import("@intell/shared").GrovePackDevice;
 
 export type HomeGrove = {
   id: string;
@@ -105,14 +107,14 @@ export function modelsFromPacks(
 
   for (const row of packs) {
     if (row.scope === "region") {
-      const region = RegionPack.safeParse(JSON.parse(row.manifest_json));
+      const region = RegionPackDevice.safeParse(JSON.parse(row.manifest_json));
       if (!region.success) continue;
       sunReference ??= region.data.sunReference;
       timeZone ??= region.data.timezone;
       continue;
     }
     if (row.scope !== "grove") continue;
-    const parsed = GrovePack.safeParse(JSON.parse(row.manifest_json));
+    const parsed = GrovePackDevice.safeParse(JSON.parse(row.manifest_json));
     if (!parsed.success) continue;
     const pack = parsed.data;
     const pieces = piecesFromBoundary(pack.grove.boundary);
@@ -200,8 +202,8 @@ export function modelsFromPacks(
 
 function toInput(
   groveId: string,
-  fragment: GrovePack["fragments"][number],
-  revisions: GrovePack["revisions"],
+  fragment: GrovePackData["fragments"][number],
+  revisions: GrovePackData["revisions"],
 ): FragmentInput {
   const revision = currentRevision(fragment.id, revisions);
   return {
@@ -223,15 +225,15 @@ function toInput(
   };
 }
 
-function currentRevision(fragmentId: string, revisions: GrovePack["revisions"]) {
+function currentRevision(fragmentId: string, revisions: GrovePackData["revisions"]) {
   return revisions
     .filter((revision) => revision.fragmentId === fragmentId)
     .sort((a, b) => b.revisionNo - a.revisionNo)[0];
 }
 
 function cardText(
-  fragment: GrovePack["fragments"][number],
-  changeTeaser: GrovePack["revisions"][number]["changeTeaser"] | undefined,
+  fragment: GrovePackData["fragments"][number],
+  changeTeaser: GrovePackData["revisions"][number]["changeTeaser"] | undefined,
   pulse: PulseKind,
 ): string {
   const teaser = pickL10n(fragment.teaser, "en") ?? "";

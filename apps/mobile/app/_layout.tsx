@@ -3,7 +3,9 @@ import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { dataLayer } from "../src/runtime/dataLayer";
+import { ExploringProvider } from "../src/session/ExploringProvider";
 import { strings } from "../src/ui/strings";
+import "../src/location/locationTask";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -16,7 +18,7 @@ export default function RootLayout() {
   }, []);
   if (!fontsLoaded) return null;
   return (
-    <>
+    <ExploringProvider>
       <StatusBar style="dark" />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -33,6 +35,6 @@ export default function RootLayout() {
         <Stack.Screen name="dev/data" options={{ title: strings.devData, headerShown: true }} />
         <Stack.Screen name="+not-found" />
       </Stack>
-    </>
+    </ExploringProvider>
   );
 }

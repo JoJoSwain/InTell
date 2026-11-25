@@ -236,6 +236,7 @@ MOBILE_HOME_STANDARDS names the playing overlay and teaser as transient chrome b
 - Beacons on/off → kv only for M7 (director `beaconsEnabled` stays false in M6).
 
 **Claude checks this with Jordan before implementation.**
+Approved by Jordan, 2026-11-24, as proposed.
 
 ---
 

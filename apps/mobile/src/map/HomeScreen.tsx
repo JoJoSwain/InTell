@@ -7,9 +7,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type MapView from "react-native-maps";
 import { listCompletions, listPacks, listUnlocks } from "../db/repos";
 import { dataLayer } from "../runtime/dataLayer";
+import { useExploringRuntime } from "../session/ExploringProvider";
+import { useSessionStore } from "../session/SessionStore";
 import { pointInGrove } from "./groves";
 import { HomeMap, fallbackCamera } from "./HomeMap";
 import { modelsFromPacks, storyTimeWindow, type HomeModel } from "./homeModel";
+import { PlayingOverlay } from "./PlayingOverlay";
+import { TeaserSheet } from "./TeaserSheet";
+import { AfterglowBanner } from "./AfterglowBanner";
 import { useMapTheme } from "../theme/useMapTheme";
 import { brandFont } from "../ui/fonts";
 import { useReduceMotion } from "../ui/reduceMotion";
@@ -29,6 +34,11 @@ export function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
+  const runtime = useExploringRuntime();
+  const overlay = useSessionStore((s) => s.overlay);
+  const teaser = useSessionStore((s) => s.teaser);
+  const unlockBanner = useSessionStore((s) => s.unlockBanner);
+  const exploring = useSessionStore((s) => s.session.phase === "exploring");
   const [model, setModel] = useState<HomeModel>(EMPTY);
   const theme = useMapTheme({
     hasRegion: model.timeZone !== null && model.sunReference !== null,
@@ -274,7 +284,37 @@ export function HomeScreen() {
           <Text maxFontSizeMultiplier={2} style={[styles.body, { color: palette.text }]}>
             {sheet.premise}
           </Text>
+          {exploring ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={strings.stopExploring}
+              onPress={() => void runtime?.stopExploring()}
+            >
+              <Text maxFontSizeMultiplier={2} style={[styles.brand, { color: palette.primary, marginTop: 12 }]}>
+                {strings.stopExploring}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
+      ) : null}
+      <AfterglowBanner showUnlockLine={unlockBanner} />
+      {overlay ? (
+        <PlayingOverlay
+          title={overlay.title}
+          tier={overlay.tier}
+          progress={overlay.progress}
+          paused={overlay.paused}
+          onTogglePause={() => void runtime?.togglePause()}
+          onBack10={() => runtime?.skipBack()}
+        />
+      ) : null}
+      {teaser ? (
+        <TeaserSheet
+          teaserText={teaser.teaserText}
+          changeTeaser={teaser.changeTeaser}
+          otherTimeHint={teaser.otherTimeHint}
+          onClose={() => useSessionStore.getState().setTeaser(null)}
+        />
       ) : null}
       {away && user ? (
         <Pressable

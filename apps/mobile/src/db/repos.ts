@@ -168,6 +168,89 @@ export async function setKv(db: SqlDriver, key: string, value: string): Promise<
   );
 }
 
+export async function upsertUnlock(
+  db: SqlDriver,
+  fragmentId: string,
+  unlockedAt: string,
+): Promise<void> {
+  await db.run(
+    `INSERT INTO unlocks (fragment_id, unlocked_at) VALUES (?, ?)
+     ON CONFLICT (fragment_id) DO NOTHING`,
+    [fragmentId, unlockedAt],
+  );
+}
+
+export async function upsertProgress(
+  db: SqlDriver,
+  row: {
+    fragment_id: string;
+    revision_no: number;
+    time_window: string;
+    max_progress_ms: number;
+    updated_at: string;
+  },
+): Promise<void> {
+  await db.run(
+    `INSERT INTO progress (fragment_id, revision_no, time_window, max_progress_ms, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (fragment_id, revision_no, time_window) DO UPDATE SET
+       max_progress_ms = CASE
+         WHEN excluded.max_progress_ms > progress.max_progress_ms THEN excluded.max_progress_ms
+         ELSE progress.max_progress_ms
+       END,
+       updated_at = excluded.updated_at`,
+    [
+      row.fragment_id,
+      row.revision_no,
+      row.time_window,
+      row.max_progress_ms,
+      row.updated_at,
+    ],
+  );
+}
+
+export async function upsertVisit(
+  db: SqlDriver,
+  row: {
+    session_id: string;
+    grove_id: string;
+    started_at: string;
+    ended_at: string;
+    fragments_completed: number;
+    time_window: string;
+  },
+): Promise<void> {
+  await db.run(
+    `INSERT INTO visits (
+      session_id, grove_id, started_at, ended_at, fragments_completed, time_window
+    ) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (session_id, grove_id) DO UPDATE SET
+       ended_at = excluded.ended_at,
+       fragments_completed = excluded.fragments_completed,
+       time_window = excluded.time_window`,
+    [
+      row.session_id,
+      row.grove_id,
+      row.started_at,
+      row.ended_at,
+      row.fragments_completed,
+      row.time_window,
+    ],
+  );
+}
+
+export async function upsertMetCharacter(
+  db: SqlDriver,
+  row: { character_id: string; met_at: string; fragment_id: string },
+): Promise<void> {
+  await db.run(
+    `INSERT INTO met_characters (character_id, met_at, fragment_id)
+     VALUES (?, ?, ?)
+     ON CONFLICT (character_id) DO NOTHING`,
+    [row.character_id, row.met_at, row.fragment_id],
+  );
+}
+
 export function asSql(value: string | number | null | undefined): SqlValue {
   return value ?? null;
 }
