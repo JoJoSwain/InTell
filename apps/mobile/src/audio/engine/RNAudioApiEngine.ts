@@ -396,6 +396,30 @@ export class RNAudioApiEngine implements AudioEngine {
     await this.endMixSession();
   }
 
+  /** Alias for ExploringRuntime session end (B7). */
+  async stopAll(fadeMs = 500): Promise<void> {
+    await this.stopAllMix(fadeMs);
+  }
+
+  /**
+   * Seek narration to an absolute position (R5 skip-back). No-op without narration.
+   */
+  seekNarration(positionMs: number): void {
+    const narration = [...this.voices.values()].find(
+      (v) => v.kind === "narration",
+    );
+    if (!narration?.meta) return;
+    const sha = [...this.buffers.entries()].find(
+      ([, b]) => b.buffer === narration.buffer,
+    )?.[0];
+    if (!sha) return;
+    this.playNarration(
+      { sha, durationMs: narration.durationMs },
+      narration.meta,
+      Math.max(0, positionMs),
+    );
+  }
+
   onSettled(
     cb: (d: ReturnType<RNAudioApiEngine["getDiagnostics"]>) => void,
   ): Unsubscribe {

@@ -1,11 +1,11 @@
 /**
- * Location modes for exploring (M6 / R2 / R3).
+ * Location modes for exploring (M6 / R2 / B6).
+ * High accuracy for the whole session. One source at a time.
  * Starts the location FGS only while the app is foregrounded.
  * Never logs coordinates.
  */
 import { AppState, Platform } from "react-native";
 import * as Location from "expo-location";
-import { LOCATION_HIGH_WITHIN_M } from "@intell/shared";
 import {
   EXPLORING_LOCATION_TASK,
   setExploringLocationListener,
@@ -16,14 +16,17 @@ export type LocationMode = "idle" | "foreground" | "balanced" | "high";
 
 const LOCATION_NOTIFICATION = {
   notificationTitle: "InTell is playing your Grove",
-  notificationBody: "Tap Stop exploring in the app to end this session.",
+  notificationBody: "Open the app to stop exploring.",
   notificationColor: "#295E7C",
 } as const;
 
 /**
- * Gap (R3): expo-location 58's LocationTaskService has no custom notification
- * actions API, so Stop cannot be a shade button yet — open-app + grove chip Stop.
+ * B6: High for the whole session (Balanced ≈ 100 m on Android — too coarse for
+ * the 25 m accuracy tolerance). balanced and high both map to High.
  */
+function sessionAccuracy(): Location.LocationAccuracy {
+  return Location.Accuracy.High;
+}
 
 export class LocationService {
   private mode: LocationMode = "idle";
@@ -31,10 +34,12 @@ export class LocationService {
   private background = false;
   private onFix: LocationFixListener | null = null;
   private onStopRequest: (() => void) | null = null;
+  /** Drop duplicate / stale fixes (B6). */
+  private lastFixAt = 0;
 
   setFixListener(listener: LocationFixListener | null): void {
     this.onFix = listener;
-    setExploringLocationListener(listener);
+    setExploringLocationListener((fix) => this.emitFix(fix));
   }
 
   setStopRequestListener(listener: (() => void) | null): void {
@@ -45,60 +50,57 @@ export class LocationService {
     return this.mode;
   }
 
-  /** R2: only start session FGS when AppState is active. */
   isAppActive(): boolean {
     return AppState.currentState === "active";
   }
 
   async setMode(mode: LocationMode): Promise<void> {
-    if (mode === this.mode && mode !== "idle") {
-      // Still allow accuracy bump balanced ↔ high
-      if (mode === "balanced" || mode === "high") {
-        await this.ensureBackground(mode);
-      }
-      return;
-    }
-    const prev = this.mode;
-    this.mode = mode;
-    console.info("location mode", mode);
+    // Collapse balanced → high (B6).
+    const next: LocationMode = mode === "balanced" ? "high" : mode;
+    if (next === this.mode && next !== "idle") return;
+    this.mode = next;
+    console.info("location mode", next);
 
-    if (mode === "idle") {
+    if (next === "idle") {
       await this.stopAll();
       return;
     }
 
-    if (mode === "foreground") {
-      if (prev === "balanced" || prev === "high") await this.stopBackground();
+    if (next === "foreground") {
+      await this.stopBackground();
       await this.ensureForegroundWatch();
       return;
     }
 
-    // balanced | high — session
+    // high (session) — FGS only; one source (B6)
     if (!this.isAppActive()) {
-      // R2: process restarted in background while exploring — wait for active.
       console.info("location fgs deferred until active");
       await this.ensureForegroundWatch();
       return;
     }
-    await this.ensureBackground(mode);
+    await this.ensureBackground();
   }
 
-  /** Call when AppState becomes active and session is still exploring. */
   async onAppBecameActive(): Promise<void> {
-    if (this.mode === "balanced" || this.mode === "high") {
-      await this.ensureBackground(this.mode);
+    if (this.mode === "high") {
+      await this.ensureBackground();
     }
   }
 
-  /**
-   * Choose balanced vs high from distance to nearest candidate (metres).
-   * Shell passes the distance; we never log the point.
-   */
-  async applyProximityDistance(distanceM: number | null): Promise<void> {
-    if (this.mode !== "balanced" && this.mode !== "high") return;
-    const next: LocationMode =
-      distanceM !== null && distanceM <= LOCATION_HIGH_WITHIN_M ? "high" : "balanced";
-    if (next !== this.mode) await this.setMode(next);
+  /** @deprecated B6 dropped balanced↔high switching; kept as no-op for callers. */
+  async applyProximityDistance(_distanceM: number | null): Promise<void> {
+    return;
+  }
+
+  private emitFix(fix: {
+    at: number;
+    lat: number;
+    lng: number;
+    accuracyM: number;
+  }): void {
+    if (fix.at <= this.lastFixAt) return;
+    this.lastFixAt = fix.at;
+    this.onFix?.(fix);
   }
 
   private async ensureForegroundWatch(): Promise<void> {
@@ -110,12 +112,12 @@ export class LocationService {
     }
     this.watch = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: sessionAccuracy(),
         distanceInterval: 5,
         timeInterval: 2000,
       },
       (position) => {
-        this.onFix?.({
+        this.emitFix({
           at: position.timestamp,
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -125,35 +127,31 @@ export class LocationService {
     );
   }
 
-  private async ensureBackground(mode: "balanced" | "high"): Promise<void> {
-    await this.ensureForegroundWatch();
+  private async ensureBackground(): Promise<void> {
     if (!this.isAppActive()) {
       console.info("location fgs refused: app not active");
       return;
     }
-    const accuracy =
-      mode === "high" ? Location.Accuracy.High : Location.Accuracy.Balanced;
-    const timeInterval = mode === "high" ? 2000 : 5000;
-    const distanceInterval = mode === "high" ? 5 : 10;
+    // B6: stop the on-screen watch so each fix arrives once.
+    this.watch?.remove();
+    this.watch = null;
 
     const started = await Location.hasStartedLocationUpdatesAsync(EXPLORING_LOCATION_TASK);
     if (started) {
-      // Restart with new options
       await Location.stopLocationUpdatesAsync(EXPLORING_LOCATION_TASK);
     }
 
     try {
       await Location.startLocationUpdatesAsync(EXPLORING_LOCATION_TASK, {
-        accuracy,
-        timeInterval,
-        distanceInterval,
-        deferredUpdatesInterval: timeInterval,
+        accuracy: sessionAccuracy(),
+        timeInterval: 2000,
+        distanceInterval: 5,
+        deferredUpdatesInterval: 2000,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
           ...LOCATION_NOTIFICATION,
           killServiceOnDestroy: true,
         },
-        // While Using only — never request background permission.
         pausesUpdatesAutomatically: false,
       });
       this.background = true;
@@ -162,6 +160,8 @@ export class LocationService {
       const message = e instanceof Error ? e.message : "unknown";
       console.info("location fgs start failed", message);
       this.background = false;
+      // Fall back to watch so exploring still gets fixes while on screen.
+      await this.ensureForegroundWatch();
     }
   }
 
@@ -179,15 +179,14 @@ export class LocationService {
     this.watch?.remove();
     this.watch = null;
     await this.stopBackground();
+    this.lastFixAt = 0;
     console.info("location stopped");
   }
 
-  /** Test helper / report: whether background updates are running. */
   isBackgroundRunning(): boolean {
     return this.background;
   }
 
-  /** Invoked if a future native Stop action lands. */
   requestStop(): void {
     this.onStopRequest?.();
   }

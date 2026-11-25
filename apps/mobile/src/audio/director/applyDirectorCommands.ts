@@ -37,7 +37,14 @@ export async function applyDirectorCommands(
       case "load": {
         const uri = deps.resolveUri(command.sha);
         if (!uri) break;
-        await deps.engine.load(command.sha, uri, command.decodeHz);
+        try {
+          await deps.engine.load(command.sha, uri, command.decodeHz);
+        } catch (cause) {
+          const err = new Error(`load failed: ${command.sha}`) as Error & { sha: string };
+          err.sha = command.sha;
+          err.cause = cause;
+          throw err;
+        }
         break;
       }
       case "unload":
@@ -93,6 +100,7 @@ export async function applyDirectorCommands(
         break;
       }
       case "suspend":
+        // B·S3 focus path usually already fade-suspended; pauseNarration is safe idempotent.
         deps.engine.pauseNarration();
         break;
       case "resume":

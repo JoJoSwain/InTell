@@ -16,7 +16,7 @@ export type FocusChangeEvent = {
   shouldResume?: boolean;
 };
 
-export type RemoteCommand = "play" | "pause" | "skipBack";
+export type RemoteCommand = "play" | "pause" | "skipBack" | "stopExploring";
 
 export type RemoteEvent = { command: RemoteCommand };
 

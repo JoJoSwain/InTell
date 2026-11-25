@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { dataLayer } from "../runtime/dataLayer";
 import { LocationService } from "../location/LocationService";
-import { AudioSessionController } from "../audio/session/AudioSessionController";
+import { RNAudioApiEngine } from "../audio/engine/RNAudioApiEngine";
 import { ExploringRuntime } from "./ExploringRuntime";
+import type { ExploringEngine } from "./enginePort";
 import "../location/locationTask";
 
 type Ctx = { runtime: ExploringRuntime | null };
@@ -16,27 +17,34 @@ export function useExploringRuntime(): ExploringRuntime | null {
 export function ExploringProvider(props: { children: ReactNode }) {
   const [runtime, setRuntime] = useState<ExploringRuntime | null>(null);
   const started = useRef(false);
+  const runtimeRef = useRef<ExploringRuntime | null>(null);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     let alive = true;
     const location = new LocationService();
-    const audioSession = new AudioSessionController();
+    const engine = new RNAudioApiEngine() as unknown as ExploringEngine;
     void dataLayer()
       .then(async ({ db }) => {
-        const next = new ExploringRuntime({ db, location, audioSession });
+        // B1: one RNAudioApiEngine — its internal AudioSessionController is the session.
+        const next = new ExploringRuntime({ db, location, engine });
         await next.start();
-        if (alive) setRuntime(next);
+        if (!alive) {
+          next.dispose();
+          return;
+        }
+        runtimeRef.current = next;
+        setRuntime(next);
       })
       .catch(() => {
         console.info("exploring runtime failed to start");
       });
     return () => {
       alive = false;
-      runtime?.dispose();
+      runtimeRef.current?.dispose();
+      runtimeRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

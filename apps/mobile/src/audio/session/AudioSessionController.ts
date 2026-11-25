@@ -311,6 +311,10 @@ export class AudioSessionController {
     }
     if (e.command === "skipBack") {
       await this.onRemote?.("skipBack");
+      return;
+    }
+    if (e.command === "stopExploring") {
+      await this.onRemote?.("stopExploring");
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * Wires session shell, effects, location, director, and audio-session (M6 steps 1–6).
+ * Wires session shell, effects, location, director, engine, and audio-session (M6 review 1).
  */
 import { AppState, type AppStateStatus } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -7,19 +7,21 @@ import { randomUUID } from "expo-crypto";
 import {
   DIRECTOR_HEARTBEAT_SEC,
   backSkipMs,
+  currentTimeWindow,
   directorStep,
   initialDirectorState,
   localDayKey,
+  type AudioRoute,
   type DirectorSessionEffect,
   type DirectorState,
   type SessionEvent,
   type SessionState,
   type StoryState,
+  type TimeWindow,
 } from "@intell/shared";
 import type { SqlDriver } from "../db/driver";
 import { getKv, listAssets, listCompletions, listPacks, listUnlocks, setKv } from "../db/repos";
 import type { LocationService } from "../location/LocationService";
-import type { AudioSessionController } from "../audio/session/AudioSessionController";
 import { applyDirectorCommands } from "../audio/director/applyDirectorCommands";
 import {
   buildM6DirectorWorld,
@@ -46,6 +48,7 @@ import {
 import { buildPackedSession, type PackedSession } from "./sessionWorld";
 import { useSessionStore } from "./SessionStore";
 import { hashMarkerCode } from "./markerCode";
+import type { ExploringEngine } from "./enginePort";
 
 function newSessionId(): string {
   return randomUUID();
@@ -54,9 +57,13 @@ function newSessionId(): string {
 export type ExploringRuntimeDeps = {
   db: SqlDriver;
   location: LocationService;
-  audioSession: AudioSessionController;
-  /** Optional engine; when absent, play effects still update UI / director state. */
-  engine?: Parameters<typeof applyDirectorCommands>[1]["engine"];
+  /** Required — one RNAudioApiEngine (or a fake in tests). */
+  engine: ExploringEngine;
+  /**
+   * B8 tests: prebuilt packed world. Completions/unlocks still refresh from db
+   * on reloadPacks so recordCompletion is exercised.
+   */
+  packedForTest?: PackedSession;
 };
 
 export class ExploringRuntime {
@@ -65,9 +72,13 @@ export class ExploringRuntime {
   private packed: PackedSession | null = null;
   private settings: ExploringSettings = { ...DEFAULT_EXPLORING_SETTINGS };
   private appSub: { remove: () => void } | null = null;
-  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private unsubs: (() => void)[] = [];
   private voices = new Map();
   private disposed = false;
+  private narrationVoiceId: string | null = null;
+  private lastWindow: TimeWindow | null = null;
+  private lastHeartbeatAudioSec = 0;
+  private endingSession = false;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -78,7 +89,16 @@ export class ExploringRuntime {
     this.director = { ...this.director, settings: m6DirectorSettings() };
   }
 
+  getSession(): SessionState {
+    return this.session;
+  }
+
+  getAudioSession() {
+    return this.deps.engine.getSession();
+  }
+
   async start(): Promise<void> {
+    await this.deps.engine.init({ mixWithOthers: false });
     await this.reloadSettings();
     await this.reloadPacks();
     const sessionRaw = await getKv(this.deps.db, SESSION_KV_KEY);
@@ -92,6 +112,34 @@ export class ExploringRuntime {
     this.director = { ...this.director, settings: m6DirectorSettings() };
     useSessionStore.getState().setSession(this.session, null);
 
+    this.wireLocation();
+    this.wireEngine();
+    this.wireAudioSessionRemotes();
+
+    this.appSub = AppState.addEventListener("change", (next: AppStateStatus) => {
+      if (next === "active") void this.deps.location.onAppBecameActive();
+    });
+
+    await this.dispatchWindowIfNeeded(Date.now(), true);
+
+    if (this.session.phase === "idle") {
+      await this.deps.location.setMode("foreground");
+    } else if (this.deps.location.isAppActive()) {
+      await this.deps.location.setMode("high");
+    } else {
+      await this.deps.location.setMode("foreground");
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.appSub?.remove();
+    for (const u of this.unsubs) u();
+    this.unsubs = [];
+    this.deps.location.setFixListener(null);
+  }
+
+  private wireLocation(): void {
     this.deps.location.setFixListener((fix) => {
       void this.dispatch({
         type: "fix",
@@ -104,18 +152,53 @@ export class ExploringRuntime {
     this.deps.location.setStopRequestListener(() => {
       void this.dispatch({ type: "stop", at: Date.now() });
     });
+  }
 
-    this.deps.audioSession.setRemoteHandler(async (command) => {
+  private wireEngine(): void {
+    const { engine } = this.deps;
+    this.unsubs.push(
+      engine.onTick((audioSec) => {
+        void this.onAudioClock(audioSec);
+      }),
+    );
+    this.unsubs.push(
+      engine.onVoiceEnded((e) => {
+        void this.onVoiceEnded(e);
+      }),
+    );
+    this.unsubs.push(
+      engine.onNarrationProgress((p) => {
+        void this.onNarrationProgress(p);
+      }),
+    );
+    this.unsubs.push(
+      engine.onInterruption((phase) => {
+        void this.onInterruption(phase);
+      }),
+    );
+    this.unsubs.push(
+      engine.onRouteChange((route) => {
+        void this.onRoute(route);
+      }),
+    );
+  }
+
+  private wireAudioSessionRemotes(): void {
+    const session = this.deps.engine.getSession();
+    session.setRemoteHandler(async (command) => {
+      if (command === "stopExploring") {
+        await this.dispatch({ type: "stop", at: Date.now() });
+        return;
+      }
+      if (!this.session.playing) return;
       if (command === "pause") {
         await this.dispatch({ type: "narrationPaused", at: Date.now() });
-        await this.deps.audioSession.userPause();
         const overlay = useSessionStore.getState().overlay;
         if (overlay) useSessionStore.getState().setOverlay({ ...overlay, paused: true });
         return;
       }
       if (command === "play") {
         await this.dispatch({ type: "narrationResumed", at: Date.now() });
-        await this.deps.audioSession.userPlay();
         const overlay = useSessionStore.getState().overlay;
         if (overlay) useSessionStore.getState().setOverlay({ ...overlay, paused: false });
         return;
@@ -124,35 +207,6 @@ export class ExploringRuntime {
         this.skipBack();
       }
     });
-
-    this.appSub = AppState.addEventListener("change", (next: AppStateStatus) => {
-      if (next === "active") void this.deps.location.onAppBecameActive();
-    });
-
-    // Foreground watch when idle (puck / grove entry)
-    if (this.session.phase === "idle") {
-      await this.deps.location.setMode("foreground");
-    } else if (this.isAppActive()) {
-      await this.deps.location.setMode("balanced");
-    } else {
-      // R2: exploring after background restart — wait for active; ticks still end session
-      await this.deps.location.setMode("foreground");
-    }
-
-    this.heartbeat = setInterval(() => {
-      void this.onHeartbeat();
-    }, DIRECTOR_HEARTBEAT_SEC * 1000);
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    this.appSub?.remove();
-    if (this.heartbeat) clearInterval(this.heartbeat);
-    this.deps.location.setFixListener(null);
-  }
-
-  private isAppActive(): boolean {
-    return AppState.currentState === "active";
   }
 
   async reloadSettings(): Promise<void> {
@@ -177,7 +231,6 @@ export class ExploringRuntime {
   }
 
   async reloadPacks(): Promise<void> {
-    const packs = await listPacks(this.deps.db);
     const completions = (await listCompletions(this.deps.db)).map((row) => ({
       fragmentId: row.fragment_id,
       revisionNo: row.revision_no,
@@ -187,6 +240,26 @@ export class ExploringRuntime {
     const unlocks = (await listUnlocks(this.deps.db)).map((row) => ({
       fragmentId: row.fragment_id,
     }));
+
+    if (this.deps.packedForTest) {
+      const base = this.deps.packedForTest;
+      this.packed = {
+        ...base,
+        world: {
+          ...base.world,
+          completions,
+          unlocks,
+          settings: {
+            accessibleTrigger: this.settings.accessibleTrigger,
+            locationAvailable: this.settings.locationAvailable,
+            accuracyToleranceM: this.settings.accuracyToleranceM,
+          },
+        },
+      };
+      return;
+    }
+
+    const packs = await listPacks(this.deps.db);
     const assets = await listAssets(this.deps.db);
     const assetUris: Record<string, string> = {};
     for (const asset of assets) assetUris[asset.sha] = asset.local_uri;
@@ -210,14 +283,15 @@ export class ExploringRuntime {
 
   async togglePause(): Promise<void> {
     const overlay = useSessionStore.getState().overlay;
-    if (!overlay) return;
+    if (!overlay || !this.session.playing) return;
+    const session = this.deps.engine.getSession();
     if (overlay.paused) {
       await this.dispatch({ type: "narrationResumed", at: Date.now() });
-      await this.deps.audioSession.userPlay();
+      await session.userPlay();
       useSessionStore.getState().setOverlay({ ...overlay, paused: false });
     } else {
       await this.dispatch({ type: "narrationPaused", at: Date.now() });
-      await this.deps.audioSession.userPause();
+      await session.userPause();
       useSessionStore.getState().setOverlay({ ...overlay, paused: true });
     }
   }
@@ -225,11 +299,36 @@ export class ExploringRuntime {
   skipBack(): void {
     const position = this.director.narration.positionMs;
     const next = backSkipMs(position);
-    // Engine seek if available; director progress updates on next narrationProgress.
-    const engine = this.deps.engine as
-      | { seekNarration?: (ms: number) => void }
-      | undefined;
-    engine?.seekNarration?.(next);
+    this.deps.engine.seekNarration?.(next);
+  }
+
+  /** Inject a location fix (tests / mock GPX). */
+  async injectFix(fix: {
+    at: number;
+    lat: number;
+    lng: number;
+    accuracyM: number;
+  }): Promise<void> {
+    await this.dispatch({
+      type: "fix",
+      at: fix.at,
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracyM: fix.accuracyM,
+    });
+  }
+
+  /** Simulate engine narration end (tests). */
+  async injectNarrationEnded(
+    reason: "natural" | "stopped" | "interrupted",
+    playedMs: number,
+  ): Promise<void> {
+    await this.dispatch({
+      type: "narrationEnded",
+      at: Date.now(),
+      reason,
+      playedMs,
+    });
   }
 
   async dispatch(event: SessionEvent): Promise<void> {
@@ -256,6 +355,7 @@ export class ExploringRuntime {
       nowIso: () => new Date().toISOString(),
       setLocationMode: async (mode) => {
         useSessionStore.getState().setLocationMode(mode);
+        // B6: balanced collapses to high inside LocationService
         await this.deps.location.setMode(mode);
       },
       onPlay: async (play) => {
@@ -263,7 +363,7 @@ export class ExploringRuntime {
       },
       onStopNarration: async () => {
         useSessionStore.getState().setOverlay(null);
-        await this.deps.audioSession.userPause();
+        this.narrationVoiceId = null;
         await this.directorSessionEffect({ type: "stopNarration" }, result.story);
       },
       onTeaser: (teaser) => useSessionStore.getState().setTeaser(teaser),
@@ -282,28 +382,57 @@ export class ExploringRuntime {
       onAnalytics: () => useSessionStore.getState().bumpAnalytics(),
     });
 
-    // Forward session effects the director cares about
     for (const effect of result.effects) {
+      if (effect.type === "sessionEnded") {
+        await this.onSessionEnded(result.story);
+      }
       if (
-        effect.type === "play" ||
         effect.type === "stopNarration" ||
         effect.type === "startAfterglow" ||
         effect.type === "groveEntered" ||
-        effect.type === "showTeaser" ||
-        effect.type === "sessionEnded"
+        effect.type === "showTeaser"
       ) {
-        // play handled in onPlay with enrichment
-        if (effect.type === "play") continue;
         await this.directorSessionEffect(effect as DirectorSessionEffect, result.story);
       }
     }
 
-    await setKv(this.deps.db, SESSION_KV_KEY, sessionJsonForDisk(this.session));
-    await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
+    // B4: only persist while exploring (or right after a transition that wrote effects)
+    if (this.session.phase === "exploring" || result.effects.length > 0) {
+      await setKv(this.deps.db, SESSION_KV_KEY, sessionJsonForDisk(this.session));
+      await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
+    }
 
-    // Refresh pack-derived completions after writes
-    if (result.effects.some((e) => e.type === "recordCompletion" || e.type === "writeUnlocks")) {
+    if (
+      result.effects.some(
+        (e) => e.type === "recordCompletion" || e.type === "writeUnlocks",
+      )
+    ) {
       await this.reloadPacks();
+    }
+  }
+
+  private async onSessionEnded(story: StoryState): Promise<void> {
+    if (this.endingSession) return;
+    this.endingSession = true;
+    try {
+      // B7: fade-stop narration, end media session, stop location ≤ 5 s
+      if (this.deps.engine.stopAll) {
+        await this.deps.engine.stopAll(400);
+      } else {
+        this.deps.engine.pauseNarration();
+      }
+      await this.deps.engine.getSession().stop();
+      useSessionStore.getState().setOverlay(null);
+      useSessionStore.getState().resetUi();
+      this.narrationVoiceId = null;
+      await this.directorSessionEffect(
+        { type: "sessionEnded", sessionId: this.session.sessionId ?? "", at: Date.now() },
+        story,
+      );
+      await this.deps.location.setMode("idle");
+      await this.deps.location.setMode("foreground");
+    } finally {
+      this.endingSession = false;
     }
   }
 
@@ -327,14 +456,15 @@ export class ExploringRuntime {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {
-      // G3: haptic best-effort
+      // G3 best-effort
     }
 
-    if (!this.deps.audioSession.isStarted()) {
-      await this.deps.audioSession.start({ title, artist: "InTell" });
+    const audioSession = this.deps.engine.getSession();
+    if (!audioSession.isStarted()) {
+      await audioSession.start({ title, artist: "InTell" });
     } else {
-      await this.deps.audioSession.update({ title, artist: "InTell" }, "playing");
-      await this.deps.audioSession.userPlay();
+      await audioSession.update({ title, artist: "InTell" }, "playing");
+      await audioSession.userPlay();
     }
 
     await this.directorSessionEffect(
@@ -359,7 +489,7 @@ export class ExploringRuntime {
     const groveId =
       this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
     const world = buildM6DirectorWorld(this.packed, groveId);
-    const audioSec = this.director.audioClockSec;
+    const audioSec = this.safeAudioSec();
     const wallAtMs = Date.now();
     let next = directorStep(
       this.director,
@@ -373,30 +503,87 @@ export class ExploringRuntime {
       world,
     );
     this.director = next.state;
-    if (this.deps.engine) {
+    await this.applyCommands(next.commands);
+    if (this.session.phase === "exploring") {
+      await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
+    }
+  }
+
+  private async applyCommands(
+    commands: Parameters<typeof applyDirectorCommands>[0],
+  ): Promise<void> {
+    try {
       this.voices = await applyDirectorCommands(
-        next.commands,
+        commands,
         {
           engine: this.deps.engine,
           resolveUri: (sha) => this.packed?.assetUris[sha] ?? null,
           setNowPlaying: (title) => {
-            void this.deps.audioSession.update({ title, artist: "InTell" }, "playing");
+            void this.deps.engine.getSession().update({ title, artist: "InTell" }, "playing");
           },
+          onHapticTrigger: undefined,
         },
         this.voices,
       );
+      const playCmd = [...commands].reverse().find((c) => c.type === "playNarration");
+      if (playCmd && playCmd.type === "playNarration") {
+        this.narrationVoiceId = playCmd.id;
+      }
+    } catch (e) {
+      const sha =
+        e && typeof e === "object" && "sha" in e
+          ? String((e as { sha: string }).sha)
+          : null;
+      if (sha) await this.reportAssetFailed(sha);
+      console.info("director command apply failed");
     }
-    await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
   }
 
-  private async onHeartbeat(): Promise<void> {
+  private async reportAssetFailed(sha: string): Promise<void> {
     if (!this.packed) return;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    const result = directorStep(
+      this.director,
+      {
+        type: "assetFailed",
+        sha,
+        audioSec: this.safeAudioSec(),
+        wallAtMs: Date.now(),
+      },
+      world,
+    );
+    this.director = result.state;
+    await this.applyCommands(result.commands);
+  }
+
+  private safeAudioSec(): number {
+    try {
+      return this.deps.engine.getContextCurrentTime();
+    } catch {
+      return this.lastHeartbeatAudioSec;
+    }
+  }
+
+  /** B4: engine audio-clock tick — session tick + director heartbeat only while exploring. */
+  private async onAudioClock(audioSec: number): Promise<void> {
+    if (this.disposed || this.session.phase !== "exploring") return;
+    if (audioSec - this.lastHeartbeatAudioSec < DIRECTOR_HEARTBEAT_SEC - 0.05) {
+      // Still emit progress / afterglow checks less often via same path when due
+    }
+    this.lastHeartbeatAudioSec = audioSec;
+
+    await this.dispatchWindowIfNeeded(Date.now(), false);
     await this.dispatch({ type: "tick", at: Date.now() });
+
     if (this.session.afterglowEndsAt && Date.now() >= this.session.afterglowEndsAt) {
       await this.dispatch({ type: "afterglowElapsed", at: Date.now() });
       useSessionStore.getState().setAfterglow(null);
       useSessionStore.getState().setUnlockBanner(false);
     }
+
+    if (!this.packed) return;
     const groveId =
       this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
     const world = buildM6DirectorWorld(this.packed, groveId);
@@ -404,21 +591,209 @@ export class ExploringRuntime {
       this.director,
       {
         type: "heartbeat",
-        audioSec: this.director.audioClockSec + DIRECTOR_HEARTBEAT_SEC,
+        audioSec,
         wallAtMs: Date.now(),
       },
       world,
     );
     this.director = result.state;
-    if (this.deps.engine) {
-      this.voices = await applyDirectorCommands(
-        result.commands,
+    await this.applyCommands(result.commands);
+  }
+
+  private async onVoiceEnded(e: {
+    voiceId: string;
+    kind: string;
+    reason: "ended" | "cancelled";
+  }): Promise<void> {
+    if (!this.packed) return;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    const audioSec = this.safeAudioSec();
+    const wallAtMs = Date.now();
+
+    if (e.kind !== "heartbeat") {
+      const voiceKind =
+        e.kind === "narration"
+          ? ("narration" as const)
+          : e.kind === "oneshot"
+            ? ("accent" as const)
+            : e.kind === "bed"
+              ? ("bed" as const)
+              : e.kind === "stem"
+                ? ("stem" as const)
+                : ("moment" as const);
+      const dir = directorStep(
+        this.director,
         {
-          engine: this.deps.engine,
-          resolveUri: (sha) => this.packed?.assetUris[sha] ?? null,
+          type: "voiceEnded",
+          voiceId: e.voiceId,
+          kind: voiceKind,
+          audioSec,
+          wallAtMs,
         },
-        this.voices,
+        world,
       );
+      this.director = dir.state;
+      await this.applyCommands(dir.commands);
+    }
+
+    if (e.kind === "narration" && this.session.playing) {
+      const playedMs = Math.max(
+        0,
+        this.director.narration.positionMs ||
+          (this.session.playing
+            ? Date.now() -
+              this.session.playing.startedAt -
+              this.session.playing.pausedTotalMs
+            : 0),
+      );
+      const reason =
+        e.reason === "ended"
+          ? "natural"
+          : this.endingSession
+            ? "stopped"
+            : "interrupted";
+      this.narrationVoiceId = null;
+      await this.dispatch({
+        type: "narrationEnded",
+        at: Date.now(),
+        reason,
+        playedMs,
+      });
+    }
+  }
+
+  private async onNarrationProgress(p: {
+    positionMs: number;
+    durationMs: number;
+  }): Promise<void> {
+    if (!this.packed || this.session.phase !== "exploring") return;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    const result = directorStep(
+      this.director,
+      {
+        type: "narrationProgress",
+        positionMs: p.positionMs,
+        durationMs: p.durationMs,
+        audioSec: this.safeAudioSec(),
+        wallAtMs: Date.now(),
+      },
+      world,
+    );
+    this.director = result.state;
+    const overlay = useSessionStore.getState().overlay;
+    if (overlay && p.durationMs > 0) {
+      useSessionStore.getState().setOverlay({
+        ...overlay,
+        progress: Math.min(1, p.positionMs / p.durationMs),
+      });
+    }
+  }
+
+  private async onInterruption(phase: "began" | "ended"): Promise<void> {
+    if (!this.packed) return;
+    const playing = this.session.playing != null && this.session.playing.pausedAt === null;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    const audioSec = this.safeAudioSec();
+    const wallAtMs = Date.now();
+
+    if (phase === "began") {
+      // B3 guard: only pause session when something is playing
+      if (this.session.playing && this.session.playing.pausedAt === null) {
+        await this.dispatch({ type: "narrationPaused", at: Date.now() });
+        const overlay = useSessionStore.getState().overlay;
+        if (overlay) useSessionStore.getState().setOverlay({ ...overlay, paused: true });
+      }
+      const result = directorStep(
+        this.director,
+        {
+          type: "interruption",
+          phase: "began",
+          shouldResume: true,
+          audioSec,
+          wallAtMs,
+        },
+        world,
+      );
+      this.director = result.state;
+      // Focus path already fade-suspended the engine (B·S3); don't double-pause.
+      await this.applyCommands(
+        result.commands.filter((c) => c.type !== "suspend" && c.type !== "resume"),
+      );
+      return;
+    }
+
+    // ended
+    const result = directorStep(
+      this.director,
+      {
+        type: "interruption",
+        phase: "ended",
+        shouldResume: true,
+        audioSec,
+        wallAtMs,
+      },
+      world,
+    );
+    this.director = result.state;
+    await this.applyCommands(
+      result.commands.filter((c) => c.type !== "suspend"),
+    );
+    if (this.session.playing && this.session.playing.pausedAt !== null) {
+      await this.dispatch({ type: "narrationResumed", at: Date.now() });
+      const overlay = useSessionStore.getState().overlay;
+      if (overlay) useSessionStore.getState().setOverlay({ ...overlay, paused: false });
+    }
+    void playing;
+  }
+
+  private async onRoute(route: AudioRoute): Promise<void> {
+    if (!this.packed) return;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    const result = directorStep(
+      this.director,
+      {
+        type: "settings",
+        settings: { route },
+        audioSec: this.safeAudioSec(),
+        wallAtMs: Date.now(),
+      },
+      world,
+    );
+    this.director = result.state;
+    await this.applyCommands(result.commands);
+  }
+
+  /** B5: Day/Night from region sun reference. */
+  private async dispatchWindowIfNeeded(at: number, force: boolean): Promise<void> {
+    if (!this.packed?.sunReference || !this.packed.timeZone) return;
+    const window = currentTimeWindow(
+      new Date(at),
+      this.packed.sunReference,
+      this.packed.timeZone,
+    );
+    if (!force && window === this.lastWindow) return;
+    if (window === this.lastWindow && !force) return;
+    const prev = this.lastWindow;
+    this.lastWindow = window;
+    if (this.packed) {
+      this.packed = {
+        ...this.packed,
+        world: { ...this.packed.world, timeWindow: window },
+      };
+    }
+    if (force && prev === null) {
+      // First computation — still dispatch so the machine has the window
+    }
+    if (prev !== null || force) {
+      await this.dispatch({ type: "windowChanged", at, timeWindow: window });
     }
   }
 }

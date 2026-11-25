@@ -1,4 +1,4 @@
-import { PreviewManifest } from "@intell/shared";
+import { PreviewManifestDevice } from "@intell/shared";
 import type { SqlDriver } from "../db/driver";
 import { deleteAllPreview, listAssets, listPreview, upsertPreview } from "../db/repos";
 import { joinPath, type FileStore } from "../files/store";
@@ -28,7 +28,7 @@ export async function storePreview(args: {
     throw new PreviewForbiddenError(args.response.status);
   }
   if (args.response.status !== 200) throw new Error(`preview failed (${args.response.status})`);
-  const manifest = PreviewManifest.parse(args.response.body);
+  const manifest = PreviewManifestDevice.parse(args.response.body);
   const now = args.now ?? (() => new Date().toISOString());
   const written: string[] = [];
   try {

@@ -1,0 +1,540 @@
+/**
+ * B8: ExploringRuntime with fake engine + fake location (not the shared-machine harness).
+ */
+import type { GeoJsonMultiPolygon, SessionWorld } from "@intell/shared";
+import { migrate } from "../db/migrate";
+import { openNodeSqlite } from "../db/nodeSqlite";
+import {
+  insertCompletionIgnore,
+  listCompletions,
+  setKv,
+  upsertUnlock,
+} from "../db/repos";
+import type { LocationService } from "../location/LocationService";
+import { ExploringRuntime } from "./ExploringRuntime";
+import { FakeExploringEngine } from "./fakeExploringEngine";
+import {
+  ACCESSIBLE_TRIGGER_KEY,
+  LOCATION_AVAILABLE_KEY,
+} from "./settingsKeys";
+import type { PackedSession } from "./sessionWorld";
+import { useSessionStore } from "./SessionStore";
+
+const GROVE_ID = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
+const SHA1 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const SHA2 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const LAT = 40.9612;
+const LNG = -111.929;
+
+function squareAround(lat: number, lng: number, delta = 0.002): GeoJsonMultiPolygon {
+  return {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [lng - delta, lat - delta],
+          [lng + delta, lat - delta],
+          [lng + delta, lat + delta],
+          [lng - delta, lat + delta],
+          [lng - delta, lat - delta],
+        ],
+      ],
+    ],
+  };
+}
+
+class FakeLocation {
+  mode: "idle" | "foreground" | "balanced" | "high" = "idle";
+  private onFix: ((f: {
+    at: number;
+    lat: number;
+    lng: number;
+    accuracyM: number;
+  }) => void) | null = null;
+  private onStop: (() => void) | null = null;
+  modeHistory: string[] = [];
+
+  setFixListener(
+    listener: ((f: {
+      at: number;
+      lat: number;
+      lng: number;
+      accuracyM: number;
+    }) => void) | null,
+  ): void {
+    this.onFix = listener;
+  }
+
+  setStopRequestListener(listener: (() => void) | null): void {
+    this.onStop = listener;
+  }
+
+  async setMode(mode: "idle" | "foreground" | "balanced" | "high"): Promise<void> {
+    const next = mode === "balanced" ? "high" : mode;
+    this.mode = next;
+    this.modeHistory.push(next);
+  }
+
+  async onAppBecameActive(): Promise<void> {
+    // no-op
+  }
+
+  isAppActive(): boolean {
+    return true;
+  }
+
+  getMode(): "idle" | "foreground" | "balanced" | "high" {
+    return this.mode;
+  }
+
+  emit(fix: { at: number; lat: number; lng: number; accuracyM: number }): void {
+    this.onFix?.(fix);
+  }
+
+  requestStop(): void {
+    this.onStop?.();
+  }
+}
+
+function buildPacked(overrides?: {
+  world?: Partial<SessionWorld>;
+  meta?: PackedSession["meta"];
+}): PackedSession {
+  const f1 = {
+    id: "f1",
+    groveId: GROVE_ID,
+    tier: "root" as const,
+    visibility: "standard" as const,
+    retired: false,
+    lat: LAT,
+    lng: LNG,
+    radiusM: 40,
+    requires: [] as string[][],
+    threadIds: [] as string[],
+    contingencyRevisionNo: 1,
+    versions: [
+      { lang: "en" as const, timeWindow: "day" as const },
+      { lang: "en" as const, timeWindow: "night" as const },
+    ],
+  };
+  const f2 = {
+    id: "f2",
+    groveId: GROVE_ID,
+    tier: "branch" as const,
+    visibility: "standard" as const,
+    retired: false,
+    lat: LAT + 0.00005,
+    lng: LNG,
+    radiusM: 40,
+    requires: [["f1"]],
+    threadIds: [] as string[],
+    contingencyRevisionNo: 1,
+    versions: [
+      { lang: "en" as const, timeWindow: "day" as const },
+      { lang: "en" as const, timeWindow: "night" as const },
+    ],
+  };
+  const physical = {
+    id: "phys",
+    groveId: GROVE_ID,
+    tier: "leaf" as const,
+    visibility: "physical" as const,
+    retired: false,
+    lat: LAT + 0.001,
+    lng: LNG,
+    requires: [] as string[][],
+    threadIds: [] as string[],
+    contingencyRevisionNo: 1,
+    versions: [{ lang: "en" as const, timeWindow: "day" as const }],
+  };
+  const fContingency = {
+    id: "f10",
+    groveId: GROVE_ID,
+    tier: "leaf" as const,
+    visibility: "standard" as const,
+    retired: false,
+    lat: LAT + 0.0002,
+    lng: LNG + 0.0002,
+    radiusM: 40,
+    requires: [] as string[][],
+    threadIds: [] as string[],
+    contingencyRevisionNo: 2,
+    versions: [
+      { lang: "en" as const, timeWindow: "day" as const },
+      { lang: "en" as const, timeWindow: "night" as const },
+    ],
+  };
+  const fCorrection = {
+    id: "f4",
+    groveId: GROVE_ID,
+    tier: "branch" as const,
+    visibility: "standard" as const,
+    retired: false,
+    lat: LAT - 0.0002,
+    lng: LNG - 0.0002,
+    radiusM: 40,
+    requires: [] as string[][],
+    threadIds: [] as string[],
+    contingencyRevisionNo: 1,
+    versions: [
+      { lang: "en" as const, timeWindow: "day" as const },
+      { lang: "en" as const, timeWindow: "night" as const },
+    ],
+  };
+
+  const world: SessionWorld = {
+    groves: [{ id: GROVE_ID, boundary: squareAround(LAT, LNG) }],
+    fragments: [f1, f2, physical, fContingency, fCorrection],
+    fragmentMeta: {
+      f1: { revisionNo: 1, teaser: "t1" },
+      f2: { revisionNo: 1, teaser: "t2" },
+      phys: { revisionNo: 1, teaser: "tp" },
+      f10: { revisionNo: 2, teaser: "contingency" },
+      f4: { revisionNo: 2, teaser: "correction", changeTeaser: "fixed" },
+    },
+    externalPrerequisites: [],
+    markers: { "marker-hash-phys": "phys" },
+    completions: [],
+    unlocks: [],
+    timeWindow: "day",
+    lang: "en",
+    settings: {
+      accessibleTrigger: false,
+      locationAvailable: true,
+      accuracyToleranceM: 25,
+    },
+    ...overrides?.world,
+  };
+
+  const meta: PackedSession["meta"] = {
+    f1: {
+      teaser: "t1",
+      characterIds: [],
+      revisionNo: 1,
+      narrationByWindow: {
+        day: {
+          sha: SHA1,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Root story",
+        },
+        night: {
+          sha: SHA1,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Root story night",
+        },
+      },
+    },
+    f2: {
+      teaser: "t2",
+      characterIds: [],
+      revisionNo: 1,
+      narrationByWindow: {
+        day: {
+          sha: SHA2,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Branch story",
+        },
+      },
+    },
+    phys: {
+      teaser: "tp",
+      characterIds: [],
+      revisionNo: 1,
+      narrationByWindow: {
+        day: {
+          sha: SHA1,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Physical",
+        },
+      },
+    },
+    f10: {
+      teaser: "contingency",
+      characterIds: [],
+      revisionNo: 2,
+      narrationByWindow: {
+        day: {
+          sha: SHA2,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Contingency",
+        },
+      },
+    },
+    f4: {
+      teaser: "correction",
+      changeTeaser: "fixed",
+      characterIds: [],
+      revisionNo: 2,
+      narrationByWindow: {
+        day: {
+          sha: SHA1,
+          durationMs: 2_000,
+          breathPointsMs: [],
+          title: "Correction",
+        },
+      },
+    },
+    ...overrides?.meta,
+  };
+
+  return {
+    world,
+    meta,
+    markers: world.markers,
+    motifDaySha: null,
+    motifNightSha: null,
+    allowsSpeakerWildlife: false,
+    depthBloomTextureM: 10,
+    timeZone: null,
+    sunReference: null,
+    assetUris: {
+      [SHA1]: "file:///tmp/a.m4a",
+      [SHA2]: "file:///tmp/b.m4a",
+    },
+  };
+}
+
+async function setup(opts?: {
+  accessible?: boolean;
+  locationAvailable?: boolean;
+  packed?: PackedSession;
+}) {
+  const db = openNodeSqlite();
+  await migrate(db);
+  if (opts?.accessible) await setKv(db, ACCESSIBLE_TRIGGER_KEY, "1");
+  if (opts?.locationAvailable === false) {
+    await setKv(db, LOCATION_AVAILABLE_KEY, "0");
+  }
+  const engine = new FakeExploringEngine();
+  const location = new FakeLocation();
+  const packed = opts?.packed ?? buildPacked();
+  const runtime = new ExploringRuntime({
+    db,
+    location: location as unknown as LocationService,
+    engine,
+    packedForTest: packed,
+  });
+  useSessionStore.getState().resetUi();
+  await runtime.start();
+  return { db, engine, location, runtime, packed };
+}
+
+async function twoFixes(
+  runtime: ExploringRuntime,
+  at: number,
+  lat = LAT,
+  lng = LNG,
+): Promise<void> {
+  await runtime.injectFix({ at, lat, lng, accuracyM: 5 });
+  await runtime.injectFix({ at: at + 1_000, lat, lng, accuracyM: 5 });
+}
+
+/** Wall-clock base: session timeouts compare event.at to lastInsideGroveAt. */
+function nowBase(): number {
+  return Date.now();
+}
+
+async function flush(): Promise<void> {
+  await new Promise<void>((r) => setImmediate(r));
+  await new Promise<void>((r) => setImmediate(r));
+}
+
+describe("ExploringRuntime (B8)", () => {
+  it("fix → play → voiceEnded → completion → afterglow → queued fragment", async () => {
+    const packed = buildPacked();
+    const f1 = packed.world.fragments.find((f) => f.id === "f1")!;
+    const f2 = packed.world.fragments.find((f) => f.id === "f2")!;
+    packed.world = {
+      ...packed.world,
+      fragments: [f1, f2],
+      fragmentMeta: {
+        f1: packed.world.fragmentMeta.f1!,
+        f2: packed.world.fragmentMeta.f2!,
+      },
+    };
+    const { db, engine, runtime } = await setup({ packed });
+    const t0 = nowBase();
+    await twoFixes(runtime, t0);
+    expect(runtime.getSession().phase).toBe("exploring");
+    expect(runtime.getSession().playing?.fragmentId).toBe("f1");
+    expect(engine.playedNarration.some((p) => p.title === "Root story")).toBe(true);
+
+    // Queue f2 while f1 plays (unlocked after f1 completes)
+    await twoFixes(runtime, t0 + 3_000, LAT + 0.00005, LNG);
+
+    engine.emitVoiceEnded({ kind: "narration", reason: "ended" });
+    await flush();
+
+    const completions = await listCompletions(db);
+    expect(completions.some((c) => c.fragment_id === "f1")).toBe(true);
+    expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
+    expect(useSessionStore.getState().afterglow).not.toBeNull();
+
+    const afterAt = (runtime.getSession().afterglowEndsAt ?? t0) + 1;
+    await runtime.dispatch({ type: "afterglowElapsed", at: afterAt });
+    await twoFixes(runtime, afterAt + 1_000, LAT + 0.00005, LNG);
+    expect(runtime.getSession().playing?.fragmentId).toBe("f2");
+    expect(engine.playedNarration.some((p) => p.title === "Branch story")).toBe(true);
+
+    runtime.dispose();
+  });
+
+  it("interruption pauses and resumes when something is playing", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+
+    engine.emitInterruption("began");
+    await flush();
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    engine.emitInterruption("ended");
+    await flush();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+
+    runtime.dispose();
+  });
+
+  it("does not pause when nothing is playing (B3 guard)", async () => {
+    const { engine, runtime } = await setup();
+    await runtime.injectFix({
+      at: nowBase(),
+      lat: LAT,
+      lng: LNG,
+      accuracyM: 5,
+    });
+    expect(runtime.getSession().playing).toBeNull();
+    engine.emitInterruption("began");
+    await flush();
+    expect(runtime.getSession().playing).toBeNull();
+    runtime.dispose();
+  });
+
+  it("location denied: scans still play", async () => {
+    const { engine, runtime } = await setup({ locationAvailable: false });
+    await runtime.dispatch({
+      type: "scan",
+      at: nowBase(),
+      markerHash: "marker-hash-phys",
+    });
+    expect(runtime.getSession().phase).toBe("exploring");
+    expect(runtime.getSession().playing?.fragmentId).toBe("phys");
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+    runtime.dispose();
+  });
+
+  it("accessible trigger within 35 ft with one accurate fix", async () => {
+    // Proximity radius 5 m; stand ~8 m away → accessible only (35 ft ≈ 10.67 m)
+    const packed = buildPacked();
+    packed.world = {
+      ...packed.world,
+      fragments: packed.world.fragments.map((f) =>
+        f.id === "f1" ? { ...f, radiusM: 5 } : f,
+      ),
+    };
+    const { runtime } = await setup({ accessible: true, packed });
+    const offsetLat = LAT + 8 / 111_320;
+    await runtime.injectFix({
+      at: nowBase(),
+      lat: offsetLat,
+      lng: LNG,
+      accuracyM: 5,
+    });
+    expect(runtime.getSession().phase).toBe("exploring");
+    expect(runtime.getSession().playing?.fragmentId).toBe("f1");
+    runtime.dispose();
+  });
+
+  it("session end: stopAll + media session stop + location stops", async () => {
+    const { engine, location, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    expect(location.mode).toBe("high");
+
+    await runtime.stopExploring();
+    await flush();
+
+    expect(runtime.getSession().phase).toBe("idle");
+    expect(engine.stopAllCalls.length).toBeGreaterThan(0);
+    expect(engine.session.stopped).toBe(true);
+    expect(location.modeHistory).toContain("idle");
+    expect(location.mode).toBe("foreground");
+    runtime.dispose();
+  });
+
+  it("engine audio clock drives tick while exploring (B4)", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    engine.emitTick(5);
+    await flush();
+    expect(runtime.getSession().phase).toBe("exploring");
+    runtime.dispose();
+  });
+});
+
+describe("ExploringRuntime contingency / correction (B8)", () => {
+  it("contingency: older completion of f10 plays again", async () => {
+    const packed = buildPacked();
+    // Only f10 so root f1 cannot win chooseTrigger
+    const f10 = packed.world.fragments.find((f) => f.id === "f10")!;
+    packed.world = {
+      ...packed.world,
+      fragments: [f10],
+      fragmentMeta: { f10: packed.world.fragmentMeta.f10! },
+      groves: [{ id: GROVE_ID, boundary: squareAround(f10.lat, f10.lng) }],
+    };
+    const { db, engine, runtime } = await setup({ packed });
+    await insertCompletionIgnore(db, {
+      fragment_id: "f10",
+      revision_no: 1,
+      time_window: "day",
+      completed_at: "2026-01-01T00:00:00.000Z",
+      on_site: 1,
+      trigger: "proximity",
+      session_id: "old",
+    });
+    await upsertUnlock(db, "f10", "2026-01-01T00:00:00.000Z");
+    await runtime.reloadPacks();
+
+    await twoFixes(runtime, nowBase(), f10.lat, f10.lng);
+    expect(runtime.getSession().playing?.fragmentId).toBe("f10");
+    expect(engine.playedNarration.some((p) => p.title === "Contingency")).toBe(
+      true,
+    );
+    runtime.dispose();
+  });
+
+  it("correction: f4 completed at r1 does not play at correction revision", async () => {
+    const packed = buildPacked();
+    const f4 = packed.world.fragments.find((f) => f.id === "f4")!;
+    packed.world = {
+      ...packed.world,
+      fragments: [f4],
+      fragmentMeta: { f4: packed.world.fragmentMeta.f4! },
+      groves: [{ id: GROVE_ID, boundary: squareAround(f4.lat, f4.lng) }],
+    };
+    const { db, engine, runtime } = await setup({ packed });
+    await insertCompletionIgnore(db, {
+      fragment_id: "f4",
+      revision_no: 1,
+      time_window: "day",
+      completed_at: "2026-01-01T00:00:00.000Z",
+      on_site: 1,
+      trigger: "proximity",
+      session_id: "old",
+    });
+    await upsertUnlock(db, "f4", "2026-01-01T00:00:00.000Z");
+    await runtime.reloadPacks();
+
+    await twoFixes(runtime, nowBase(), f4.lat, f4.lng);
+    expect(runtime.getSession().playing?.fragmentId).not.toBe("f4");
+    expect(engine.playedNarration.some((p) => p.title === "Correction")).toBe(
+      false,
+    );
+    runtime.dispose();
+  });
+});

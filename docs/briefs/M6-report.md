@@ -1,63 +1,53 @@
-# Lane B · M6 report (pre–Pixel walk)
+# Lane B · M6 report (review-1 fixes; pre–Pixel walk)
 
-Branch `b/m6-narration-session`. Plan review applied (G1–G7, R1–R6). Overlay design approved by Jordan 2026-11-24. **Stopped before the Pixel walk.**
+Branch `b/m6-narration-session`. Review-1 (B1–B8, R3) applied. Merged `origin/master` (A7b / PR #38). Preview uses `PreviewManifestDevice`. **Stopped before the Pixel walk for Claude’s check.**
 
-## What’s built (steps 1–8)
+## What’s wired now
 
-1. **Pack parsers** — `GrovePackDevice` / `RegionPackDevice` in install, sync, homeModel.
-2. **Session shell** — `sessionShell`, `applySessionEffects`, `sessionWorld`, `persist` (R1 scrub), `SessionStore`, `ExploringRuntime` + `ExploringProvider`.
-3. **Location** — `LocationService` + task; two FGS design; start only when app active (R2); notification title from TECH_SPEC (R3).
-4. **Director** — `m6World` / `M6_LAYERS`, command filter, `applyDirectorCommands`, heartbeat + session effects.
-5. **audio-session** — meta title, pause/play, skipBack via `BACK_SKIP_MS` (R5); remote resume unchanged pending measure (R6).
-6. **QR** — `app/f/[code].tsx`, sha256 upper-case match, `intell://` + https intent filters; hosting deferred to M12 (G6).
-7. **Overlay / teaser / afterglow** — per §6 approved design.
-8. **Settings** — accessible trigger, location available, beacons kv (M7).
+| Item | Status |
+|---|---|
+| **B1** One `RNAudioApiEngine` in `ExploringProvider` → `ExploringRuntime` | Done |
+| **B2** `voiceEnded` → session `narrationEnded` + director; progress → overlay; load fail → `assetFailed` | Done |
+| **B3** Interruptions + route → director; pause/resume only when playing; suspend filtered on focus path | Done |
+| **B4** Tick + director heartbeat from engine audio clock; kv only while exploring / on effects | Done |
+| **B5** `windowChanged` from region sun reference at start and on flip | Done |
+| **B6** High accuracy whole session; one location source (watch stopped while FGS runs); drop stale `at` | Done |
+| **B7** `sessionEnded` → `stopAll` fade, media session `stop`, location idle ≤ 5 s then foreground | Done |
+| **B8** `ExploringRuntime` tests with fake engine/location (9 cases) | Done |
+| **R3** Media3 custom “Stop exploring” `CommandButton` → `stopExploring` → session `stop` | Done (native; needs device confirm) |
+| **A7b** `PreviewManifestDevice` on preview path | Done (via master merge) |
 
-## Tests / CI
+## Kept from review-1 “good” list
+
+Pack parsers, R1 kv scrub, R2 expo-location finding, overlay/teaser/settings UI, QR route, M6 world gate.
+
+## Tests / commands
 
 - `pnpm --filter @intell/mobile typecheck` — green
-- `pnpm --filter @intell/mobile lint` — green (pre-existing spike require warning)
-- `pnpm --filter @intell/mobile test` — **90** tests green, including GPX shell acceptance
+- `pnpm --filter @intell/mobile lint` — green (pre-existing spike `require` warning; array-type warnings cleaned in new files)
+- `pnpm --filter @intell/mobile test` — **99** tests green
+  - Shell GPX harness (`gpxAcceptance.test.ts`) — shared-machine + effects path
+  - **Runtime** (`ExploringRuntime.test.ts`) — fake engine: play → end → completion → afterglow → next; interruption; location-denied scan; accessible; session end; contingency/correction
 
-## Emulator GPX acceptance (§8.2) — shell harness
+## Emulator GPX / AVD
 
-| Item | Result |
-|---|---|
-| Unlocked fragments once, tier/route order | **pass** |
-| Locked never play | **pass** (frag9 absent) |
-| Contingency / correction | Covered in shared `sessionWalk`; shell mirrors play path |
-| Day-only silent at night | **pass** |
-| Locked marker scan → teaser | **pass** |
-| No overlap | **pass** (shared assert + single play queue) |
-| No tap to start | **pass** (fix/scan only) |
-| Location denied → scans ok, proximity off | **pass** (proximity plays empty) |
-| Accessible trigger @ 35 ft | **pass** |
-| Location stop ≤ 5 s after session end | **pass** (idle mode on end) |
+No AVD created this pass. Runtime tests + Pixel walk stand in for Maestro-on-AVD UI. Shell GPX acceptance still passes as a pure-logic walk of `demo-route.gpx`.
 
-Full Maestro-on-AVD UI walk not run in this lane session (no AVD attached; Pixel was connected). Shell harness is the automated acceptance; Pixel walk with Jordan is next.
+## Pixel walk pack (no home coords)
 
-## PSS (G7)
+- **Pack:** seeded **Farmington Bird Refuge** demo grove (`supabase/fixtures/farmington-bird-refuge.json` → published demo pack). Trail + fragments are at the George S. and Dolores Doré Eccles Wildlife Education Center, Farmington, UT.
+- **Where:** fragments sit on the demo trail loop around the refuge (Frags 1–10; Frag 9 physical `DEMO-001`; Frag 8 day-only; Frag 10 contingency; Frag 4 correction). GPX: `apps/mobile/e2e/demo-route.gpx`.
+- **Can Jordan walk there?** Yes — public refuge / education-center trails. Walk the GPX-ish loop on site with the installed demo pack; ear-confirm narration, pocket/lock, call interruption, and notification **Stop exploring**.
+- **Do not** log or commit anyone’s home location; Embark origin still must not be stored.
 
-Not captured yet — needs a release/dev build with map + pack on emulator or Pixel. Record on the walk.
+## Still open / not claimed
 
-## expo-location finding (R2)
-
-**Confirmed in expo-location 58.0.22 Android source:**
-
-- Manifest declares only `ACCESS_FINE` / `ACCESS_COARSE` — **no** `ACCESS_BACKGROUND_LOCATION`.
-- `LocationTaskConsumer.maybeStartForegroundService` returns early when `!isForegrounded` (“cannot be started while the app is in the background”).
-- `startForeground` failures (`SecurityException` / `IllegalStateException`) are caught and the service stops.
-- FGS type is `location` only.
-
-Safe to use While Using + FGS without background permission. **Known limit:** a session can only start while the app is on screen; after a background process restart while `exploring`, location FGS waits until active (ticks still end the session).
-
-## New gaps
-
-1. **R3 Stop action:** expo-location’s notification API has no custom actions — Stop is “open app → grove chip → Stop exploring”. Native patch or Claude decision if a shade Stop is required.
-2. **A7b** not merged yet — preview still awaits `PreviewManifestDevice` after master merge.
-3. **PSS** numbers pending device build.
-4. **Remote resume timing (R6)** — measure on Pixel walk before tightening retries.
+1. **PSS (G7)** — needs a release/dev build on emulator or Pixel; record on the walk.
+2. **R3 on device** — Kotlin `CommandButton` + custom command is in `audio-session`; confirm it appears on lock screen / notification on the Pixel build (rebuild native module).
+3. **R6 remote resume timing** — measure on Pixel before tightening retries.
+4. **Accuracy (G1)** — still 25 m until the walk retunes.
+5. **No home coords** in this report or logs.
 
 ## Next
 
-Pixel walk with Jordan (pocket, locked, call mid-story). Then final report + CI push if needed.
+Claude reviews this push. Then Pixel walk with Jordan. Then final report if needed.
