@@ -12,6 +12,8 @@ export type PlayingOverlayProps = {
   tier: "root" | "branch" | "leaf";
   progress: number;
   paused: boolean;
+  /** Optional focus-denied / busy line under Look up. */
+  busyHint?: string;
   onTogglePause: () => void;
   onBack10: () => void;
 };
@@ -51,6 +53,15 @@ export function PlayingOverlay(props: PlayingOverlayProps) {
       <Text maxFontSizeMultiplier={2} style={[styles.copy, { color: palette.surface }]}>
         {strings.lookUp}
       </Text>
+      {props.busyHint ? (
+        <Text
+          maxFontSizeMultiplier={2}
+          style={[styles.copy, { color: palette.surface, opacity: 0.95 }]}
+          accessibilityRole="text"
+        >
+          {props.busyHint}
+        </Text>
+      ) : null}
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"

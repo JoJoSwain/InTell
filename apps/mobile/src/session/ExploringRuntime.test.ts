@@ -14,11 +14,18 @@ import type { LocationService } from "../location/LocationService";
 import { ExploringRuntime } from "./ExploringRuntime";
 import { FakeExploringEngine } from "./fakeExploringEngine";
 import {
+  DIRECTOR_KV_KEY,
+  SESSION_KV_KEY,
+  directorJsonForDisk,
+  sessionJsonForDisk,
+} from "./persist";
+import {
   ACCESSIBLE_TRIGGER_KEY,
   LOCATION_AVAILABLE_KEY,
 } from "./settingsKeys";
 import type { PackedSession } from "./sessionWorld";
 import { useSessionStore } from "./SessionStore";
+import { strings } from "../ui/strings";
 
 const GROVE_ID = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const SHA1 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -669,3 +676,103 @@ describe("ExploringRuntime contingency / correction (B8)", () => {
     runtime.dispose();
   });
 });
+
+describe("ExploringRuntime restart clean start (F1)", () => {
+  it("clears stale playing/overlay and a new scan plays narration", async () => {
+    const { db, engine, runtime, packed } = await setup();
+    await twoFixes(runtime, nowBase());
+    expect(runtime.getSession().playing).not.toBeNull();
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+
+    await setKv(db, SESSION_KV_KEY, sessionJsonForDisk(runtime.getSession()));
+    await setKv(
+      db,
+      DIRECTOR_KV_KEY,
+      directorJsonForDisk(runtime.getDirector()),
+    );
+    runtime.dispose();
+
+    const engine2 = new FakeExploringEngine();
+    const location2 = new FakeLocation();
+    const runtime2 = new ExploringRuntime({
+      db,
+      location: location2 as unknown as LocationService,
+      engine: engine2,
+      packedForTest: packed,
+    });
+    useSessionStore.getState().resetUi();
+    useSessionStore.getState().setOverlay({
+      title: "stale",
+      tier: "root",
+      progress: 1,
+      paused: true,
+      fragmentId: "f1",
+    });
+    await runtime2.start();
+    await flush();
+
+    expect(useSessionStore.getState().overlay).toBeNull();
+    expect(runtime2.getSession().playing).toBeNull();
+    expect(runtime2.getDirector().suspended).toBe(false);
+    expect(runtime2.getDirector().lastEmitted.narration).toBeNull();
+
+    const playsBefore = engine2.playedNarration.length;
+    await runtime2.dispatch({
+      type: "scan",
+      at: nowBase() + 60_000,
+      markerHash: "marker-hash-phys",
+    });
+    await flush();
+    expect(runtime2.getSession().playing?.fragmentId).toBe("phys");
+    expect(engine2.playedNarration.length).toBeGreaterThan(playsBefore);
+    runtime2.dispose();
+  });
+});
+
+describe("ExploringRuntime focus-denied start (F2)", () => {
+  it("denies start, then retry on Resume plays", async () => {
+    const { engine, runtime } = await setup();
+    engine.session.denyNextStart = true;
+
+    await twoFixes(runtime, nowBase());
+    await flush();
+
+    expect(engine.playedNarration.length).toBe(0);
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+    const overlay = useSessionStore.getState().overlay;
+    expect(overlay?.paused).toBe(true);
+    expect(overlay?.busyHint).toBe(strings.audioBusyTap);
+    expect(engine.session.isStarted()).toBe(false);
+
+    await runtime.togglePause();
+    await flush();
+
+    expect(engine.session.isStarted()).toBe(true);
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+    expect(useSessionStore.getState().overlay?.paused).toBe(false);
+    expect(useSessionStore.getState().overlay?.busyHint).toBeUndefined();
+    runtime.dispose();
+  });
+});
+
+describe("ExploringRuntime single resume (F3)", () => {
+  it("interruption end does not apply a director resume command", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+
+    engine.emitInterruption("began");
+    await flush();
+    const resumesAtBegan = engine.resumeNarrationCalls;
+
+    engine.emitInterruption("ended");
+    await flush();
+
+    // Focus path owns resumeAfterFade; director `resume` is filtered out (F3).
+    expect(engine.resumeNarrationCalls).toBe(resumesAtBegan);
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    runtime.dispose();
+  });
+});
+

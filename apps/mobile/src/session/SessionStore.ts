@@ -15,6 +15,8 @@ export type OverlayModel = {
   progress: number;
   paused: boolean;
   fragmentId: string;
+  /** Focus-denied hint (M6 F2); shown while paused. */
+  busyHint?: string;
 } | null;
 
 type SessionStoreState = {

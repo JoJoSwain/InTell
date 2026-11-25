@@ -304,6 +304,7 @@ export function HomeScreen() {
           tier={overlay.tier}
           progress={overlay.progress}
           paused={overlay.paused}
+          busyHint={overlay.busyHint}
           onTogglePause={() => void runtime?.togglePause()}
           onBack10={() => runtime?.skipBack()}
         />

@@ -46,4 +46,7 @@ export const strings = {
   beaconsPref: "Beacons (coming later)",
   stopExploring: "Stop exploring",
   teaserClose: "Close teaser",
+  audioBusyTap: "Audio busy — tap to try again",
+  resetSessionKeepPacks: "Reset session (keep packs)",
+  audioDiagnostics: "Audio diagnostics",
 } as const;

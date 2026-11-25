@@ -35,6 +35,8 @@ type NativeAudioSession = {
   abandonFocus(): Promise<void>;
   /** Native Log.i — survives release stripping of console.log. */
   logContextState(state: string): Promise<void>;
+  /** Native Log.i tag InTellAudio — release diagnostics (M6 F5). */
+  logBreadcrumb(message: string): Promise<void>;
   addListener(
     event: "focusChange",
     listener: (e: FocusChangeEvent) => void,

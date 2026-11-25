@@ -93,7 +93,8 @@ function enforceMinFade(fadeMs: number): number {
  * Platform session owned by `audio-session` (not the library).
  * UI code must import this only through the AudioEngine interface (plus spike helpers).
  */
-export class RNAudioApiEngine implements AudioEngine {
+/** Omit onRemoteCommand so we can widen it with stopExploring (M6 F6). */
+export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private buses: Partial<Record<BusId, GainNode>> = {};
@@ -134,7 +135,15 @@ export class RNAudioApiEngine implements AudioEngine {
     (p: { positionMs: number; durationMs: number }) => void
   >();
   private remoteSubs = new Set<
-    (c: "play" | "pause" | "skipForward" | "skipBackward" | "next") => void
+    (
+      c:
+        | "play"
+        | "pause"
+        | "skipForward"
+        | "skipBackward"
+        | "next"
+        | "stopExploring",
+    ) => void
   >();
   private appStateSubs = new Set<(state: AppStateStatus) => void>();
   private notificationSubs = new Set<(visible: boolean) => void>();
@@ -1071,11 +1080,45 @@ export class RNAudioApiEngine implements AudioEngine {
 
   onRemoteCommand(
     cb: (
-      c: "play" | "pause" | "skipForward" | "skipBackward" | "next",
+      c:
+        | "play"
+        | "pause"
+        | "skipForward"
+        | "skipBackward"
+        | "next"
+        | "stopExploring",
     ) => void,
   ): Unsubscribe {
     this.remoteSubs.add(cb);
     return () => this.remoteSubs.delete(cb);
+  }
+
+  getMasterGainLinear(): number {
+    return this.master?.gain.value ?? this.unduckedMasterLinear;
+  }
+
+  getNarrationDiag(): {
+    id: string;
+    paused: boolean;
+    positionMs: number;
+  } | null {
+    const narration = [...this.voices.values()].find(
+      (v) => v.kind === "narration",
+    );
+    if (!narration) return null;
+    const ctx = this.context;
+    let positionMs = narration.pauseOffsetSec * 1000;
+    if (!narration.paused && ctx) {
+      positionMs =
+        (narration.offsetSec +
+          (ctx.currentTime - narration.startedAtContextTime)) *
+        1000;
+    }
+    return {
+      id: narration.id,
+      paused: narration.paused,
+      positionMs,
+    };
   }
 
   getDiagnostics(): EngineDiagnostics {
@@ -1492,6 +1535,7 @@ export class RNAudioApiEngine implements AudioEngine {
       void this.applyFocusEffect(effect);
     });
     // Play/pause audio work is done by the focus effect from userPlay/userPause.
+    // F6: ExploringRuntime subscribes via onRemoteCommand — do not let it overwrite this.
     this.session.setRemoteHandler(async (command) => {
       if (command === "play") {
         for (const cb of this.remoteSubs) cb("play");
@@ -1504,6 +1548,10 @@ export class RNAudioApiEngine implements AudioEngine {
       if (command === "skipBack") {
         this.skipNarrationBack(10_000);
         for (const cb of this.remoteSubs) cb("skipBackward");
+        return;
+      }
+      if (command === "stopExploring") {
+        for (const cb of this.remoteSubs) cb("stopExploring");
       }
     });
     this.session.setBusyHandler((state) => {

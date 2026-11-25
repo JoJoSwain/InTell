@@ -13,16 +13,35 @@ import type {
 import type { AudioSessionController } from "../audio/session/AudioSessionController";
 import type { ExploringEngine, VoiceEndedEvent } from "./enginePort";
 
-type RemoteCmd = "play" | "pause" | "skipForward" | "skipBackward" | "next";
+type RemoteCmd =
+  | "play"
+  | "pause"
+  | "skipForward"
+  | "skipBackward"
+  | "next"
+  | "stopExploring";
 
 export class FakeAudioSession {
   started = false;
   stopped = false;
   focusRequests = 0;
+  /** When true, the next start() returns false (F2). */
+  denyNextStart = false;
+  private busy: "ok" | "audioBusy" | "notificationDenied" = "ok";
+  private mode: "userPaused" | "playing" | "ducked" | "suspendedTransient" =
+    "userPaused";
   private remote: ((c: string) => void | Promise<void>) | null = null;
 
   isStarted(): boolean {
     return this.started;
+  }
+
+  getMode(): string {
+    return this.mode;
+  }
+
+  getBusy(): string {
+    return this.busy;
   }
 
   setRemoteHandler(handler: ((c: string) => void | Promise<void>) | null): void {
@@ -30,8 +49,17 @@ export class FakeAudioSession {
   }
 
   async start(_meta: { title: string; artist: string }): Promise<boolean> {
+    this.focusRequests += 1;
+    if (this.denyNextStart) {
+      this.denyNextStart = false;
+      this.busy = "audioBusy";
+      this.started = false;
+      return false;
+    }
     this.started = true;
     this.stopped = false;
+    this.busy = "ok";
+    this.mode = "playing";
     return true;
   }
 
@@ -48,19 +76,21 @@ export class FakeAudioSession {
   }
 
   async userPlay(): Promise<boolean> {
+    this.mode = "playing";
     return true;
   }
 
   async userPause(): Promise<void> {
-    // no-op
+    this.mode = "userPaused";
   }
 
   async stop(): Promise<void> {
     this.started = false;
     this.stopped = true;
+    this.mode = "userPaused";
   }
 
-  /** Test helper: fire a remote command through the wired handler. */
+  /** Test helper: fire a remote command through the wired session handler. */
   async emitRemote(command: string): Promise<void> {
     await this.remote?.(command);
   }
@@ -77,12 +107,16 @@ export class FakeExploringEngine implements ExploringEngine {
   seekCalls: number[] = [];
   /** How many emitTick calls notified subscribers (C1). */
   tickNotifyCount = 0;
+  /** Count of resumeNarration calls (F3). */
+  resumeNarrationCalls = 0;
   /** Master gain after stopAll is ~0 until narration restores it (C4). */
   masterLinear = 1;
   private sessionClock = false;
   /** Models AudioContext suspended after fadeMasterAndSuspend / stopAll (C4). */
   private contextSuspended = false;
   private narrationVoiceId: string | null = null;
+  private narrationPaused = false;
+  private narrationPositionMs = 0;
   private tickSubs = new Set<(t: number) => void>();
   private voiceEndedSubs = new Set<
     (e: VoiceEndedEvent) => void | Promise<void>
@@ -95,7 +129,25 @@ export class FakeExploringEngine implements ExploringEngine {
   private remoteSubs = new Set<(c: RemoteCmd) => void>();
 
   async init(): Promise<void> {
-    // no-op
+    // Wire session remotes into engine subscribers (mirrors RNAudioApiEngine).
+    this.session.setRemoteHandler(async (command) => {
+      if (command === "play") {
+        for (const cb of this.remoteSubs) cb("play");
+        return;
+      }
+      if (command === "pause") {
+        for (const cb of this.remoteSubs) cb("pause");
+        return;
+      }
+      if (command === "skipBack") {
+        this.seekNarration(Math.max(0, this.narrationPositionMs - 10_000));
+        for (const cb of this.remoteSubs) cb("skipBackward");
+        return;
+      }
+      if (command === "stopExploring") {
+        for (const cb of this.remoteSubs) cb("stopExploring");
+      }
+    });
   }
 
   getSession(): AudioSessionController {
@@ -120,6 +172,7 @@ export class FakeExploringEngine implements ExploringEngine {
     void this.session.requestFocus();
     this.contextSuspended = false;
     this.masterLinear = 1;
+    this.narrationPaused = false;
 
     const id = `narr-${this.playedNarration.length + 1}`;
     this.narrationVoiceId = id;
@@ -145,11 +198,14 @@ export class FakeExploringEngine implements ExploringEngine {
   pauseNarration(): void {
     this.contextSuspended = true;
     this.masterLinear = 0.0001;
+    this.narrationPaused = true;
   }
 
   resumeNarration(): void {
+    this.resumeNarrationCalls += 1;
     this.contextSuspended = false;
     this.masterLinear = 1;
+    this.narrationPaused = false;
   }
 
   playOneShot(
@@ -195,6 +251,7 @@ export class FakeExploringEngine implements ExploringEngine {
 
   seekNarration(positionMs: number): void {
     this.seekCalls.push(positionMs);
+    this.narrationPositionMs = positionMs;
   }
 
   startSessionClock(): void {
@@ -213,6 +270,23 @@ export class FakeExploringEngine implements ExploringEngine {
 
   isContextSuspended(): boolean {
     return this.contextSuspended;
+  }
+
+  getMasterGainLinear(): number {
+    return this.masterLinear;
+  }
+
+  getNarrationDiag(): {
+    id: string;
+    paused: boolean;
+    positionMs: number;
+  } | null {
+    if (!this.narrationVoiceId) return null;
+    return {
+      id: this.narrationVoiceId,
+      paused: this.narrationPaused,
+      positionMs: this.narrationPositionMs,
+    };
   }
 
   onTick(cb: (ctxTimeSec: number) => void): () => void {
@@ -293,6 +367,7 @@ export class FakeExploringEngine implements ExploringEngine {
   }
 
   emitProgress(positionMs: number, durationMs: number): void {
+    this.narrationPositionMs = positionMs;
     for (const cb of this.progressSubs) cb({ positionMs, durationMs });
   }
 

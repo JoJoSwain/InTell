@@ -168,6 +168,10 @@ export async function setKv(db: SqlDriver, key: string, value: string): Promise<
   );
 }
 
+export async function deleteKv(db: SqlDriver, key: string): Promise<void> {
+  await db.run("DELETE FROM kv WHERE key = ?", [key]);
+}
+
 export async function upsertUnlock(
   db: SqlDriver,
   fragmentId: string,

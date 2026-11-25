@@ -1,8 +1,23 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
 import { Redirect } from "expo-router";
 import { installDemoGrove, installStressGrove } from "../../src/map/installFixtures";
-import { counts, fetchPreview, installGrove, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
+import {
+  counts,
+  fetchPreview,
+  installGrove,
+  signIn,
+  signOut,
+  syncNow,
+  type DataCounts,
+} from "../../src/runtime/dataLayer";
+import { useExploringRuntime } from "../../src/session/ExploringProvider";
 import { strings } from "../../src/ui/strings";
 
 /** Dev builds, or local USB walk release builds that bake cleartext to 127.0.0.1. */
@@ -17,12 +32,43 @@ export default function DataDevScreen() {
 }
 
 function DataDevBody() {
+  const runtime = useExploringRuntime();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [releaseId, setReleaseId] = useState("");
   const [groveId, setGroveId] = useState("");
   const [status, setStatus] = useState("Idle");
   const [tally, setTally] = useState<DataCounts | null>(null);
+  const [diagText, setDiagText] = useState("—");
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!runtime) {
+        setDiagText("runtime not ready");
+        return;
+      }
+      const s = runtime.getAudioDiagnosticsSnapshot();
+      const crumbs = s.breadcrumbs
+        .slice(-12)
+        .map((c) => `${new Date(c.at).toISOString().slice(11, 19)} ${c.message}`)
+        .join("\n");
+      const narr = s.narration
+        ? `${s.narration.id} paused=${s.narration.paused} posMs=${Math.round(s.narration.positionMs)}`
+        : "none";
+      setDiagText(
+        [
+          `ctx=${s.contextState} master=${s.masterGain.toFixed(3)}`,
+          `focus=${s.focusMode} busy=${s.busy} sessionStarted=${s.sessionStarted}`,
+          `narration: ${narr}`,
+          `director.suspended=${s.directorSuspended}`,
+          `session phase=${s.sessionPhase} playing=${s.playing}`,
+          "--- breadcrumbs ---",
+          crumbs || "(empty)",
+        ].join("\n"),
+      );
+    }, 500);
+    return () => clearInterval(id);
+  }, [runtime]);
 
   async function run(label: string, action: () => Promise<void>): Promise<void> {
     setStatus(label);
@@ -37,7 +83,7 @@ function DataDevBody() {
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root}>
       <Text style={styles.title}>Data layer</Text>
       <Text accessibilityRole="text">{status}</Text>
       {tally ? (
@@ -45,6 +91,23 @@ function DataDevBody() {
           {`Packs ${tally.packs}, assets ${tally.assets}, preview ${tally.preview}`}
         </Text>
       ) : null}
+      <Text style={styles.section}>{strings.audioDiagnostics}</Text>
+      <Text
+        accessibilityRole="text"
+        accessibilityLabel={strings.audioDiagnostics}
+        style={styles.diag}
+      >
+        {diagText}
+      </Text>
+      <DevButton
+        label={strings.resetSessionKeepPacks}
+        onPress={() =>
+          run("Resetting session", async () => {
+            if (!runtime) throw new Error("runtime not ready");
+            await runtime.resetSessionKeepPacks();
+          })
+        }
+      />
       <DevButton
         label="Sync"
         onPress={() => run("Syncing", () => syncNow("wifi", async () => true))}
@@ -102,7 +165,7 @@ function DataDevBody() {
         onPress={() => run("Fetching preview", () => fetchPreview(releaseId.trim()))}
       />
       <DevButton label="Sign out" onPress={() => run("Signing out", () => signOut())} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -115,8 +178,18 @@ function DevButton({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 24, gap: 12, backgroundColor: "#F6F2EA" },
+  root: { padding: 24, gap: 12, backgroundColor: "#F6F2EA" },
   title: { fontSize: 22, fontFamily: "Georgia", color: "#1F2419" },
+  section: { marginTop: 8, fontSize: 16, fontWeight: "600", color: "#1F2419" },
+  diag: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "#1F2419",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DDD6C7",
+  },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#DDD6C7",
