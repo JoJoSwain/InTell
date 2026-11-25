@@ -67,9 +67,14 @@ export class FakeExploringEngine implements ExploringEngine {
   playedNarration: { sha: string; title: string }[] = [];
   stopAllCalls: number[] = [];
   seekCalls: number[] = [];
+  /** How many emitTick calls notified subscribers (C1). */
+  tickNotifyCount = 0;
+  private sessionClock = false;
   private narrationVoiceId: string | null = null;
   private tickSubs = new Set<(t: number) => void>();
-  private voiceEndedSubs = new Set<(e: VoiceEndedEvent) => void>();
+  private voiceEndedSubs = new Set<
+    (e: VoiceEndedEvent) => void | Promise<void>
+  >();
   private progressSubs = new Set<
     (p: { positionMs: number; durationMs: number }) => void
   >();
@@ -155,12 +160,24 @@ export class FakeExploringEngine implements ExploringEngine {
     this.seekCalls.push(positionMs);
   }
 
+  startSessionClock(): void {
+    this.sessionClock = true;
+  }
+
+  stopSessionClock(): void {
+    this.sessionClock = false;
+  }
+
+  isSessionClockRunning(): boolean {
+    return this.sessionClock;
+  }
+
   onTick(cb: (ctxTimeSec: number) => void): () => void {
     this.tickSubs.add(cb);
     return () => this.tickSubs.delete(cb);
   }
 
-  onVoiceEnded(cb: (e: VoiceEndedEvent) => void): () => void {
+  onVoiceEnded(cb: (e: VoiceEndedEvent) => void | Promise<void>): () => void {
     this.voiceEndedSubs.add(cb);
     return () => this.voiceEndedSubs.delete(cb);
   }
@@ -203,13 +220,18 @@ export class FakeExploringEngine implements ExploringEngine {
     this.tickSubs.clear();
   }
 
-  /** Advance the fake audio clock and notify tick subscribers. */
+  /**
+   * Advance the fake audio clock and notify tick subscribers.
+   * No-op until `startSessionClock()` (C1) — mirrors production heartbeats.
+   */
   emitTick(audioSec: number): void {
+    if (!this.sessionClock) return;
     this.audioSec = audioSec;
+    this.tickNotifyCount += 1;
     for (const cb of this.tickSubs) cb(audioSec);
   }
 
-  emitVoiceEnded(partial?: Partial<VoiceEndedEvent>): void {
+  async emitVoiceEnded(partial?: Partial<VoiceEndedEvent>): Promise<void> {
     const e: VoiceEndedEvent = {
       voiceId: partial?.voiceId ?? this.narrationVoiceId ?? "narr-1",
       kind: partial?.kind ?? "narration",
@@ -217,7 +239,9 @@ export class FakeExploringEngine implements ExploringEngine {
       reason: partial?.reason ?? "ended",
     };
     this.narrationVoiceId = null;
-    for (const cb of this.voiceEndedSubs) cb(e);
+    await Promise.all(
+      [...this.voiceEndedSubs].map((cb) => Promise.resolve(cb(e))),
+    );
   }
 
   emitInterruption(phase: "began" | "ended"): void {

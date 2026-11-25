@@ -16,7 +16,9 @@ export type ExploringEngine = AudioEngine & {
   getSession: () => AudioSessionController;
   getContextCurrentTime: () => number;
   onTick: (cb: (ctxTimeSec: number) => void) => () => void;
-  onVoiceEnded: (cb: (e: VoiceEndedEvent) => void) => () => void;
+  onVoiceEnded: (
+    cb: (e: VoiceEndedEvent) => void | Promise<void>,
+  ) => () => void;
   onInterruption: (cb: (e: "began" | "ended") => void) => () => void;
   onRouteChange: (cb: (route: AudioRoute) => void) => () => void;
   onNarrationProgress: (
@@ -28,4 +30,7 @@ export type ExploringEngine = AudioEngine & {
   /** Fade-stop narration (session end). */
   stopAll?: (fadeMs: number) => Promise<void>;
   seekNarration?: (positionMs: number) => void;
+  /** C1: silent heartbeats while exploring (no focus, no tour loop). */
+  startSessionClock: () => void;
+  stopSessionClock: () => void;
 };

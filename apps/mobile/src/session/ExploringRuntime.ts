@@ -5,7 +5,6 @@ import { AppState, type AppStateStatus } from "react-native";
 import * as Haptics from "expo-haptics";
 import { randomUUID } from "expo-crypto";
 import {
-  DIRECTOR_HEARTBEAT_SEC,
   backSkipMs,
   currentTimeWindow,
   directorStep,
@@ -79,6 +78,8 @@ export class ExploringRuntime {
   private lastWindow: TimeWindow | null = null;
   private lastHeartbeatAudioSec = 0;
   private endingSession = false;
+  /** Prevents window sync from re-entering dispatch (C2). */
+  private inWindowSync = false;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -122,6 +123,11 @@ export class ExploringRuntime {
 
     await this.dispatchWindowIfNeeded(Date.now(), true);
 
+    // C1: resume while exploring — restart the session clock
+    if (this.session.phase === "exploring") {
+      this.deps.engine.startSessionClock();
+    }
+
     if (this.session.phase === "idle") {
       await this.deps.location.setMode("foreground");
     } else if (this.deps.location.isAppActive()) {
@@ -133,6 +139,7 @@ export class ExploringRuntime {
 
   dispose(): void {
     this.disposed = true;
+    this.deps.engine.stopSessionClock();
     this.appSub?.remove();
     for (const u of this.unsubs) u();
     this.unsubs = [];
@@ -163,7 +170,8 @@ export class ExploringRuntime {
     );
     this.unsubs.push(
       engine.onVoiceEnded((e) => {
-        void this.onVoiceEnded(e);
+        // Return the promise so fake engines can await the full chain in tests.
+        return this.onVoiceEnded(e);
       }),
     );
     this.unsubs.push(
@@ -336,6 +344,22 @@ export class ExploringRuntime {
     if (!this.packed) await this.reloadPacks();
     if (!this.packed) return;
 
+    // C2: recompute Day/Night before every step (not only on audio ticks).
+    if (!this.inWindowSync && event.type !== "windowChanged") {
+      this.inWindowSync = true;
+      try {
+        await this.dispatchWindowIfNeeded(
+          event.at,
+          this.lastWindow === null,
+        );
+      } finally {
+        this.inWindowSync = false;
+      }
+      if (!this.packed) return;
+    }
+
+    const wasExploring = this.session.phase === "exploring";
+
     const world = {
       ...this.packed.world,
       settings: {
@@ -349,6 +373,11 @@ export class ExploringRuntime {
     const result = stepSession(this.session, enriched, world);
     this.session = result.state;
     useSessionStore.getState().setSession(this.session, result.story);
+
+    // C1: start silent session clock when we become exploring
+    if (this.session.phase === "exploring" && !wasExploring) {
+      this.deps.engine.startSessionClock();
+    }
 
     await applySessionEffects(result.effects, {
       db: this.deps.db,
@@ -396,6 +425,15 @@ export class ExploringRuntime {
       }
     }
 
+    // C1 backup: session tick + afterglow on every accepted fix (GPS may outlive silent gaps)
+    if (
+      event.type === "fix" &&
+      this.session.phase === "exploring" &&
+      !this.endingSession
+    ) {
+      await this.runSessionTimers(event.at);
+    }
+
     // B4: only persist while exploring (or right after a transition that wrote effects)
     if (this.session.phase === "exploring" || result.effects.length > 0) {
       await setKv(this.deps.db, SESSION_KV_KEY, sessionJsonForDisk(this.session));
@@ -415,6 +453,8 @@ export class ExploringRuntime {
     if (this.endingSession) return;
     this.endingSession = true;
     try {
+      // C1: stop silent heartbeats
+      this.deps.engine.stopSessionClock();
       // B7: fade-stop narration, end media session, stop location ≤ 5 s
       if (this.deps.engine.stopAll) {
         await this.deps.engine.stopAll(400);
@@ -566,22 +606,30 @@ export class ExploringRuntime {
     }
   }
 
-  /** B4: engine audio-clock tick — session tick + director heartbeat only while exploring. */
-  private async onAudioClock(audioSec: number): Promise<void> {
+  /**
+   * Session tick + afterglow drain (C1). Used by the audio clock and as a
+   * backup on every accepted location fix.
+   */
+  private async runSessionTimers(at: number): Promise<void> {
     if (this.disposed || this.session.phase !== "exploring") return;
-    if (audioSec - this.lastHeartbeatAudioSec < DIRECTOR_HEARTBEAT_SEC - 0.05) {
-      // Still emit progress / afterglow checks less often via same path when due
-    }
-    this.lastHeartbeatAudioSec = audioSec;
-
-    await this.dispatchWindowIfNeeded(Date.now(), false);
-    await this.dispatch({ type: "tick", at: Date.now() });
-
-    if (this.session.afterglowEndsAt && Date.now() >= this.session.afterglowEndsAt) {
-      await this.dispatch({ type: "afterglowElapsed", at: Date.now() });
+    await this.dispatch({ type: "tick", at });
+    if (
+      this.session.afterglowEndsAt !== null &&
+      at >= this.session.afterglowEndsAt
+    ) {
+      await this.dispatch({ type: "afterglowElapsed", at });
       useSessionStore.getState().setAfterglow(null);
       useSessionStore.getState().setUnlockBanner(false);
     }
+  }
+
+  /** B4 / C1: engine audio-clock tick — session tick + director heartbeat while exploring. */
+  private async onAudioClock(audioSec: number): Promise<void> {
+    if (this.disposed || this.session.phase !== "exploring") return;
+    this.lastHeartbeatAudioSec = audioSec;
+    const at = Date.now();
+
+    await this.runSessionTimers(at);
 
     if (!this.packed) return;
     const groveId =
@@ -592,7 +640,7 @@ export class ExploringRuntime {
       {
         type: "heartbeat",
         audioSec,
-        wallAtMs: Date.now(),
+        wallAtMs: at,
       },
       world,
     );

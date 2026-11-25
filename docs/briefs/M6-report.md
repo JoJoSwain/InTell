@@ -1,53 +1,72 @@
-# Lane B · M6 report (review-1 fixes; pre–Pixel walk)
+# Lane B · M6 report (review-2 fixes; pre–Pixel walk)
 
-Branch `b/m6-narration-session`. Review-1 (B1–B8, R3) applied. Merged `origin/master` (A7b / PR #38). Preview uses `PreviewManifestDevice`. **Stopped before the Pixel walk for Claude’s check.**
+Branch `b/m6-narration-session`. Review-2 (C1–C3) applied on top of review-1. **Stopped before the Pixel walk for Claude’s check.**
 
 ## What’s wired now
 
 | Item | Status |
 |---|---|
-| **B1** One `RNAudioApiEngine` in `ExploringProvider` → `ExploringRuntime` | Done |
-| **B2** `voiceEnded` → session `narrationEnded` + director; progress → overlay; load fail → `assetFailed` | Done |
-| **B3** Interruptions + route → director; pause/resume only when playing; suspend filtered on focus path | Done |
-| **B4** Tick + director heartbeat from engine audio clock; kv only while exploring / on effects | Done |
-| **B5** `windowChanged` from region sun reference at start and on flip | Done |
-| **B6** High accuracy whole session; one location source (watch stopped while FGS runs); drop stale `at` | Done |
-| **B7** `sessionEnded` → `stopAll` fade, media session `stop`, location idle ≤ 5 s then foreground | Done |
-| **B8** `ExploringRuntime` tests with fake engine/location (9 cases) | Done |
-| **R3** Media3 custom “Stop exploring” `CommandButton` → `stopExploring` → session `stop` | Done (native; needs device confirm) |
-| **A7b** `PreviewManifestDevice` on preview path | Done (via master merge) |
+| Review-1 B1–B8, R3, A7b preview | Done (prior push) |
+| **C1** `startSessionClock` / `stopSessionClock` (silent heartbeats, no focus, no tour loop); start on exploring / resume; stop on `sessionEnded`; spike tour behind `spikeMode`; tick + afterglow on every fix; fake ticks only after clock start | Done |
+| **C2** Time window recomputed at the start of every `dispatch` | Done |
+| **C3** “Before the walk” steps below | Done |
 
-## Kept from review-1 “good” list
+## Before the walk (Jordan)
 
-Pack parsers, R1 kv scrub, R2 expo-location finding, overlay/teaser/settings UI, QR route, M6 world gate.
+Staging has no content, and the phone’s `.env` often has no Supabase URL. Do this **at home on Wi‑Fi before leaving** for Farmington.
+
+### 1. Which build
+
+- Install a **development client** on the Pixel (not Expo Go): from `apps/mobile`, with Android SDK + Maps keys already in `apps/mobile/.env`, run `pnpm exec expo run:android` (or your usual debug install of this branch).
+- Rebuild if native modules changed (`audio-session` Stop exploring). A JS-only OTA is not enough for that.
+
+### 2. Point the phone at Lane A’s local Supabase
+
+Lane A’s stack must already be up (`supabase start` / `pnpm db:setup-local` from **Lane A only**). Staging is empty — use local.
+
+1. On the PC, get the API URL and **Publishable** key: `pnpm exec supabase status` in Lane A.
+2. In `apps/mobile/.env` on this lane:
+   - `EXPO_PUBLIC_SUPABASE_URL` = the PC’s **LAN IP**, e.g. `http://192.168.x.x:54321` (not `127.0.0.1` — the phone cannot reach the PC that way). Same Wi‑Fi as the Pixel.
+   - Optional shortcut on USB: `adb reverse tcp:54321 tcp:54321` and use `http://127.0.0.1:54321` instead.
+   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = Publishable key from `supabase status` (not the anon/service role key).
+3. Rebuild or reload the app so env is picked up (`app.config` → Expo).
+
+### 3. Download the Farmington demo pack + audio
+
+1. Open **`intell://dev/data`** (or Dev → Data).
+2. Tap **Install grove** with grove id  
+   `aaaaaaaa-bbbb-4ccc-8ddd-000000000010`  
+   (Farmington demo from seed), **or** use Sync after a first install so the region pack follows.
+3. Wait until status is **Done**. Refresh counts: packs ≥ 2 (grove + region), **assets** > 0.
+4. **Do not** rely on **“Install demo grove”** for the walk — that fixture writes map manifests only (no real audio files). You need the published local pack + media from Supabase storage.
+
+### 4. Confirm it works offline
+
+1. Airplane mode (or turn Wi‑Fi off).
+2. Open the map home: Farmington markers still show; tapping a locked one still shows a teaser.
+3. Optional ear check at home: mock/fake location into a fragment radius if you have a mock-location build, or wait for the trail — either way, assets must already be on disk (`assets` count unchanged offline).
+
+### 5. On the trail — does the phone need the PC?
+
+**No.** Once packs and audio are installed, progress and playback are on-device. Leave the PC at home. Keep Wi‑Fi/cellular optional (map tiles / Embark need network; narration does not). Do not log or store home/origin coordinates.
+
+### Walk itself
+
+Farmington Bird Refuge / Eccles Wildlife Education Center trails (demo GPX loop). Ear-check: auto-start narration, afterglow → next story, pocket/lock, call interruption, notification **Stop exploring**.
 
 ## Tests / commands
 
-- `pnpm --filter @intell/mobile typecheck` — green
-- `pnpm --filter @intell/mobile lint` — green (pre-existing spike `require` warning; array-type warnings cleaned in new files)
-- `pnpm --filter @intell/mobile test` — **99** tests green
-  - Shell GPX harness (`gpxAcceptance.test.ts`) — shared-machine + effects path
-  - **Runtime** (`ExploringRuntime.test.ts`) — fake engine: play → end → completion → afterglow → next; interruption; location-denied scan; accessible; session end; contingency/correction
-
-## Emulator GPX / AVD
-
-No AVD created this pass. Runtime tests + Pixel walk stand in for Maestro-on-AVD UI. Shell GPX acceptance still passes as a pure-logic walk of `demo-route.gpx`.
-
-## Pixel walk pack (no home coords)
-
-- **Pack:** seeded **Farmington Bird Refuge** demo grove (`supabase/fixtures/farmington-bird-refuge.json` → published demo pack). Trail + fragments are at the George S. and Dolores Doré Eccles Wildlife Education Center, Farmington, UT.
-- **Where:** fragments sit on the demo trail loop around the refuge (Frags 1–10; Frag 9 physical `DEMO-001`; Frag 8 day-only; Frag 10 contingency; Frag 4 correction). GPX: `apps/mobile/e2e/demo-route.gpx`.
-- **Can Jordan walk there?** Yes — public refuge / education-center trails. Walk the GPX-ish loop on site with the installed demo pack; ear-confirm narration, pocket/lock, call interruption, and notification **Stop exploring**.
-- **Do not** log or commit anyone’s home location; Embark origin still must not be stored.
+- `pnpm lint && pnpm typecheck && pnpm test` — green
+- Mobile: session-clock tests + spikeMode gate tests added
 
 ## Still open / not claimed
 
-1. **PSS (G7)** — needs a release/dev build on emulator or Pixel; record on the walk.
-2. **R3 on device** — Kotlin `CommandButton` + custom command is in `audio-session`; confirm it appears on lock screen / notification on the Pixel build (rebuild native module).
-3. **R6 remote resume timing** — measure on Pixel before tightening retries.
-4. **Accuracy (G1)** — still 25 m until the walk retunes.
-5. **No home coords** in this report or logs.
+1. **PSS (G7)** — record on the walk.
+2. **R3 on device** — confirm Stop exploring on lock screen / notification after native rebuild.
+3. **R6** remote resume timing — measure on Pixel.
+4. **Accuracy (G1)** — 25 m until field retune.
+5. No AVD Maestro run this pass.
 
 ## Next
 
-Claude reviews this push. Then Pixel walk with Jordan. Then final report if needed.
+Claude reviews this push. Then Pixel walk with Jordan.

@@ -25,6 +25,7 @@ import {
 import { AppState, type AppStateStatus } from "react-native";
 import { BufferLruCache } from "./lruCache";
 import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
+import { shouldRunTourLoop } from "./spikeGate";
 import {
   AudioSessionController,
   shouldDemoteSessionOnSuspend,
@@ -112,6 +113,16 @@ export class RNAudioApiEngine implements AudioEngine {
   private mixContextStartSec: number | null = null;
   private initWallMs = 0;
   private mixActive = false;
+  /**
+   * Production exploring clock (C1). Silent heartbeats only — no focus, no tour loop.
+   * Independent of `mixActive` (spike).
+   */
+  private sessionClockActive = false;
+  /**
+   * Spike-only paths (tour loop, tour narration template). Set by `enableSpikeMode`
+   * / `prepareMixStart`. Production ExploringRuntime never enables this.
+   */
+  private spikeMode = false;
   /** Linear master multiplier while ducked (1 = unducked). */
   private duckFactor = 1;
   private unduckedMasterLinear = 1;
@@ -287,6 +298,7 @@ export class RNAudioApiEngine implements AudioEngine {
     this.mixWallStartMs = Date.now();
     this.mixContextStartSec = ctx.currentTime;
     this.mixActive = true;
+    this.spikeMode = true;
     this.clockWindowWallStartMs = Date.now();
     this.clockWindowContextStartSec = ctx.currentTime;
     this.clockRateLowWindows = 0;
@@ -294,6 +306,35 @@ export class RNAudioApiEngine implements AudioEngine {
     this.requestFocus();
     this.ensureHeartbeats();
     this.tick();
+  }
+
+  /**
+   * Exploring session audio clock (C1). Schedules silent heartbeats so `onTick`
+   * keeps firing while exploring — including during afterglow with no narration.
+   * Does **not** request audio focus (entering a grove must not pause a podcast).
+   * Does **not** enable the B·S2 tour loop.
+   */
+  startSessionClock(): void {
+    this.sessionClockActive = true;
+    this.ensureHeartbeats();
+    this.tick();
+  }
+
+  stopSessionClock(): void {
+    this.sessionClockActive = false;
+  }
+
+  isSessionClockRunning(): boolean {
+    return this.sessionClockActive;
+  }
+
+  /** Spike screen only — enables tour-loop / tour-template behaviour. */
+  enableSpikeMode(enabled = true): void {
+    this.spikeMode = enabled;
+  }
+
+  isSpikeMode(): boolean {
+    return this.spikeMode;
   }
 
   startHeartbeats(): void {
@@ -600,7 +641,8 @@ export class RNAudioApiEngine implements AudioEngine {
     void this.showNotification(meta, "playing", offsetSec * 1000, internal.durationMs);
     this.requestFocus();
 
-    if (this.mixActive) {
+    // Tour auto-replay is spike-only (C1). Production never sets spikeMode.
+    if (this.spikeMode) {
       this.tourNarrationTemplate = { h, meta };
       this.lastTourNarrationStartSec = when;
       console.log("[audio-spike] tourNarrationStart", { whenSec: when });
@@ -1228,7 +1270,7 @@ export class RNAudioApiEngine implements AudioEngine {
 
       for (const cb of this.tickSubs) cb(now);
 
-      if (this.mixActive || this.settledPending) {
+      if (this.mixActive || this.settledPending || this.sessionClockActive) {
         this.ensureHeartbeats();
       }
     } finally {
@@ -1261,11 +1303,20 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   private maybeRunTourLoop(nowSec: number): void {
-    if (!this.mixActive || !this.tourNarrationTemplate) return;
+    if (
+      !shouldRunTourLoop(
+        this.spikeMode,
+        this.mixActive,
+        this.tourNarrationTemplate != null,
+      )
+    ) {
+      return;
+    }
     if (nowSec - this.lastTourNarrationStartSec < TOUR_NARRATION_PERIOD_SEC) {
       return;
     }
     const template = this.tourNarrationTemplate;
+    if (!template) return;
     console.log("[audio-spike] tourNarrationRestart", { atSec: nowSec });
     this.playNarration(template.h, template.meta, 0);
   }

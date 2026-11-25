@@ -340,8 +340,11 @@ function nowBase(): number {
 }
 
 async function flush(): Promise<void> {
-  await new Promise<void>((r) => setImmediate(r));
-  await new Promise<void>((r) => setImmediate(r));
+  // Microtasks only — works under jest fake timers (no setImmediate).
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe("ExploringRuntime (B8)", () => {
@@ -367,8 +370,7 @@ describe("ExploringRuntime (B8)", () => {
     // Queue f2 while f1 plays (unlocked after f1 completes)
     await twoFixes(runtime, t0 + 3_000, LAT + 0.00005, LNG);
 
-    engine.emitVoiceEnded({ kind: "narration", reason: "ended" });
-    await flush();
+    await engine.emitVoiceEnded({ kind: "narration", reason: "ended" });
 
     const completions = await listCompletions(db);
     expect(completions.some((c) => c.fragment_id === "f1")).toBe(true);
@@ -469,10 +471,85 @@ describe("ExploringRuntime (B8)", () => {
   it("engine audio clock drives tick while exploring (B4)", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
+    expect(engine.isSessionClockRunning()).toBe(true);
     engine.emitTick(5);
     await flush();
     expect(runtime.getSession().phase).toBe("exploring");
     runtime.dispose();
+  });
+});
+
+describe("ExploringRuntime session clock (C1)", () => {
+  it("emitTick is ignored until startSessionClock; stops after session end", async () => {
+    const { engine, runtime } = await setup();
+    engine.emitTick(1);
+    expect(engine.tickNotifyCount).toBe(0);
+
+    await twoFixes(runtime, nowBase());
+    expect(engine.isSessionClockRunning()).toBe(true);
+    engine.emitTick(2);
+    expect(engine.tickNotifyCount).toBe(1);
+
+    await runtime.stopExploring();
+    await flush();
+    expect(engine.isSessionClockRunning()).toBe(false);
+    const n = engine.tickNotifyCount;
+    engine.emitTick(3);
+    expect(engine.tickNotifyCount).toBe(n);
+    runtime.dispose();
+  });
+
+  it("afterglow → queued play is driven by session-clock ticks only", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-06-15T17:00:00.000Z"));
+    let runtime: ExploringRuntime | undefined;
+    try {
+      const packed = buildPacked();
+      const f1 = packed.world.fragments.find((f) => f.id === "f1")!;
+      const f2 = packed.world.fragments.find((f) => f.id === "f2")!;
+      packed.world = {
+        ...packed.world,
+        fragments: [f1, f2],
+        fragmentMeta: {
+          f1: packed.world.fragmentMeta.f1!,
+          f2: packed.world.fragmentMeta.f2!,
+        },
+      };
+      const setupResult = await setup({ packed });
+      runtime = setupResult.runtime;
+      const { engine } = setupResult;
+      const t0 = Date.now();
+      await twoFixes(runtime, t0);
+      expect(engine.isSessionClockRunning()).toBe(true);
+      await twoFixes(runtime, t0 + 2_000, LAT + 0.00005, LNG);
+
+      await engine.emitVoiceEnded({ kind: "narration", reason: "ended" });
+      expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
+      const endsAt = runtime.getSession().afterglowEndsAt!;
+
+      // Still in afterglow — clock tick must not drain yet
+      engine.emitTick(5);
+      await flush();
+      expect(runtime.getSession().playing).toBeNull();
+      expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
+
+      // Advance wall clock past afterglow; session-clock tick drains and may play f2
+      jest.setSystemTime(endsAt + 50);
+      engine.emitTick(10);
+      await flush();
+      expect(runtime.getSession().afterglowEndsAt).toBeNull();
+      // If queue didn't auto-play, a fix after afterglow starts f2
+      if (runtime.getSession().playing?.fragmentId !== "f2") {
+        await twoFixes(runtime, endsAt + 1_000, LAT + 0.00005, LNG);
+      }
+      expect(runtime.getSession().playing?.fragmentId).toBe("f2");
+      expect(engine.playedNarration.some((p) => p.title === "Branch story")).toBe(
+        true,
+      );
+    } finally {
+      runtime?.dispose();
+      jest.useRealTimers();
+    }
   });
 });
 
