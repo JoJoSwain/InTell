@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { L10n } from "./l10n";
+import {
+  musicConditionSchema,
+  stemRulePackSchema,
+  type PackObjMode,
+} from "./music";
 
 const Uuid = z.string().uuid();
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/);
@@ -29,37 +34,9 @@ const GeoJsonMultiPolygon = z.object({
 });
 
 /** Builders use strict; device parsers strip unknown keys at every object level. */
-type PackObjMode = "strict" | "device";
-
 function packObj<T extends z.ZodRawShape>(shape: T, mode: PackObjMode) {
   const base = z.object(shape);
   return mode === "strict" ? base.strict() : base.strip();
-}
-
-function musicCondition(mode: PackObjMode) {
-  return packObj(
-    {
-      threadIds: z.array(z.string().uuid()).optional(),
-      tiers: z.array(z.enum(["root", "branch", "leaf"])).optional(),
-      heardAll: z.array(z.string().uuid()).optional(),
-      heardAny: z.array(z.string().uuid()).optional(),
-      notHeard: z.array(z.string().uuid()).optional(),
-      narrationPlaying: z.boolean().optional(),
-      minDepthM: z.number().nonnegative().optional(),
-      insideTierBuffer: z.enum(["root", "branch", "leaf"]).optional(),
-    },
-    mode,
-  );
-}
-
-function stemRulePack(mode: PackObjMode) {
-  return packObj(
-    {
-      when: musicCondition(mode),
-      gainDb: z.number(),
-    },
-    mode,
-  );
 }
 
 function makePackSchemas(mode: PackObjMode) {
@@ -68,7 +45,7 @@ function makePackSchemas(mode: PackObjMode) {
       assetSha: Sha256,
       role: z.string(),
       gainDb: z.number(),
-      stateGains: z.array(stemRulePack(mode)),
+      stateGains: z.array(stemRulePackSchema(mode)),
       loopStartMs: z.number().int().nullable().optional(),
       loopEndMs: z.number().int().nullable().optional(),
     },
@@ -269,7 +246,7 @@ function makePackSchemas(mode: PackObjMode) {
                 edgeFadeM: z.number().optional(),
                 timeWindow: TimeWindow,
                 priority: z.number().int(),
-                conditions: musicCondition(mode),
+                conditions: musicConditionSchema(mode),
                 minDwellS: z.number(),
                 crossfadeMs: z.number().int(),
                 resolveRootAssetSha: Sha256.optional(),
@@ -432,7 +409,7 @@ function makePackSchemas(mode: PackObjMode) {
             zoneId: Uuid.optional(),
             timeWindow: TimeWindow,
             priority: z.number().int(),
-            conditions: musicCondition(mode),
+            conditions: musicConditionSchema(mode),
             minDwellS: z.number(),
             crossfadeMs: z.number().int(),
             stems: z.array(PackStem),

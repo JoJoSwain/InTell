@@ -362,15 +362,10 @@ describe("GrovePackDevice deep strip", () => {
     { path: "questions.0", label: "questions[]" },
     { path: "music", label: "music" },
     { path: "music.cues.0", label: "music.cues[]" },
-    { path: "music.cues.0.conditions", label: "music.cues[].conditions" },
     { path: "music.cues.0.stems.0", label: "music.cues[].stems[]" },
     {
       path: "music.cues.0.stems.0.stateGains.0",
       label: "music.cues[].stems[].stateGains[]",
-    },
-    {
-      path: "music.cues.0.stems.0.stateGains.0.when",
-      label: "music.cues[].stems[].stateGains[].when",
     },
     { path: "soundCues.0", label: "soundCues[]" },
     { path: "ambienceZones.0", label: "ambienceZones[]" },
@@ -399,6 +394,25 @@ describe("GrovePackDevice deep strip", () => {
     };
     expect(() => GrovePackDevice.parse(bad)).toThrow(/radiusM/i);
   });
+
+  it("turns unknown cue condition keys into neverMatch", () => {
+    const dirty = withUnknownAt(richGrove, "music.cues.0.conditions");
+    expect(() => GrovePack.parse(dirty)).toThrow();
+    const parsed = GrovePackDevice.parse(dirty);
+    expect(parsed.music.cues[0]?.conditions).toEqual({ neverMatch: true });
+  });
+
+  it("turns unknown stem when keys into neverMatch", () => {
+    const dirty = withUnknownAt(
+      richGrove,
+      "music.cues.0.stems.0.stateGains.0.when",
+    );
+    expect(() => GrovePack.parse(dirty)).toThrow();
+    const parsed = GrovePackDevice.parse(dirty);
+    expect(parsed.music.cues[0]?.stems[0]?.stateGains[0]?.when).toEqual({
+      neverMatch: true,
+    });
+  });
 });
 
 describe("RegionPackDevice deep strip", () => {
@@ -412,15 +426,10 @@ describe("RegionPackDevice deep strip", () => {
     { path: "ambienceZones.0", label: "ambienceZones[]" },
     { path: "musicZones.0", label: "musicZones[]" },
     { path: "musicCues.0", label: "musicCues[]" },
-    { path: "musicCues.0.conditions", label: "musicCues[].conditions" },
     { path: "musicCues.0.stems.0", label: "musicCues[].stems[]" },
     {
       path: "musicCues.0.stems.0.stateGains.0",
       label: "musicCues[].stems[].stateGains[]",
-    },
-    {
-      path: "musicCues.0.stems.0.stateGains.0.when",
-      label: "musicCues[].stems[].stateGains[].when",
     },
     { path: "uiCues.0", label: "uiCues[]" },
     { path: "assets.0", label: "assets[]" },
@@ -431,6 +440,13 @@ describe("RegionPackDevice deep strip", () => {
       expectDeviceStrips(RegionPack, RegionPackDevice, richRegion, path);
     });
   }
+
+  it("turns unknown region cue condition keys into neverMatch", () => {
+    const dirty = withUnknownAt(richRegion, "musicCues.0.conditions");
+    expect(() => RegionPack.parse(dirty)).toThrow();
+    const parsed = RegionPackDevice.parse(dirty);
+    expect(parsed.musicCues[0]?.conditions).toEqual({ neverMatch: true });
+  });
 });
 
 describe("PreviewManifestDevice deep strip", () => {
