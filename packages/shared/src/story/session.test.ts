@@ -202,6 +202,14 @@ describe("proximity and accessible", () => {
       fragmentId: "f1",
       via: "proximity",
     });
+    expect(
+      second.effects.find(
+        (e) => e.type === "analytics" && e.name === "fragment_triggered",
+      ),
+    ).toMatchObject({
+      props: { trigger: "proximity", time_window: "day" },
+      refs: { fragmentId: "f1", sessionId: "s" },
+    });
   });
 
   it("accessible: a single fix within 35 ft starts play", () => {
@@ -473,12 +481,25 @@ describe("natural end effect order", () => {
       "writeUnlocks",
       "metCharacters",
       "analytics",
+      "analytics",
+      "analytics",
       "startAfterglow",
     ]);
     expect(effects.find((e) => e.type === "writeUnlocks")).toMatchObject({
       // f1 has empty requires → shouldWriteUnlock; f2 unlocks from f1's completion
       fragmentIds: ["f1", "f2"],
     });
+    const analytics = effects.filter((e) => e.type === "analytics");
+    expect(analytics[0]).toMatchObject({
+      name: "fragment_completed",
+      props: { time_window: "day", change_kind: null },
+      refs: { fragmentId: "f1", sessionId: "s" },
+    });
+    expect(analytics.map((e) => e.type === "analytics" && e.name)).toEqual([
+      "fragment_completed",
+      "fragment_unlocked",
+      "fragment_unlocked",
+    ]);
     expect(effects.find((e) => e.type === "startAfterglow")).toMatchObject({
       endsAt: 3_000 + AFTERGLOW_MS,
       fragmentId: "f1",

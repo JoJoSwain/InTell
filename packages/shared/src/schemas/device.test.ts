@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { RegisterDeviceRequest, RegisterDeviceResponse } from "./device";
+import {
+  DeleteDeviceDataRequest,
+  DeleteDeviceDataResponse,
+  ExportArchiveRequest,
+  RegisterDeviceRequest,
+  RegisterDeviceResponse,
+} from "./device";
 
 const deviceId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 
@@ -62,5 +68,37 @@ describe("RegisterDeviceResponse", () => {
       firstSeenAt: "2026-11-22T20:00:00.000Z",
     });
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe("DeleteDeviceDataRequest", () => {
+  it("accepts a v4 device id", () => {
+    expect(DeleteDeviceDataRequest.parse({ deviceId }).deviceId).toBe(deviceId);
+  });
+});
+
+describe("DeleteDeviceDataResponse", () => {
+  it("requires counts and device: 1", () => {
+    const parsed = DeleteDeviceDataResponse.parse({
+      ok: true,
+      events: 0,
+      journalEntries: 0,
+      checkins: 0,
+      voiceFiles: 0,
+      rateLimits: 0,
+      device: 1,
+    });
+    expect(parsed.device).toBe(1);
+  });
+});
+
+describe("ExportArchiveRequest", () => {
+  it("accepts an empty body or a region id", () => {
+    expect(ExportArchiveRequest.parse({})).toEqual({});
+    expect(
+      ExportArchiveRequest.parse({
+        regionId: "aaaaaaaa-bbbb-4ccc-8ddd-000000000001",
+      }).regionId,
+    ).toBe("aaaaaaaa-bbbb-4ccc-8ddd-000000000001");
   });
 });

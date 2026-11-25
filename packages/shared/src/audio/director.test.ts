@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { AFTERGLOW_MS } from "./DuckingPolicy";
 import { resumePointMs } from "./breath";
 import {
-  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
-  DIRECTOR_ACCENT_MAX_PENDING,
   directorStep,
   diffMix,
   emptyTargetMix,
@@ -20,6 +18,10 @@ import {
   HUSH_FADE_OUT_MS,
   HUSH_TRIGGER_FADE_MS,
 } from "./hush";
+import {
+  ONESHOT_LOOKAHEAD_SEC,
+  ONESHOT_MAX_PENDING,
+} from "./oneshotSchedule";
 import {
   MIX_RECOVER_STEP_MS,
   MIX_SHED_AFTER_WINDOWS,
@@ -266,9 +268,9 @@ function momentSha(commands: DirectorCommand[], state: DirectorState): string | 
 }
 
 describe("director constants", () => {
-  it("uses distinct accent horizon names", () => {
-    expect(DIRECTOR_ACCENT_LOOKAHEAD_SEC).toBe(20);
-    expect(DIRECTOR_ACCENT_MAX_PENDING).toBe(2);
+  it("uses oneshotSchedule as the single accent-horizon source", () => {
+    expect(ONESHOT_LOOKAHEAD_SEC).toBe(20);
+    expect(ONESHOT_MAX_PENDING).toBe(2);
   });
 });
 
@@ -498,12 +500,12 @@ describe("4. accent gating", () => {
       wallAtMs: T0 + 3000,
     }));
     expect(state.pendingAccents.length).toBeLessThanOrEqual(
-      DIRECTOR_ACCENT_MAX_PENDING,
+      ONESHOT_MAX_PENDING,
     );
     for (const a of state.pendingAccents) {
       expect(a.whenSec).toBeGreaterThan(state.audioClockSec);
       expect(a.whenSec).toBeLessThanOrEqual(
-        state.audioClockSec + DIRECTOR_ACCENT_LOOKAHEAD_SEC,
+        state.audioClockSec + ONESHOT_LOOKAHEAD_SEC,
       );
     }
 
@@ -520,11 +522,11 @@ describe("4. accent gating", () => {
       wallAtMs: T0 + 5000,
     }));
     expect(state.pendingAccents.length).toBeLessThanOrEqual(
-      DIRECTOR_ACCENT_MAX_PENDING,
+      ONESHOT_MAX_PENDING,
     );
     for (const a of state.pendingAccents) {
       expect(a.whenSec - state.audioClockSec).toBeLessThanOrEqual(
-        DIRECTOR_ACCENT_LOOKAHEAD_SEC,
+        ONESHOT_LOOKAHEAD_SEC,
       );
     }
   });

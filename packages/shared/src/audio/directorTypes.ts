@@ -23,10 +23,6 @@ import { initialThresholdMotifState } from "./thresholdMotif";
 import { initialLockedTeaserState } from "./lockedTeaser";
 import { initialMixLevelState } from "./mixHealth";
 
-/** Director-only accent horizon (do not collide with B·S2 oneshotSchedule). */
-export const DIRECTOR_ACCENT_LOOKAHEAD_SEC = 20;
-export const DIRECTOR_ACCENT_MAX_PENDING = 2;
-
 export const DIRECTOR_HEARTBEAT_SEC = 5;
 
 export type DirectorMusicCue = MusicCueInput & {
