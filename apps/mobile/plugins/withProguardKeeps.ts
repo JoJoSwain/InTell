@@ -26,6 +26,11 @@ ${MARKER}
 
 # Local audio-session module (Media3 + Expo modules)
 -keep class expo.modules.audiosession.** { *; }
+
+# Do not strip InTellAudio Log.w breadcrumbs (R8 often strips Log.i/v/d only)
+-keepclassmembers class android.util.Log {
+    public static *** w(...);
+}
 `;
 
 const withProguardKeeps: ConfigPlugin = (config) =>

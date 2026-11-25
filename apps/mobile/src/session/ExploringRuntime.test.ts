@@ -776,3 +776,112 @@ describe("ExploringRuntime single resume (F3)", () => {
   });
 });
 
+describe("ExploringRuntime replaced narration voice (RC6)", () => {
+  it("interruption remount keeps playing with a new live voice", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    const playsBefore = engine.playedNarration.length;
+    const voiceBefore = engine.getNarrationDiag()?.id;
+    expect(voiceBefore).toBeTruthy();
+
+    engine.emitInterruption("began");
+    await flush();
+    engine.emitInterruption("ended");
+    await flush();
+
+    expect(runtime.getSession().playing).not.toBeNull();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    expect(engine.playedNarration.length).toBeGreaterThan(playsBefore);
+    const voiceAfter = engine.getNarrationDiag()?.id;
+    expect(voiceAfter).toBeTruthy();
+    expect(voiceAfter).not.toBe(voiceBefore);
+    runtime.dispose();
+  });
+
+  it("Back 10 s keeps playing after the remount", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    engine.emitProgress(12_000, 60_000);
+    await flush();
+    const voiceBefore = engine.getNarrationDiag()?.id;
+    const playsBefore = engine.playedNarration.length;
+
+    runtime.skipBack();
+    await flush();
+
+    expect(runtime.getSession().playing).not.toBeNull();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    expect(engine.seekCalls.length).toBeGreaterThan(0);
+    expect(engine.playedNarration.length).toBeGreaterThan(playsBefore);
+    expect(engine.getNarrationDiag()?.id).not.toBe(voiceBefore);
+    runtime.dispose();
+  });
+
+  it("user pause/resume keeps playing", async () => {
+    const { runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+
+    await runtime.togglePause();
+    await flush();
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    await runtime.togglePause();
+    await flush();
+    expect(runtime.getSession().playing).not.toBeNull();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    runtime.dispose();
+  });
+
+  it("remote pause/play keeps playing", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+
+    await engine.session.emitRemote("pause");
+    await flush();
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    await engine.session.emitRemote("play");
+    await flush();
+    expect(runtime.getSession().playing).not.toBeNull();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    runtime.dispose();
+  });
+
+  it("natural end fires narrationEnded once then completion and afterglow", async () => {
+    const { db, engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    const currentId = engine.getNarrationDiag()?.id;
+    expect(currentId).toBeTruthy();
+
+    await engine.emitVoiceEnded({
+      voiceId: currentId!,
+      kind: "narration",
+      reason: "ended",
+    });
+    await flush();
+
+    expect(runtime.getSession().playing).toBeNull();
+    const completions = await listCompletions(db);
+    expect(completions.some((c) => c.fragment_id === "f1")).toBe(true);
+    expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
+
+    // A stale cancelled end from a replaced voice must not double-complete.
+    const before = completions.length;
+    await engine.emitVoiceEnded({
+      voiceId: "narr-stale",
+      kind: "narration",
+      reason: "cancelled",
+    });
+    await flush();
+    const after = await listCompletions(db);
+    expect(after.length).toBe(before);
+    runtime.dispose();
+  });
+});
+

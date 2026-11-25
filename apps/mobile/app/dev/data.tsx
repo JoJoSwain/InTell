@@ -55,11 +55,16 @@ function DataDevBody() {
       const narr = s.narration
         ? `${s.narration.id} paused=${s.narration.paused} posMs=${Math.round(s.narration.positionMs)}`
         : "none";
+      const out =
+        s.outDb != null && Number.isFinite(s.outDb)
+          ? `${Math.round(s.outDb)} dB`
+          : "n/a";
       setDiagText(
         [
           `ctx=${s.contextState} master=${s.masterGain.toFixed(3)}`,
           `focus=${s.focusMode} busy=${s.busy} sessionStarted=${s.sessionStarted}`,
           `narration: ${narr}`,
+          `out=${out}`,
           `director.suspended=${s.directorSuspended}`,
           `session phase=${s.sessionPhase} playing=${s.playing}`,
           "--- breadcrumbs ---",

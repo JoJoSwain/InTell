@@ -117,6 +117,10 @@ export class FakeExploringEngine implements ExploringEngine {
   private narrationVoiceId: string | null = null;
   private narrationPaused = false;
   private narrationPositionMs = 0;
+  private lastNarration: { h: BufferHandle; meta: NowPlayingMeta } | null =
+    null;
+  /** Simulated master RMS dBFS while a narration voice is live. */
+  private outputLevelDb = -90;
   private tickSubs = new Set<(t: number) => void>();
   private voiceEndedSubs = new Set<
     (e: VoiceEndedEvent) => void | Promise<void>
@@ -166,7 +170,7 @@ export class FakeExploringEngine implements ExploringEngine {
   playNarration(
     h: BufferHandle,
     meta: NowPlayingMeta,
-    _startAtMs?: number,
+    startAtMs?: number,
   ): VoiceHandle {
     // C4 narration start: focus → resume → restore master (prepareMixStart minus spike).
     void this.session.requestFocus();
@@ -174,9 +178,24 @@ export class FakeExploringEngine implements ExploringEngine {
     this.masterLinear = 1;
     this.narrationPaused = false;
 
+    // RC6: replacing a live narration stops the old voice as "cancelled".
+    const previousId = this.narrationVoiceId;
     const id = `narr-${this.playedNarration.length + 1}`;
     this.narrationVoiceId = id;
+    this.lastNarration = { h, meta };
+    if (startAtMs != null) this.narrationPositionMs = startAtMs;
     this.playedNarration.push({ sha: h.sha, title: meta.title });
+    this.outputLevelDb = -25;
+    if (previousId) {
+      queueMicrotask(() => {
+        void this.emitVoiceEndedKeepCurrent({
+          voiceId: previousId,
+          kind: "narration",
+          reason: "cancelled",
+          appState: "active",
+        });
+      });
+    }
     return { id };
   }
 
@@ -199,6 +218,7 @@ export class FakeExploringEngine implements ExploringEngine {
     this.contextSuspended = true;
     this.masterLinear = 0.0001;
     this.narrationPaused = true;
+    this.outputLevelDb = -90;
   }
 
   resumeNarration(): void {
@@ -206,6 +226,7 @@ export class FakeExploringEngine implements ExploringEngine {
     this.contextSuspended = false;
     this.masterLinear = 1;
     this.narrationPaused = false;
+    if (this.narrationVoiceId) this.outputLevelDb = -25;
   }
 
   playOneShot(
@@ -243,15 +264,28 @@ export class FakeExploringEngine implements ExploringEngine {
 
   async stopAll(fadeMs: number): Promise<void> {
     this.stopAllCalls.push(fadeMs);
+    const previousId = this.narrationVoiceId;
     this.narrationVoiceId = null;
+    this.outputLevelDb = -90;
     // fadeMasterAndSuspend: context suspended, master ~0
     this.contextSuspended = true;
     this.masterLinear = 0.0001;
+    if (previousId) {
+      await this.emitVoiceEndedKeepCurrent({
+        voiceId: previousId,
+        kind: "narration",
+        reason: "cancelled",
+        appState: "active",
+      });
+    }
   }
 
   seekNarration(positionMs: number): void {
     this.seekCalls.push(positionMs);
     this.narrationPositionMs = positionMs;
+    // RC6: real engine remounts via playNarration (old voice → cancelled).
+    if (!this.lastNarration) return;
+    this.playNarration(this.lastNarration.h, this.lastNarration.meta, positionMs);
   }
 
   startSessionClock(): void {
@@ -274,6 +308,10 @@ export class FakeExploringEngine implements ExploringEngine {
 
   getMasterGainLinear(): number {
     return this.masterLinear;
+  }
+
+  getOutputLevelDb(): number | null {
+    return this.outputLevelDb;
   }
 
   getNarrationDiag(): {
@@ -356,7 +394,15 @@ export class FakeExploringEngine implements ExploringEngine {
       appState: partial?.appState ?? "active",
       reason: partial?.reason ?? "ended",
     };
-    this.narrationVoiceId = null;
+    if (e.kind === "narration" && e.voiceId === this.narrationVoiceId) {
+      this.narrationVoiceId = null;
+      this.outputLevelDb = -90;
+    }
+    await this.emitVoiceEndedKeepCurrent(e);
+  }
+
+  /** Emit without clearing the current narration voice id (RC6 replacements). */
+  private async emitVoiceEndedKeepCurrent(e: VoiceEndedEvent): Promise<void> {
     await Promise.all(
       [...this.voiceEndedSubs].map((cb) => Promise.resolve(cb(e))),
     );

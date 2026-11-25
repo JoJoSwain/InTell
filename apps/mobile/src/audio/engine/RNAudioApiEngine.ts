@@ -17,6 +17,7 @@ import {
   AudioContext,
   AudioManager,
   decodeAudioData,
+  type AnalyserNode,
   type AudioBuffer,
   type AudioBufferSourceNode,
   type GainNode,
@@ -97,6 +98,9 @@ function enforceMinFade(fadeMs: number): number {
 export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Master-bus analyser for output-level diagnostics (review 5). */
+  private analyser: AnalyserNode | null = null;
+  private analyserTimeDomain: Float32Array | null = null;
   private buses: Partial<Record<BusId, GainNode>> = {};
   private cache: BufferLruCache | null = null;
   private voices = new Map<string, VoiceState>();
@@ -209,7 +213,11 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
 
     const master = context.createGain();
     master.gain.value = 1;
-    master.connect(context.destination);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
+    master.connect(analyser);
+    analyser.connect(context.destination);
 
     const busIds: BusId[] = ["story", "music", "surroundings", "ui"];
     const buses: Partial<Record<BusId, GainNode>> = {};
@@ -228,6 +236,8 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
 
     this.context = context;
     this.master = master;
+    this.analyser = analyser;
+    this.analyserTimeDomain = new Float32Array(analyser.fftSize);
     this.buses = buses;
     this.cache = new BufferLruCache(context.sampleRate);
     this.silentBuffer = silent;
@@ -649,8 +659,11 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
       console.log("[audio-spike] tourNarrationStart", { whenSec: when });
     }
 
+    // RC6: explicit stop/replace must report "cancelled", never "ended".
     source.onended = () => {
-      this.releaseVoice(voiceId, "ended", { missedSweep: false });
+      const live = this.voices.get(voiceId);
+      const reason = live?.pendingReleaseReason ?? "ended";
+      this.releaseVoice(voiceId, reason, { missedSweep: false });
       if (![...this.voices.values()].some((v) => v.kind === "narration")) {
         this.narrationActive = false;
         this.applyDucking(DuckingPolicy.DUCK_RELEASE_MS);
@@ -1095,6 +1108,25 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
 
   getMasterGainLinear(): number {
     return this.master?.gain.value ?? this.unduckedMasterLinear;
+  }
+
+  /**
+   * Master-bus RMS in dBFS from the AnalyserNode (review 5).
+   * Silence ≈ −90 or lower; narration typically −35…−15.
+   */
+  getOutputLevelDb(): number | null {
+    const analyser = this.analyser;
+    const buf = this.analyserTimeDomain;
+    if (!analyser || !buf) return null;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i += 1) {
+      const s = buf[i] ?? 0;
+      sum += s * s;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, buf.length));
+    if (rms <= 1e-8) return -100;
+    return 20 * Math.log10(rms);
   }
 
   getNarrationDiag(): {

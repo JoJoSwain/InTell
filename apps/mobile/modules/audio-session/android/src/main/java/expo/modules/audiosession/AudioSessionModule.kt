@@ -133,9 +133,9 @@ class AudioSessionModule : Module() {
       android.util.Log.i(TAG, "contextState after resume: $state")
     }
 
-    /** Release-visible breadcrumbs — tag InTellAudio (M6 review 4 / F5). */
+    /** Release-visible breadcrumbs — Log.w survives R8 Log.i stripping (M6 review 5). */
     AsyncFunction("logBreadcrumb") { message: String ->
-      android.util.Log.i("InTellAudio", message)
+      android.util.Log.w("InTellAudio", message)
     }
 
     OnDestroy {

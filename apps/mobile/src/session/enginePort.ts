@@ -48,4 +48,6 @@ export type ExploringEngine = Omit<AudioEngine, "onRemoteCommand"> & {
     paused: boolean;
     positionMs: number;
   } | null;
+  /** Master-bus RMS in dBFS (AnalyserNode); null if unavailable. */
+  getOutputLevelDb?: () => number | null;
 };

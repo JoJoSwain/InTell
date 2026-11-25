@@ -1,6 +1,6 @@
 /**
- * Release-visible audio breadcrumbs (M6 review 4 / F5).
- * Mirrored to native Log.i tag InTellAudio — never coordinates or marker codes.
+ * Release-visible audio breadcrumbs (M6 review 4 / F5; review 5 → Log.w).
+ * Mirrored to native Log.w tag InTellAudio — never coordinates or marker codes.
  */
 import NativeAudioSession from "audio-session";
 

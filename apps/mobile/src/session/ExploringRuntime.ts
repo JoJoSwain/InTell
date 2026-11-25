@@ -95,6 +95,8 @@ export class ExploringRuntime {
   private endingSession = false;
   /** Prevents window sync from re-entering dispatch (C2). */
   private inWindowSync = false;
+  /** Last wall time we emitted an `out=` breadcrumb while narration was live. */
+  private lastOutBreadcrumbAt = 0;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -190,6 +192,8 @@ export class ExploringRuntime {
     directorSuspended: boolean;
     sessionPhase: SessionState["phase"];
     playing: boolean;
+    /** Master-bus RMS in dBFS; null if analyser unavailable. */
+    outDb: number | null;
     breadcrumbs: readonly { at: number; message: string }[];
   } {
     const audioSession = this.deps.engine.getSession();
@@ -204,6 +208,7 @@ export class ExploringRuntime {
       directorSuspended: this.director.suspended,
       sessionPhase: this.session.phase,
       playing: this.session.playing != null && this.session.playing.pausedAt === null,
+      outDb: this.deps.engine.getOutputLevelDb?.() ?? null,
       breadcrumbs: getAudioBreadcrumbs(),
     };
   }
@@ -319,8 +324,12 @@ export class ExploringRuntime {
                 busyHint: undefined,
               });
             }
+            return;
           }
-          // skipBackward: engine already sought; do not double-skip.
+          // skipBackward: engine already sought; sync engine voice id (RC6).
+          if (command === "skipBackward") {
+            this.syncNarrationVoiceIdFromEngine();
+          }
         })();
       }),
     );
@@ -460,6 +469,13 @@ export class ExploringRuntime {
     const position = this.director.narration.positionMs;
     const next = backSkipMs(position);
     this.deps.engine.seekNarration?.(next);
+    this.syncNarrationVoiceIdFromEngine();
+  }
+
+  /** RC6: keep narrationVoiceId aligned after seek / remount outside applyCommands. */
+  private syncNarrationVoiceIdFromEngine(): void {
+    const diag = this.deps.engine.getNarrationDiag?.();
+    if (diag?.id) this.narrationVoiceId = diag.id;
   }
 
   /** Inject a location fix (tests / mock GPX). */
@@ -735,9 +751,11 @@ export class ExploringRuntime {
         },
         this.voices,
       );
+      // RC6: track the *engine* voice id (not the director command id).
       const playCmd = [...commands].reverse().find((c) => c.type === "playNarration");
       if (playCmd && playCmd.type === "playNarration") {
-        this.narrationVoiceId = playCmd.id;
+        const voice = this.voices.get(playCmd.id) as { id: string } | undefined;
+        if (voice?.id) this.narrationVoiceId = voice.id;
       }
     } catch (e) {
       const sha =
@@ -801,6 +819,19 @@ export class ExploringRuntime {
 
     await this.runSessionTimers(at);
 
+    // Review 5: prove audible render without an ear — `out=-NN dB` every 5 s.
+    if (
+      this.session.playing != null &&
+      this.session.playing.pausedAt === null &&
+      at - this.lastOutBreadcrumbAt >= 5_000
+    ) {
+      const outDb = this.deps.engine.getOutputLevelDb?.();
+      if (outDb != null && Number.isFinite(outDb)) {
+        this.lastOutBreadcrumbAt = at;
+        pushAudioBreadcrumb(`out=${Math.round(outDb)} dB`);
+      }
+    }
+
     if (!this.packed) return;
     const groveId =
       this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
@@ -856,30 +887,37 @@ export class ExploringRuntime {
       await this.applyCommands(dir.commands);
     }
 
-    if (e.kind === "narration" && this.session.playing) {
-      const playedMs = Math.max(
-        0,
-        this.director.narration.positionMs ||
-          (this.session.playing
-            ? Date.now() -
-              this.session.playing.startedAt -
-              this.session.playing.pausedTotalMs
-            : 0),
-      );
-      const reason =
-        e.reason === "ended"
-          ? "natural"
-          : this.endingSession
-            ? "stopped"
-            : "interrupted";
-      this.narrationVoiceId = null;
-      await this.dispatch({
-        type: "narrationEnded",
-        at: Date.now(),
-        reason,
-        playedMs,
-      });
-    }
+    // RC6: only the *current* narration voice may end the session's narration.
+    // Replaced voices (interruption remount, Back 10 s) arrive as cancelled and
+    // must not clear playing / stop the new voice. Cancelled while still marked
+    // current (sync onended during playNarration) is also ignored unless we are
+    // ending the exploring session.
+    if (e.kind !== "narration" || !this.session.playing) return;
+    if (e.voiceId !== this.narrationVoiceId) return;
+    if (e.reason === "cancelled" && !this.endingSession) return;
+
+    const playedMs = Math.max(
+      0,
+      this.director.narration.positionMs ||
+        (this.session.playing
+          ? Date.now() -
+            this.session.playing.startedAt -
+            this.session.playing.pausedTotalMs
+          : 0),
+    );
+    const reason =
+      e.reason === "ended"
+        ? "natural"
+        : this.endingSession
+          ? "stopped"
+          : "interrupted";
+    this.narrationVoiceId = null;
+    await this.dispatch({
+      type: "narrationEnded",
+      at: Date.now(),
+      reason,
+      playedMs,
+    });
   }
 
   private async onNarrationProgress(p: {
