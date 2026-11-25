@@ -1,9 +1,23 @@
 export { isL10nBlank, L10n, pickL10n } from "./schemas/l10n";
 export {
-  TelemetryEvent,
+  AnalyticsRefs,
   EVENT_NAMES,
+  EVENT_SCHEMA_VERSION,
+  EventNameSchema,
+  IngestDrop,
+  IngestEventsRequest,
+  IngestEventsResponse,
+  TelemetryEvent,
+  eventPropsSchemas,
+  isFutureDated,
+  makeEvent,
+  parseTelemetryEvent,
+  type DropReason,
   type EventName,
+  type EventPropsFor,
+  type ParseTelemetryResult,
 } from "./schemas/events";
+export type { TelemetryEvent as TelemetryEventData } from "./schemas/events";
 export {
   MusicCondition,
   StemRule,
@@ -151,12 +165,31 @@ export {
   sessionStep,
   storyStateOf,
   type PlayingRef,
+  type SessionAnalyticsEffect,
   type SessionEffect,
   type SessionEvent,
   type SessionFragmentMeta,
   type SessionState,
   type SessionWorld,
 } from "./story/session";
+
+export {
+  EVENT_BATCH_MAX,
+  EVENT_FLUSH_INTERVAL_MS,
+  EVENT_QUEUE_CAP,
+  acknowledgeBatch,
+  classifyIngestResponse,
+  decideFlush,
+  emptyEventQueue,
+  enqueueEvent,
+  nextRetryDelayMs,
+  partitionBatchForSend,
+  peekBatch,
+  type EventQueueState,
+  type FlushDecision,
+  type IngestHttpResult,
+  type QueuedTelemetryEvent,
+} from "./analytics/eventQueue";
 
 export {
   currentTimeWindow,

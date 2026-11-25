@@ -435,9 +435,9 @@ enabled = true
 # verify_jwt = false only when the function checks a key itself and tests
 # prove every other caller is refused:
 # - service-called functions (requireServiceCaller / publish service path)
-# - register-device / embark: the app sends the publishable key and no user JWT.
-#   That key is not a JWT, so platform verification would reject the caller.
-#   requirePublishableCaller accepts only the publishable key.
+# - register-device / embark / ingest-events: the app sends the publishable key
+#   and no user JWT. That key is not a JWT, so platform verification would reject
+#   the caller. requirePublishableCaller accepts only the publishable key.
 # Staff-JWT-only functions stay true.
 [functions.build-pack]
 verify_jwt = false
@@ -464,5 +464,8 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.embark]
+verify_jwt = false
+
+[functions.ingest-events]
 verify_jwt = false
 
