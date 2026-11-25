@@ -27,14 +27,12 @@ import {
 } from "./DuckingPolicy";
 import { depthConditionLatched, insideTierBuffersLatched } from "./depthBloom";
 import { diffMix, type TargetMix } from "./directorDiff";
-import {
-  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
-  DIRECTOR_ACCENT_MAX_PENDING,
-  type DirectorCommand,
-  type DirectorInput,
-  type DirectorState,
-  type DirectorWorld,
-  type PendingAccent,
+import type {
+  DirectorCommand,
+  DirectorInput,
+  DirectorState,
+  DirectorWorld,
+  PendingAccent,
 } from "./directorTypes";
 import { hushStepMs, HUSH_CUE_GAIN_DB } from "./hush";
 import { localDayKey, lockedTeaserStep } from "./lockedTeaser";
@@ -45,14 +43,16 @@ import {
   stemGainDb,
   type StoryState,
 } from "./music";
+import {
+  ONESHOT_LOOKAHEAD_SEC,
+  ONESHOT_MAX_PENDING,
+} from "./oneshotSchedule";
 import { pickResolve } from "./resolve";
 import { createSeededRng, type SeededRng } from "./seededRng";
 import { thresholdMotifStep } from "./thresholdMotif";
 import { allocateVoices, type VoiceRequest } from "./voices";
 
 export {
-  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
-  DIRECTOR_ACCENT_MAX_PENDING,
   DIRECTOR_HEARTBEAT_SEC,
   initialDirectorState,
   parseDirectorState,
@@ -60,6 +60,8 @@ export {
   defaultDirectorSettings,
   emptyStory,
 } from "./directorTypes";
+/** Re-export production one-shot horizon (single source: oneshotSchedule). */
+export { ONESHOT_LOOKAHEAD_SEC, ONESHOT_MAX_PENDING } from "./oneshotSchedule";
 export type {
   DirectorCommand,
   DirectorFragment,
@@ -111,20 +113,20 @@ function fillAccentHorizon(
   );
   let lastOneShotAtSec = state.lastOneShotAtSec;
   let accentSeq = state.accentSeq;
-  const horizon = state.audioClockSec + DIRECTOR_ACCENT_LOOKAHEAD_SEC;
+  const horizon = state.audioClockSec + ONESHOT_LOOKAHEAD_SEC;
 
   // Drop expired
   pending = pending.filter((a) => a.whenSec > state.audioClockSec);
 
   for (const { layer, weight, density } of layers) {
     if (layer.kind !== "oneshot") continue;
-    if (pending.length >= DIRECTOR_ACCENT_MAX_PENDING) break;
+    if (pending.length >= ONESHOT_MAX_PENDING) break;
     if (!layer.assets.some((a) => usableSha(state, a.sha))) continue;
 
     let layerState = oneshotByLayerId[layer.id] ?? { nextAtSec: null };
     // Advance nextOneShot until we fill horizon or hit pending cap
     let guard = 0;
-    while (pending.length < DIRECTOR_ACCENT_MAX_PENDING && guard < 32) {
+    while (pending.length < ONESHOT_MAX_PENDING && guard < 32) {
       guard += 1;
       const recent = pending
         .filter((p) => p.layerId === layer.id)
@@ -228,7 +230,7 @@ function fillAccentHorizon(
   // Cap and horizon trim
   pending = pending
     .filter((a) => a.whenSec <= horizon && a.whenSec > state.audioClockSec)
-    .slice(0, DIRECTOR_ACCENT_MAX_PENDING);
+    .slice(0, ONESHOT_MAX_PENDING);
 
   return {
     pending,

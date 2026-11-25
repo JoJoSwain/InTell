@@ -304,8 +304,6 @@ export {
 } from "./audio/hush";
 
 export {
-  DIRECTOR_ACCENT_LOOKAHEAD_SEC,
-  DIRECTOR_ACCENT_MAX_PENDING,
   DIRECTOR_HEARTBEAT_SEC,
   directorStep,
   diffMix,
