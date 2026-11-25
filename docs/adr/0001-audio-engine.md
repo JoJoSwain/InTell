@@ -87,11 +87,12 @@ Copy from `docs/spikes/M1-audio-test-results.md`.
   - Delay `disconnect` until after `onEnded`, or at least one quantum after `stop`.
   - Never connect a source into the live graph as a side effect of preloading.
   - Cancel an overlapping automation curve before scheduling a new one.
-- **B·S3 smoke (2026-11-24, incomplete protocol):** Expo Module `audio-session` (Media3 `SimpleBasePlayer` + FGS + JS focus machine) on release build; library session disabled (`sessionOwner=audio-session`). Smoke: focus held (`USAGE_MEDIA`/`CONTENT_TYPE_SPEECH`), Media3 session metadata + pause/play via `media_session dispatch`. Full T4–T7 + 15‑min T1 deferred — phone left mid-run. See `docs/briefs/BS3-report.md`. **Status unchanged.**
+- **B·S3 / Android run 3 (2026-11-24):** Expo Module `audio-session` (Media3 `SimpleBasePlayer` + `DefaultMediaNotificationProvider` + JS focus machine); library session disabled. **T4/T5/T7 pass; T6 pass*** (YT Music pause; IG duck then LOSS; Pixel AudioHardening can deny focus → “audio busy”; Start full mix recovered); **15‑min T1 pass** (`clockRate` ~0.9998–1.0001, same pid, focus held). See `docs/briefs/BS3-report.md`. **Status unchanged** (Accepted for Android renderer + session module).
 - **Open items:**
   - **Bed streaming:** the library's MediaElement path isn't viable (T1c). Beds decode within the LRU cap for now, and streaming is revisited in M7, with a native streamed bed player as one option.
   - **Memory:** about 155–171 MB against the 150 MB bar. Re-measure in M6 with real assets and the map mounted, then set the whole-app target.
-  - **Gate:** M6 ships only after the session module passes T4–T7 and T5 on the Pixel (a B·S3 re-run).
+  - **Gate:** M6 ships only after the session module passes T4–T7 and T5 on the Pixel (a B·S3 re-run). **B·S3 run 3 met that gate on Pixel**; Claude to confirm before M6.
+
 - **Decision rule for Android run 2** (set before the run):
   - If the **render** still fails (T1 or T3), record **Rejected** and commission the fallback brief. No further tuning rounds.
   - If only **platform-session** items fail (T6 focus, T7 controls), Claude chooses between a small native session module alongside the library and the full fallback.

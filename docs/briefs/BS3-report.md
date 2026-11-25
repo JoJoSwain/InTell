@@ -1,53 +1,56 @@
 # Lane B · B·S3
 
-`audio-session` Expo Module (Media3 + JS focus machine) on `b/bs3-audio-session`. PR [#35](https://github.com/JoJoSwain/InTell/pull/35). **Full device protocol (T4–T7 + 15‑min T1) not finished** — phone left mid-run; resume when Jordan returns.
+`audio-session` Expo Module (Media3 + JS focus machine) on `b/bs3-audio-session`. PR [#35](https://github.com/JoJoSwain/InTell/pull/35). Android **run 3** device protocol completed 2026-11-24 with Jordan (Pixel 11 + Beats Studio Buds+).
 
 ## Commits
 
 | Commit | What |
 |---|---|
-| `31e927b` | Media3 `SimpleBasePlayer` session module, FGS, focus/noisy/route; JS focus machine + tests; library session disabled; spike wiring; M6 disconnect / MediaElement connect / curve cancel |
-| `03ed0ad` | Don’t pause on the *initial* speaker route emit (was suspending the mix right after Start) |
+| `31e927b` | Media3 `SimpleBasePlayer` session module, FGS, focus/noisy/route; JS focus machine; library session off; spike wiring; M6 rules |
+| `03ed0ad` | Don’t pause on the *initial* speaker route emit |
+| `a92eb63` | Claude review: `DefaultMediaNotificationProvider` (drop hand-built notification); `playWhenReady` before `addSession`; log FGS refusals |
 
 ## Implementation (review wins)
 
-- **Media3** `MediaSession` + small `MixPlayer` (`SimpleBasePlayer`); Compat not needed.
-- **JS focus machine** modes: `playing` / `ducked` / `suspendedTransient` / `suspendedLoss` / `userPaused` / `noisyPaused` — unit-tested transitions in `focusMachine.test.ts`.
-- Module sole route owner; library `observeAudioInterruptions` / `PlaybackNotificationManager` / route listeners removed; `AudioManager.disableSessionManagement()` at init (`sessionOwner=audio-session`).
-- App icon as notification small icon; skip-back with no narration = no-op; focus denied → no play + “audio busy”; session/notification kept while paused; FGS from Start (foreground); notification permission from Start.
-- Spike: Start requests permission + `beginMixSession`; Play (resume) after pause without Stop→Start.
+- Media3 `MediaSession` + `SimpleBasePlayer`; Compat not needed.
+- JS focus machine modes unit-tested (`focusMachine.test.ts`).
+- Module sole route owner; `AudioManager.disableSessionManagement()`; no library interruption/notification/route listeners.
+- App icon artwork + small icon; skip-back with no narration = no-op; focus denied → “audio busy”; session kept while paused; FGS from Start; notification permission from Start.
+- After Claude’s code review: Media3 default media notification (IMPORTANCE_LOW), not a plain `NotificationCompat`.
 
 ## Checks
 
-- `pnpm lint` / `typecheck` / `test` green locally.
-- CI on tip: **check** + **db** both green.
-- One release rebuild (`EXPO_PUBLIC_AUDIO_SPIKE=1`, `--variant release`); second rebuild after `03ed0ad` so the route fix is in the APK.
+- `pnpm lint` / `typecheck` / `test` green; CI check + db green on tip.
+- Release rebuild with `EXPO_PUBLIC_AUDIO_SPIKE=1` (fresh JS bundle after the notification fix).
 
-## Smoke before phone left (not a full run 3)
+## Device protocol — Android run 3
 
-On Pixel 11 release install, after the route fix:
+| # | Result | Notes |
+|---|---|---|
+| **T7** | **pass** | Shade Pause/Play work; metadata “InTell audio spike”; MediaStyle + Pause action confirmed in `dumpsys notification` |
+| **T4** | **pass** | BT disconnect → pause; reconnect stays paused; Play from shade resumes (B·S2 gap fixed) |
+| **T5** | **pass** | Call → full mix stops; hang-up → auto-resume |
+| **T6** | **pass*** | YT Music → pause; no auto-resume on close (correct — needs Play). Instagram: first sound **ducked**, second took focus (LOSS). Pixel **AudioHardening** then ignored InTell focus requests → pink “audio busy”. After IG gone, shade Play alone did not restore audible mix; **Start full mix** did. *Duck path observed; hard-loss + busy UX noted for Claude. |
+| **T1** (15 min) | **pass** | Same pid `24251`; locked/background; `clockRate` ~0.9998–1.0001; `audioHealth: ok`; `focusHeld: true`; `clockGapMs` ~±30 ms; session still PLAYING at 15 min |
 
-| Check | Result |
-|---|---|
-| `sessionOwner=audio-session` | logged at init |
-| Start → mix | `mixStarted`, `focusHeld: true`, `notificationVisible: true`; **no** immediate `noisyPaused` |
-| `dumpsys media_session` | `androidx.media3.session.id.intell-mix` is media-button session; `PLAYING`; metadata `InTell audio spike, Test` |
-| `dumpsys audio` focus | InTell on top: `GAIN`, `USAGE_MEDIA` / `CONTENT_TYPE_SPEECH` |
-| `cmd media_session dispatch pause` / `play` | session → `PAUSED` → `PLAYING`; JS `fadeSuspend` / `resumeAfterFade` |
+### T6 AudioHardening (for the report)
 
-Artifacts: `docs/spikes/logs/bs3-dumpsys-media_session-after-start.txt`, `bs3-dumpsys-audio-after-start.txt`, `bs3-t1-*-0.txt` (T1 locked briefly then phone taken).
+```
+AudioHardening focus request for req 1 ignored for org.replaceplace.intell … level: partial
+```
 
-## Not done (needs phone + Jordan)
+While Instagram held media, Android denied InTell’s re-request. Matches the “audio busy” banner.
 
-- **T4** unplug / reconnect / play from lock, earbuds, notification  
-- **T5** call pause + auto-resume  
-- **T6** other-app song / duck / regain focus  
-- **T7** lock-screen controls by ear  
-- **15‑min T1** locked clock/underrun check  
-- Android **run 3** column in `M1-audio-test-results.md` (left blank / pending)  
-- Dated ADR 0001 Findings bullet for the completed protocol (smoke-only note added)
+### setWillPauseWhenDucked
 
-## Open questions
+`setWillPauseWhenDucked(false)` — first Instagram cue ducked (not pause); longer IG media caused LOSS. T6 “duck, not pause” satisfied by the short cue.
 
-1. Mirror log to `/sdcard/Android/data/.../files/` still fails writable on this release (`ERR_UNEXPECTED`); primary log + Share remain the path — same as B·S2.
-2. YouTube (and other) MediaSessions were still visible in `dumpsys` during smoke; confirm they don’t steal media-button focus during T6/T7.
+## Artifacts
+
+`docs/spikes/logs/bs3-run3-*.txt` (local; `docs/spikes/logs` is gitignored) — media_session + audio dumpsys at baseline, T4/T5/T7, T1 t=0 and t=15.
+
+## Open questions / follow-ups for Claude
+
+1. After “audio busy” / hard LOSS, shade Play set MediaSession to PLAYING but the Web Audio mix stayed silent until **Start full mix**. Should remote `play` force a full graph resume path even when the prior focus request was denied?
+2. Spike Start stays disabled when `running && !paused` while the mix is effectively dead after a denied resume — UX trap.
+3. Mirror log to external files dir still not writable on release (`ERR_UNEXPECTED`); Share / logcat remain the path.
