@@ -42,6 +42,7 @@ class SessionMetaRecord : Record {
 class AudioSessionModule : Module() {
   companion object {
     const val STOP_EXPLORING_ACTION = "stop_exploring"
+    private const val TAG = "AudioSession"
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())
@@ -135,10 +136,6 @@ class AudioSessionModule : Module() {
     OnDestroy {
       mainHandler.post { stopSession() }
     }
-  }
-
-  companion object {
-    private const val TAG = "AudioSession"
   }
 
   private val context: Context
