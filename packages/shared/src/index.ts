@@ -28,6 +28,7 @@ export {
   GrovePackDevice,
   GrovePackFragment,
   PreviewManifest,
+  PreviewManifestDevice,
   RegionPack,
   RegionPackDevice,
   PackIndexEntry,
