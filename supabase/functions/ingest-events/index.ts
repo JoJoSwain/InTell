@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
         .select("id")
         .eq("id", deviceId)
         .maybeSingle();
-      if (error) return false;
+      if (error) return "error";
       return data != null;
     },
     rateAllow: async (deviceId) => {

@@ -87,6 +87,7 @@ export function ShellSidebar({
     },
   ];
   const ops: NavItem[] = [
+    { href: "/dashboard", label: "Dashboard", show: true },
     { href: "/regions", label: "Regions", show: true },
     { href: "/audit", label: "Audit", show: canViewAudit(role) },
     { href: "/staff", label: "Staff", show: canManageStaff(role) },

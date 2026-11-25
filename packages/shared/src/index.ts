@@ -30,7 +30,10 @@ export {
 } from "./schemas/music";
 export {
   AgeGate,
+  DeleteDeviceDataRequest,
+  DeleteDeviceDataResponse,
   DevicePlatform,
+  ExportArchiveRequest,
   RegisterDeviceRequest,
   RegisterDeviceResponse,
   UiLanguage,

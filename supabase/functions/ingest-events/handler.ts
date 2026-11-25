@@ -22,7 +22,8 @@ export function formatIngestLog(deviceId: string, event: string): string {
 }
 
 export type IngestDeps = {
-  deviceExists: (deviceId: string) => Promise<boolean>;
+  /** true / false / "error" when the devices lookup itself fails. */
+  deviceExists: (deviceId: string) => Promise<boolean | "error">;
   rateAllow: (deviceId: string) => Promise<boolean | "error">;
   insertEvents: (
     deviceId: string,
@@ -58,6 +59,10 @@ export async function handleIngest(
   const { deviceId, events: rawEvents } = envelope.data;
 
   const exists = await deps.deviceExists(deviceId);
+  if (exists === "error") {
+    deps.log(deviceId, "device-lookup-error");
+    return json({ error: "device lookup failed" }, 500);
+  }
   if (!exists) {
     deps.log(deviceId, "device-not-registered");
     return json({ error: "device_not_registered" }, 404);

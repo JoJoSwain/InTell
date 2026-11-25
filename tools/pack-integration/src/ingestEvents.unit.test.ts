@@ -60,6 +60,16 @@ describe("ingest-events handler", () => {
     expect(logs.join("\n")).not.toContain(DEVICE.slice(8));
   });
 
+  it("returns 500 when the devices lookup fails (not 404)", async () => {
+    const { deps, logs } = baseDeps({
+      deviceExists: async () => "error",
+    });
+    const res = await handleIngest({ deviceId: DEVICE, events: [] }, deps);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "device lookup failed" });
+    expect(logs.some((l) => l.includes("device-lookup-error"))).toBe(true);
+  });
+
   it("returns 429 when rate limited", async () => {
     const { deps } = baseDeps({ rateAllow: async () => false });
     const res = await handleIngest({ deviceId: DEVICE, events: [] }, deps);

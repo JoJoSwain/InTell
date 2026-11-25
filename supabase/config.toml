@@ -469,3 +469,9 @@ verify_jwt = false
 [functions.ingest-events]
 verify_jwt = false
 
+[functions.delete-device-data]
+verify_jwt = false
+
+[functions.export-archive]
+verify_jwt = true
+

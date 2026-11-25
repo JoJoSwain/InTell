@@ -37,3 +37,33 @@ export const RegisterDeviceResponse = z
   .strict();
 
 export type RegisterDeviceResponse = z.infer<typeof RegisterDeviceResponse>;
+
+export const DeleteDeviceDataRequest = z
+  .object({
+    deviceId: UuidV4,
+  })
+  .strict();
+
+export type DeleteDeviceDataRequest = z.infer<typeof DeleteDeviceDataRequest>;
+
+export const DeleteDeviceDataResponse = z
+  .object({
+    ok: z.literal(true),
+    events: z.number().int().nonnegative(),
+    journalEntries: z.number().int().nonnegative(),
+    checkins: z.number().int().nonnegative(),
+    voiceFiles: z.number().int().nonnegative(),
+    rateLimits: z.number().int().nonnegative(),
+    device: z.literal(1),
+  })
+  .strict();
+
+export type DeleteDeviceDataResponse = z.infer<typeof DeleteDeviceDataResponse>;
+
+export const ExportArchiveRequest = z
+  .object({
+    regionId: z.string().uuid().optional(),
+  })
+  .strict();
+
+export type ExportArchiveRequest = z.infer<typeof ExportArchiveRequest>;

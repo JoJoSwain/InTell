@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run src/keys.unit.test.ts src/pageSnapshots.unit.test.ts src/embark.unit.test.ts src/pack-build-error.unit.test.ts src/ingestEvents.unit.test.ts",
+    "test": "vitest run src/keys.unit.test.ts src/pageSnapshots.unit.test.ts src/embark.unit.test.ts src/pack-build-error.unit.test.ts src/ingestEvents.unit.test.ts src/deleteDeviceData.unit.test.ts src/exportArchive.unit.test.ts",
     "test:integration": "vitest run",
     "lint": "node --check src/env.ts",
     "typecheck": "node --check src/env.ts"
