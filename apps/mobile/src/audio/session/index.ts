@@ -6,6 +6,7 @@ export {
   type SessionBusyState,
 } from "./AudioSessionController";
 export { requestFocusWithRetry } from "./requestFocusWithRetry";
+export { shouldDemoteSessionOnSuspend } from "./sessionDemote";
 export {
   reduceFocus,
   type FocusAction,

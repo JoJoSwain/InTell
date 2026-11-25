@@ -27,6 +27,7 @@ import { BufferLruCache } from "./lruCache";
 import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
 import {
   AudioSessionController,
+  shouldDemoteSessionOnSuspend,
   type FocusEffect,
   type SessionBusyState,
 } from "../session";
@@ -1462,10 +1463,18 @@ export class RNAudioApiEngine implements AudioEngine {
       mode: this.session.getMode(),
     });
     switch (effect.type) {
-      case "fadeSuspend":
+      case "fadeSuspend": {
         for (const cb of this.interruptionSubs) cb("began");
-        await this.fadeMasterAndSuspend(250, "focus-suspend");
+        // Keep Media3 FGS through suspendedTransient (call / LOSS_TRANSIENT).
+        // Hard LOSS / user pause / noisy demote via update("paused").
+        const demoteSession = shouldDemoteSessionOnSuspend(
+          this.session.getMode(),
+        );
+        await this.fadeMasterAndSuspend(250, "focus-suspend", {
+          demoteSession,
+        });
         break;
+      }
       case "resumeFadeIn":
         for (const cb of this.interruptionSubs) cb("ended");
         await this.resumeAfterFade(effect.ms, "focus-gain");
@@ -1498,13 +1507,19 @@ export class RNAudioApiEngine implements AudioEngine {
   private async fadeMasterAndSuspend(
     fadeMs: number,
     reason: string,
+    opts: { demoteSession?: boolean } = {},
   ): Promise<void> {
     const ctx = this.context;
     const master = this.master;
     if (!ctx || !master || this.suspendPending) return;
     this.suspendPending = true;
+    const demoteSession = opts.demoteSession !== false;
 
-    console.log("[audio-spike] fadeMasterAndSuspend", { reason, fadeMs });
+    console.log("[audio-spike] fadeMasterAndSuspend", {
+      reason,
+      fadeMs,
+      demoteSession,
+    });
     const fade = enforceMinFade(fadeMs);
     const now = ctx.currentTime;
     const end = now + fade / 1000;
@@ -1524,12 +1539,15 @@ export class RNAudioApiEngine implements AudioEngine {
     const positionMs = narration
       ? narration.pauseOffsetSec * 1000
       : this.getDiagnostics().narrationPositionMs ?? 0;
-    await this.showNotification(
-      narration?.meta ?? { title: "InTell audio spike", artist: "Test" },
-      "paused",
-      positionMs,
-      narration?.durationMs ?? 0,
-    );
+    // Transient interruptions keep playWhenReady so Media3 does not demote FGS.
+    if (demoteSession) {
+      await this.showNotification(
+        narration?.meta ?? { title: "InTell audio spike", artist: "Test" },
+        "paused",
+        positionMs,
+        narration?.durationMs ?? 0,
+      );
+    }
   }
 
   private scheduleSuspendAt(endSec: number): void {
@@ -1595,6 +1613,8 @@ export class RNAudioApiEngine implements AudioEngine {
     } catch (err) {
       console.warn("[audio-spike] resume failed", err);
     }
+    // Native Log.i survives release stripping of console.log (review 3).
+    await this.session.logContextState(ctx.state);
 
     const now = ctx.currentTime;
     this.unduckedMasterLinear = 1;

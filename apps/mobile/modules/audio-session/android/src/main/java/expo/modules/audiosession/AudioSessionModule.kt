@@ -116,9 +116,18 @@ class AudioSessionModule : Module() {
       }
     }
 
+    /** Non-stripped diagnostic after background ctx.resume() (review 3). */
+    AsyncFunction("logContextState") { state: String ->
+      android.util.Log.i(TAG, "contextState after resume: $state")
+    }
+
     OnDestroy {
       mainHandler.post { stopSession() }
     }
+  }
+
+  companion object {
+    private const val TAG = "AudioSession"
   }
 
   private val context: Context

@@ -33,6 +33,8 @@ type NativeAudioSession = {
   stop(): Promise<void>;
   requestFocus(): Promise<boolean>;
   abandonFocus(): Promise<void>;
+  /** Native Log.i — survives release stripping of console.log. */
+  logContextState(state: string): Promise<void>;
   addListener(
     event: "focusChange",
     listener: (e: FocusChangeEvent) => void,

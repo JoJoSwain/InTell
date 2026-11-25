@@ -171,8 +171,9 @@ export class AudioSessionController {
   }
 
   /**
-   * User / remote play. Media-session play promotes FGS first (native);
-   * then we retry focus, then resume. Denied → stay paused + "audio busy".
+   * User / remote play. Native MixPlayer already set playWhenReady=true
+   * (Media3 FGS in the WIU window). We retry focus, then resume.
+   * Denied → setPlayback(false) within the retry window + "audio busy".
    */
   async userPlay(): Promise<boolean> {
     const { ok, attempts } = await requestFocusWithRetry(
@@ -181,11 +182,11 @@ export class AudioSessionController {
     );
     if (!ok) {
       console.warn(
-        "[AudioHardening] focus denied after retries — staying paused (audio busy)",
+        "[AudioHardening] focus denied after retries — reverting to paused (audio busy)",
         { attempts },
       );
       this.setBusy("audioBusy");
-      // Stay in a paused mode; do not apply userPlay.
+      // Revert Media3 playWhenReady so the shade matches (review 3).
       if (
         this.mode === "playing" ||
         this.mode === "ducked"
@@ -203,6 +204,15 @@ export class AudioSessionController {
       await this.update({}, "playing");
     }
     return true;
+  }
+
+  /** Native Log.i of AudioContext state after background resume. */
+  async logContextState(state: string): Promise<void> {
+    try {
+      await NativeAudioSession.logContextState(state);
+    } catch {
+      // Module may be absent in unit tests.
+    }
   }
 
   /** Test helper: set mode without native side effects. */

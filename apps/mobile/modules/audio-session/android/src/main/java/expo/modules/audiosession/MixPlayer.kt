@@ -14,8 +14,9 @@ import com.google.common.util.concurrent.ListenableFuture
  * Actual audio is rendered by react-native-audio-api; this only advertises
  * play/pause/skip-back and metadata.
  *
- * Remote play: [handleSetPlayWhenReady](true) forwards intent only — playWhenReady
- * stays false until JS confirms with [setPlayback](true) after focus is held.
+ * Remote play (Android 17): [handleSetPlayWhenReady](true) sets playWhenReady
+ * immediately so Media3 starts/promotes the mediaPlayback FGS inside the
+ * while-in-use window, then forwards play to JS for focus + resume.
  */
 @OptIn(UnstableApi::class)
 class MixPlayer(
@@ -79,8 +80,11 @@ class MixPlayer(
 
   override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
     if (playWhenReady) {
-      // Intent only — do not flip playWhenReady until JS setPlayback(true).
-      // Media-session play still promotes the FGS (allowed start).
+      // Must flip playWhenReady inside this command so Media3 promotes the
+      // FGS in Android's WIU window (review 3). JS may setPlayback(false) if
+      // focus is denied within the retry window.
+      this.playWhenReady = true
+      invalidateState()
       onPlay()
     } else {
       this.playWhenReady = false
@@ -89,6 +93,9 @@ class MixPlayer(
     }
     return Futures.immediateVoidFuture()
   }
+
+  /** Test/diagnostic: current playWhenReady as advertised to Media3. */
+  fun isPlayWhenReady(): Boolean = playWhenReady
 
   override fun handleSeek(
     mediaItemIndex: Int,
