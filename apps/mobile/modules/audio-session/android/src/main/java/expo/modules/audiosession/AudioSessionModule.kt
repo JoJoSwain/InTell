@@ -149,7 +149,11 @@ class AudioSessionModule : Module() {
       val player =
         MixPlayer(
           Looper.getMainLooper(),
-          onPlay = { sendEvent("remote", mapOf("command" to "play")) },
+          onPlay = {
+            // Media-session play is an allowed FGS start; promote before JS focus.
+            MixPlaybackService.instance?.ensureForegroundForRemotePlay()
+            sendEvent("remote", mapOf("command" to "play"))
+          },
           onPause = { sendEvent("remote", mapOf("command" to "pause")) },
           onSkipBack = { sendEvent("remote", mapOf("command" to "skipBack")) },
         )

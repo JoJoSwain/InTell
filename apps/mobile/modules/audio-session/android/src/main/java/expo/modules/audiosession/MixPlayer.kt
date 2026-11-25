@@ -13,6 +13,9 @@ import com.google.common.util.concurrent.ListenableFuture
  * Minimal Media3 player that mirrors the Web Audio mix state for MediaSession.
  * Actual audio is rendered by react-native-audio-api; this only advertises
  * play/pause/skip-back and metadata.
+ *
+ * Remote play: [handleSetPlayWhenReady](true) forwards intent only — playWhenReady
+ * stays false until JS confirms with [setPlayback](true) after focus is held.
  */
 @OptIn(UnstableApi::class)
 class MixPlayer(
@@ -75,9 +78,15 @@ class MixPlayer(
   }
 
   override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-    this.playWhenReady = playWhenReady
-    if (playWhenReady) onPlay() else onPause()
-    invalidateState()
+    if (playWhenReady) {
+      // Intent only — do not flip playWhenReady until JS setPlayback(true).
+      // Media-session play still promotes the FGS (allowed start).
+      onPlay()
+    } else {
+      this.playWhenReady = false
+      onPause()
+      invalidateState()
+    }
     return Futures.immediateVoidFuture()
   }
 

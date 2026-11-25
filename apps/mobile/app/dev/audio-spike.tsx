@@ -267,7 +267,9 @@ function AudioSpikeBody() {
         unsubs.push(
           engine.onSessionBusy((state) => {
             if (state === "audioBusy") {
+              // Denied resume: stay paused with Play enabled (B·S3 review 2).
               setBusyHint("audio busy");
+              setPaused(true);
             } else if (state === "notificationDenied") {
               setBusyHint(
                 "notification permission denied — lock-screen controls may not appear",
@@ -437,6 +439,7 @@ function AudioSpikeBody() {
       if (!ok) {
         setBusyHint("audio busy");
         setStatus("audio busy");
+        setPaused(true);
         return;
       }
       setPaused(false);

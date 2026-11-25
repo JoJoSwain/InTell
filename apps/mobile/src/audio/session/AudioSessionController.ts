@@ -17,6 +17,7 @@ import {
   type FocusEffect,
   type FocusMode,
 } from "./focusMachine";
+import { requestFocusWithRetry } from "./requestFocusWithRetry";
 
 export type SessionBusyState = "ok" | "audioBusy" | "notificationDenied";
 
@@ -26,6 +27,16 @@ type BusyHandler = (state: SessionBusyState) => void;
 type RouteHandler = (e: RouteEvent) => void;
 
 type Sub = { remove(): void };
+
+export type AudioSessionDeps = {
+  /** Override for unit tests. Defaults to native requestFocus. */
+  requestFocusOnce?: () => Promise<boolean>;
+  /** Override native update for tests. */
+  updateSession?: (
+    meta: SessionMeta,
+    state: PlaybackState,
+  ) => Promise<void>;
+};
 
 export class AudioSessionController {
   private mode: FocusMode = "userPaused";
@@ -39,9 +50,19 @@ export class AudioSessionController {
   private notificationWarning = false;
   /** Last route from the module; null until the first event (no pause on initial speaker). */
   private lastRoute: RouteEvent["route"] | null = null;
+  private busy: SessionBusyState = "ok";
+  private readonly deps: AudioSessionDeps;
+
+  constructor(deps: AudioSessionDeps = {}) {
+    this.deps = deps;
+  }
 
   getMode(): FocusMode {
     return this.mode;
+  }
+
+  getBusy(): SessionBusyState {
+    return this.busy;
   }
 
   isStarted(): boolean {
@@ -83,26 +104,26 @@ export class AudioSessionController {
       );
       const ok = result === PermissionsAndroid.RESULTS.GRANTED;
       this.notificationWarning = !ok;
-      if (!ok) this.onBusy?.("notificationDenied");
+      if (!ok) this.setBusy("notificationDenied");
       return ok;
     } catch {
       this.notificationWarning = true;
-      this.onBusy?.("notificationDenied");
+      this.setBusy("notificationDenied");
       return false;
     }
   }
 
   async start(meta: SessionMeta): Promise<boolean> {
     this.meta = { ...this.meta, ...meta };
-    const focused = await NativeAudioSession.requestFocus();
+    const focused = await this.requestFocusOnce();
     if (!focused) {
-      this.onBusy?.("audioBusy");
+      this.setBusy("audioBusy");
       return false;
     }
     await NativeAudioSession.start(this.meta);
     this.started = true;
     this.mode = "playing";
-    this.onBusy?.("ok");
+    this.setBusy("ok");
     this.ensureListeners();
     return true;
   }
@@ -113,6 +134,10 @@ export class AudioSessionController {
   ): Promise<void> {
     this.meta = { ...this.meta, ...meta };
     if (!this.started) return;
+    if (this.deps.updateSession) {
+      await this.deps.updateSession(this.meta as SessionMeta, state);
+      return;
+    }
     await NativeAudioSession.update(this.meta as SessionMeta, state);
   }
 
@@ -127,9 +152,9 @@ export class AudioSessionController {
   }
 
   async requestFocus(): Promise<boolean> {
-    const ok = await NativeAudioSession.requestFocus();
-    if (!ok) this.onBusy?.("audioBusy");
-    else this.onBusy?.("ok");
+    const ok = await this.requestFocusOnce();
+    if (!ok) this.setBusy("audioBusy");
+    else this.setBusy("ok");
     return ok;
   }
 
@@ -146,11 +171,33 @@ export class AudioSessionController {
   }
 
   /**
-   * User / remote play. Re-requests focus; refuses if denied ("audio busy").
+   * User / remote play. Media-session play promotes FGS first (native);
+   * then we retry focus, then resume. Denied → stay paused + "audio busy".
    */
   async userPlay(): Promise<boolean> {
-    const focused = await this.requestFocus();
-    if (!focused) return false;
+    const { ok, attempts } = await requestFocusWithRetry(
+      () => this.requestFocusOnce(),
+      { tries: 3, gapMs: 500 },
+    );
+    if (!ok) {
+      console.warn(
+        "[AudioHardening] focus denied after retries — staying paused (audio busy)",
+        { attempts },
+      );
+      this.setBusy("audioBusy");
+      // Stay in a paused mode; do not apply userPlay.
+      if (
+        this.mode === "playing" ||
+        this.mode === "ducked"
+      ) {
+        await this.applyAction({ type: "userPause" });
+      }
+      if (this.started) {
+        await this.update({}, "paused");
+      }
+      return false;
+    }
+    this.setBusy("ok");
     await this.applyAction({ type: "userPlay" });
     if (this.started) {
       await this.update({}, "playing");
@@ -158,11 +205,33 @@ export class AudioSessionController {
     return true;
   }
 
+  /** Test helper: set mode without native side effects. */
+  setModeForTest(mode: FocusMode): void {
+    this.mode = mode;
+  }
+
+  /** Test helper: mark session started without native start. */
+  markStartedForTest(started = true): void {
+    this.started = started;
+  }
+
+  private requestFocusOnce(): Promise<boolean> {
+    if (this.deps.requestFocusOnce) {
+      return this.deps.requestFocusOnce();
+    }
+    return NativeAudioSession.requestFocus();
+  }
+
+  private setBusy(state: SessionBusyState): void {
+    this.busy = state;
+    this.onBusy?.(state);
+  }
+
   private ensureListeners(): void {
     if (this.subs.length > 0) return;
     this.subs.push(
       NativeAudioSession.addListener("focusChange", (e) => {
-        void this.onFocusChange(e);
+        void this.applyFocusEvent(e);
       }),
     );
     this.subs.push(
@@ -188,7 +257,8 @@ export class AudioSessionController {
     this.subs = [];
   }
 
-  private async onFocusChange(e: FocusChangeEvent): Promise<void> {
+  /** Native focus listener and unit tests. */
+  async applyFocusEvent(e: FocusChangeEvent): Promise<void> {
     await this.applyAction({
       type: "focus",
       change: {
@@ -196,10 +266,9 @@ export class AudioSessionController {
         shouldResume: e.shouldResume,
       },
     });
-    if (e.kind === "gain" && this.mode === "suspendedLoss") {
-      // Review: try again on next gain after a denied play — no auto resume.
-      // If we were previously audioBusy, clear the busy flag so next play can retry.
-      this.onBusy?.("ok");
+    // A later gain clears "audio busy" so the next play can retry.
+    if (e.kind === "gain") {
+      this.setBusy("ok");
     }
   }
 
@@ -207,8 +276,6 @@ export class AudioSessionController {
     const prev = this.lastRoute;
     this.lastRoute = e.route;
     this.onRouteChange?.(e);
-    // Pause only on a transition onto speaker (unplug), never on the
-    // initial emit while already on speaker / unknown.
     const lostExternal =
       prev != null &&
       prev !== "speaker" &&
@@ -227,6 +294,7 @@ export class AudioSessionController {
       return;
     }
     if (e.command === "play") {
+      // FGS already promoted by the media-session command before this event.
       const ok = await this.userPlay();
       if (ok) await this.onRemote?.("play");
       return;

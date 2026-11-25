@@ -53,6 +53,20 @@ class MixPlaybackService : MediaSessionService() {
     }
   }
 
+  /**
+   * Promote (or re-promote) the FGS while [MixPlayer] still reports paused.
+   * Used on remote play: the media-session command opens Android's allowed-start
+   * window; we must be foreground before JS retries audio focus (AudioHardening).
+   */
+  fun ensureForegroundForRemotePlay() {
+    val session = mediaSession ?: return
+    try {
+      onUpdateNotification(session, /* startInForegroundRequired= */ true)
+    } catch (e: Exception) {
+      logForegroundFailure("ensureForegroundForRemotePlay", e)
+    }
+  }
+
   fun detachSession() {
     mediaSession?.let { removeSession(it) }
     mediaSession?.release()
