@@ -5,8 +5,14 @@ import { installDemoGrove, installStressGrove } from "../../src/map/installFixtu
 import { counts, fetchPreview, installGrove, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
 import { strings } from "../../src/ui/strings";
 
+/** Dev builds, or local USB walk release builds that bake cleartext to 127.0.0.1. */
+const allowDataScreen =
+  __DEV__ ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true";
+
 export default function DataDevScreen() {
-  if (!__DEV__) return <Redirect href="/" />;
+  if (!allowDataScreen) return <Redirect href="/" />;
   return <DataDevBody />;
 }
 

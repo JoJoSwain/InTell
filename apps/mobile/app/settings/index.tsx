@@ -107,14 +107,18 @@ export default function SettingsHome() {
       <Text maxFontSizeMultiplier={2} style={[styles.body, { color: palette.textMuted }]}>
         {strings.settingsLater}
       </Text>
-      {__DEV__ ? (
+      {__DEV__ ||
+      process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
+      process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true" ? (
         <View style={styles.dev}>
           <Link href="/dev/data" accessibilityLabel={strings.devData}>
             {strings.devData}
           </Link>
-          <Link href="/dev/audio-spike" accessibilityLabel={strings.devAudio}>
-            {strings.devAudio}
-          </Link>
+          {__DEV__ ? (
+            <Link href="/dev/audio-spike" accessibilityLabel={strings.devAudio}>
+              {strings.devAudio}
+            </Link>
+          ) : null}
         </View>
       ) : null}
     </View>
