@@ -23,7 +23,12 @@ describe("applySessionEffects", () => {
         sessionId: "s1",
       },
       { type: "writeUnlocks", fragmentIds: ["f2"] },
-      { type: "analytics", name: "fragment_completed", props: { fragmentId: "f1" } },
+      {
+        type: "analytics",
+        name: "fragment_completed",
+        props: { time_window: "day", change_kind: null },
+        refs: { fragmentId: "f1", sessionId: "s1" },
+      },
       { type: "growthMoment", fragmentId: "f1", revisionNo: 1 },
       { type: "setLocationMode", mode: "balanced" },
     ];

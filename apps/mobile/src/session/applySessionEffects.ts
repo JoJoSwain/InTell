@@ -50,7 +50,7 @@ export type EffectSinks = {
     fragmentId: string,
     reason: "locked" | "wrongTime",
   ) => { teaserText: string; otherTimeHint?: string };
-  /** R4: count only; do not store. */
+  /** A7 / R4: count by name; ids stay in effect.refs (never coordinates). */
   onAnalytics: (name: string) => void;
 };
 
@@ -164,7 +164,7 @@ export async function applySessionEffects(
         });
         break;
       case "analytics":
-        // R4: count, do not store. Never include geo props.
+        // A7 shape is { name, props, refs }; mobile counts by name only for now.
         sinks.onAnalytics(effect.name);
         analyticsCounted += 1;
         break;
