@@ -1,72 +1,82 @@
-# Lane B · M6 report (review-2 fixes; pre–Pixel walk)
+# Lane B · M6 report (review-2 C1–C3; pre–Pixel walk)
 
-Branch `b/m6-narration-session`. Review-2 (C1–C3) applied on top of review-1. **Stopped before the Pixel walk for Claude’s check.**
+Branch `b/m6-narration-session`. Review-2 C1–C3 done. **Stopped for Claude’s check before the walk.**
 
-## What’s wired now
+## What’s wired
 
 | Item | Status |
 |---|---|
-| Review-1 B1–B8, R3, A7b preview | Done (prior push) |
-| **C1** `startSessionClock` / `stopSessionClock` (silent heartbeats, no focus, no tour loop); start on exploring / resume; stop on `sessionEnded`; spike tour behind `spikeMode`; tick + afterglow on every fix; fake ticks only after clock start | Done |
+| Review-1 B1–B8, R3, A7b | Done |
+| **C1** `startSessionClock` / `stopSessionClock` (silent heartbeats; no focus; no tour loop); start on exploring / resume; stop on `sessionEnded`; spike tour behind `spikeMode` / `shouldRunTourLoop`; tick + afterglow on every fix; fake ticks only after clock start; tests | Done |
 | **C2** Time window recomputed at the start of every `dispatch` | Done |
-| **C3** “Before the walk” steps below | Done |
+| **C3** Before-the-walk steps + local walk layout (below) | Done |
 
 ## Before the walk (Jordan)
 
-Staging has no content, and the phone’s `.env` often has no Supabase URL. Do this **at home on Wi‑Fi before leaving** for Farmington.
+Staging has no content. Use the **local** stack and a **local-only** walk layout built from two anchors Jordan chose (coordinates stay on this PC in a gitignored folder — never committed, logged, or pasted into chat).
 
 ### 1. Which build
 
-- Install a **development client** on the Pixel (not Expo Go): from `apps/mobile`, with Android SDK + Maps keys already in `apps/mobile/.env`, run `pnpm exec expo run:android` (or your usual debug install of this branch).
-- Rebuild if native modules changed (`audio-session` Stop exploring). A JS-only OTA is not enough for that.
+- Install a **development client** on the Pixel (not Expo Go): from `apps/mobile`, with Maps keys in `apps/mobile/.env`, run `pnpm exec expo run:android` (rebuild if `audio-session` changed).
 
-### 2. Point the phone at Lane A’s local Supabase
+### 2. Point the phone at Lane A’s local Supabase (at home, Wi‑Fi)
 
-Lane A’s stack must already be up (`supabase start` / `pnpm db:setup-local` from **Lane A only**). Staging is empty — use local.
+1. Lane A’s stack must be up (`supabase start` / `pnpm db:setup-local` from **Lane A only**).
+2. In `apps/mobile/.env`:
+   - `EXPO_PUBLIC_SUPABASE_URL` = the PC’s **LAN IP**, e.g. `http://192.168.x.x:54321` (not `127.0.0.1` unless you also run `adb reverse tcp:54321 tcp:54321`).
+   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = Publishable key from `supabase status` (not service role).
+3. Reload/rebuild so Expo picks up env.
 
-1. On the PC, get the API URL and **Publishable** key: `pnpm exec supabase status` in Lane A.
-2. In `apps/mobile/.env` on this lane:
-   - `EXPO_PUBLIC_SUPABASE_URL` = the PC’s **LAN IP**, e.g. `http://192.168.x.x:54321` (not `127.0.0.1` — the phone cannot reach the PC that way). Same Wi‑Fi as the Pixel.
-   - Optional shortcut on USB: `adb reverse tcp:54321 tcp:54321` and use `http://127.0.0.1:54321` instead.
-   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = Publishable key from `supabase status` (not the anon/service role key).
-3. Rebuild or reload the app so env is picked up (`app.config` → Expo).
+### 3. Walk layout on this PC (approval before leaving)
 
-### 3. Download the Farmington demo pack + audio
+Local-only script (gitignored `local/m6-walk-test/`) already applied **draft** groves to the local DB (no db reset):
 
-1. Open **`intell://dev/data`** (or Dev → Data).
-2. Tap **Install grove** with grove id  
-   `aaaaaaaa-bbbb-4ccc-8ddd-000000000010`  
-   (Farmington demo from seed), **or** use Sync after a first install so the region pack follows.
-3. Wait until status is **Done**. Refresh counts: packs ≥ 2 (grove + region), **assets** > 0.
-4. **Do not** rely on **“Install demo grove”** for the walk — that fixture writes map manifests only (no real audio files). You need the published local pack + media from Supabase storage.
+| Grove | Slug | What to check |
+|---|---|---|
+| **Walk test 1** | `walk-test-1` | Root at anchor 1; two Branches; one Leaf locked until Branch A; one Night-only (silent by day) |
+| **Walk test 2** | `walk-test-2` | Root requires Walk test 1’s Root (cross-grove); Contingency (replays once); Correction (no replay); physical QR |
 
-### 4. Confirm it works offline
+- **Admin map (approve / drag):** `pnpm dev:admin` (needs `apps/admin/.env.local` with local Supabase URL + publishable key; for the interactive map also set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` + `NEXT_PUBLIC_GOOGLE_MAP_ID` from the password manager, then restart). Open:
+  - http://localhost:3000/story/groves/cccccccc-dddd-4eee-8fff-000000000101  
+  - http://localhost:3000/story/groves/cccccccc-dddd-4eee-8fff-000000000102  
+  Drag any point that lands on private property or inside a building (or edit lat/lng on the fragment form if the map key isn’t set yet). Derived grove outline appears once Maps is configured.
+- **Physical marker code:** `WTQR0001` (show as QR / large text on a second screen or printout for scanning).
+- **After Jordan approves:** publish draft release `cccccccc-dddd-4eee-8fff-0000000001e0` from admin (needs `supabase functions serve` / build-pack so real packs land in storage). Then install both grove packs on the phone.
 
-1. Airplane mode (or turn Wi‑Fi off).
-2. Open the map home: Farmington markers still show; tapping a locked one still shows a teaser.
-3. Optional ear check at home: mock/fake location into a fragment radius if you have a mock-location build, or wait for the trail — either way, assets must already be on disk (`assets` count unchanged offline).
+### 4. Download both packs onto the Pixel (Wi‑Fi, before leaving)
 
-### 5. On the trail — does the phone need the PC?
+1. Open `intell://dev/data`.
+2. **Install grove** for each of:  
+   `cccccccc-dddd-4eee-8fff-000000000101` and `cccccccc-dddd-4eee-8fff-000000000102`  
+   (or Sync after first install so the region pack follows).
+3. Refresh counts: packs include both walk-test groves + region; **assets > 0**.
+4. Do **not** use “Install demo grove” for audio — that fixture is map-only.
 
-**No.** Once packs and audio are installed, progress and playback are on-device. Leave the PC at home. Keep Wi‑Fi/cellular optional (map tiles / Embark need network; narration does not). Do not log or store home/origin coordinates.
+### 5. Confirm offline
 
-### Walk itself
+1. Airplane mode / Wi‑Fi off.
+2. Map still shows both walk-test groves; locked teasers still open.
+3. Optional ear check with mock location, or wait for the outdoor walk.
 
-Farmington Bird Refuge / Eccles Wildlife Education Center trails (demo GPX loop). Ear-check: auto-start narration, afterglow → next story, pocket/lock, call interruption, notification **Stop exploring**.
+### 6. QR for the physical fragment
+
+- Encode marker code **`WTQR0001`** (or the app’s scan deep link if you use one) as a QR on a laptop/phone screen or a paper printout. Scan on site at the physical point.
+
+### 7. On the trail — need the PC?
+
+**No.** Once packs and audio are on the phone, leave the PC at home. Map tiles / Embark need network; narration does not. Never log or store home/origin coordinates.
 
 ## Tests / commands
 
-- `pnpm lint && pnpm typecheck && pnpm test` — green
-- Mobile: session-clock tests + spikeMode gate tests added
+- `pnpm lint && pnpm typecheck && pnpm test` — green (103 mobile tests incl. C1 clock + spike gate)
+- Walk layout applied to local DB only; folder `local/` is gitignored
 
-## Still open / not claimed
+## Still open
 
-1. **PSS (G7)** — record on the walk.
-2. **R3 on device** — confirm Stop exploring on lock screen / notification after native rebuild.
-3. **R6** remote resume timing — measure on Pixel.
-4. **Accuracy (G1)** — 25 m until field retune.
-5. No AVD Maestro run this pass.
+1. Jordan approves / drags points on admin map, then publish + build-pack.
+2. PSS (G7), R3 on-device Stop exploring, R6 resume timing, accuracy retune — on the walk.
+3. No AVD Maestro this pass.
 
 ## Next
 
-Claude reviews this push. Then Pixel walk with Jordan.
+Claude reviews this push. Then Jordan map approval → publish packs → Pixel walk.
