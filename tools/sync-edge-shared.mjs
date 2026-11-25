@@ -15,6 +15,7 @@ const files = [
   ["src/geo/polygon.ts", "polygon.ts"],
   ["src/schemas/device.ts", "device.ts"],
   ["src/schemas/embark.ts", "embark.ts"],
+  ["src/schemas/events.ts", "events.ts"],
   ["src/schemas/l10n.ts", "l10n.ts"],
   ["src/schemas/music.ts", "music.ts"],
   ["src/schemas/packs.ts", "packs.ts"],

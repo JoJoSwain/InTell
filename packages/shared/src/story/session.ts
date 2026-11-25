@@ -15,7 +15,9 @@
  *
  * ## Effect order (natural narration end)
  * `recordCompletion` → `writeUnlocks` → `metCharacters` → `analytics fragment_completed`
- * → `startAfterglow` (and `growthMoment` when it applies — M9 Journal hook; not emitted yet).
+ * → `analytics fragment_unlocked` (one per unlock) → `startAfterglow`
+ * (and `growthMoment` when it applies — M9 Journal hook; not emitted yet).
+ * Every `play` also emits `analytics fragment_triggered`.
  *
  * ## Settings / window events
  * `settingsChanged` merges its `accessibleTrigger` and `locationAvailable` into
@@ -194,10 +196,69 @@ export function parseSessionState(raw: unknown): SessionState {
 
 export type SessionFragmentMeta = {
   revisionNo: number;
+  /** Published revision uuid when the pack/world has it (analytics refs). */
+  revisionId?: string;
+  /** Contingency/correction for the current revision; null if unknown. */
+  changeKind?: "contingency" | "correction" | null;
   teaser?: string;
   changeTeaser?: string;
   characterIds?: string[];
 };
+
+/** Session-emitted analytics (TECH_SPEC §8 / A7 G3–G4). Ids live in `refs`. */
+export type SessionAnalyticsEffect =
+  | {
+      type: "analytics";
+      name: "session_started";
+      props: Record<string, never>;
+      refs: { sessionId: string };
+    }
+  | {
+      type: "analytics";
+      name: "session_ended";
+      props: { fragments_completed: number; minutes: number };
+      refs: { sessionId: string };
+    }
+  | {
+      type: "analytics";
+      name: "grove_entered";
+      props: Record<string, never>;
+      refs: { groveId: string; sessionId?: string };
+    }
+  | {
+      type: "analytics";
+      name: "fragment_triggered";
+      props: {
+        trigger: TriggerVia;
+        time_window: TimeWindow;
+      };
+      refs: {
+        fragmentId: string;
+        sessionId?: string;
+        groveId?: string;
+        revisionId?: string;
+      };
+    }
+  | {
+      type: "analytics";
+      name: "fragment_completed";
+      props: {
+        time_window: TimeWindow;
+        change_kind: "contingency" | "correction" | null;
+      };
+      refs: {
+        fragmentId: string;
+        sessionId: string;
+        groveId?: string;
+        revisionId?: string;
+      };
+    }
+  | {
+      type: "analytics";
+      name: "fragment_unlocked";
+      props: Record<string, never>;
+      refs: { fragmentId: string; sessionId?: string };
+    };
 
 export type SessionWorld = {
   groves: readonly { id: string; boundary: GeoJsonMultiPolygon }[];
@@ -306,15 +367,7 @@ export type SessionEffect =
       fragmentId: string;
       tier: "root" | "branch" | "leaf";
     }
-  | {
-      type: "analytics";
-      name:
-        | "grove_entered"
-        | "session_started"
-        | "fragment_completed"
-        | "session_ended";
-      props: Record<string, string | number | boolean>;
-    }
+  | SessionAnalyticsEffect
   | { type: "growthMoment"; fragmentId: string; revisionNo: number };
 
 export type { StoryState };
@@ -430,7 +483,11 @@ function noteGroveCurrent(
   effects.push({
     type: "analytics",
     name: "grove_entered",
-    props: { grove_id: groveId },
+    props: {},
+    refs: {
+      groveId,
+      ...(state.sessionId ? { sessionId: state.sessionId } : {}),
+    },
   });
   return {
     ...state,
@@ -515,6 +572,7 @@ function endSession(
       fragments_completed: state.fragmentsCompletedThisSession.length,
       minutes,
     },
+    refs: { sessionId },
   });
   effects.push({ type: "sessionEnded", sessionId, at });
   effects.push({ type: "setLocationMode", mode: "idle" });
@@ -545,7 +603,12 @@ function tryStartSession(
   };
 
   effects.push({ type: "sessionStarted", sessionId, at });
-  effects.push({ type: "analytics", name: "session_started", props: {} });
+  effects.push({
+    type: "analytics",
+    name: "session_started",
+    props: {},
+    refs: { sessionId },
+  });
 
   if (currentGroveId) {
     next = noteGroveCurrent(next, currentGroveId, effects);
@@ -579,6 +642,18 @@ function emitPlay(
     version,
     via,
     ...(changeTeaser ? { changeTeaser } : {}),
+  });
+  const meta = metaOf(world, fragmentId);
+  effects.push({
+    type: "analytics",
+    name: "fragment_triggered",
+    props: { trigger: via, time_window: version.timeWindow },
+    refs: {
+      fragmentId,
+      ...(state.sessionId ? { sessionId: state.sessionId } : {}),
+      ...(f.groveId ? { groveId: f.groveId } : {}),
+      ...(meta.revisionId ? { revisionId: meta.revisionId } : {}),
+    },
   });
   return {
     ...state,
@@ -918,11 +993,34 @@ export function sessionStep(
           characterIds: metaOf(world, playing.fragmentId).characterIds ?? [],
           fragmentId: playing.fragmentId,
         });
+        const completedMeta = metaOf(world, playing.fragmentId);
         effects.push({
           type: "analytics",
           name: "fragment_completed",
-          props: { fragment_id: playing.fragmentId },
+          props: {
+            time_window: playing.version.timeWindow,
+            change_kind: completedMeta.changeKind ?? null,
+          },
+          refs: {
+            fragmentId: playing.fragmentId,
+            sessionId: next.sessionId!,
+            ...(frag?.groveId ? { groveId: frag.groveId } : {}),
+            ...(completedMeta.revisionId
+              ? { revisionId: completedMeta.revisionId }
+              : {}),
+          },
         });
+        for (const unlockedId of unlockIds) {
+          effects.push({
+            type: "analytics",
+            name: "fragment_unlocked",
+            props: {},
+            refs: {
+              fragmentId: unlockedId,
+              ...(next.sessionId ? { sessionId: next.sessionId } : {}),
+            },
+          });
+        }
         const endsAt = event.at + AFTERGLOW_MS;
         effects.push({
           type: "startAfterglow",
