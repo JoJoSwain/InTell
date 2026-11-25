@@ -87,11 +87,27 @@ export function MediaElementBed(props: Props) {
     };
   }, []);
 
+  const ensureConnected = () => {
+    const handle = audioRef.current;
+    if (!handle || mediaRef.current) return;
+    // M6: never connect from preload/onLoad alone — only when play is requested.
+    const me = context.createMediaElementSource(handle);
+    const gain = context.createGain();
+    gain.gain.value = dbToGain(gainDb);
+    me.connect(gain);
+    gain.connect(destination);
+    mediaRef.current = { me, gain };
+    prevPosRef.current = 0;
+    loopIndexRef.current = 0;
+    onReady?.();
+  };
+
   useEffect(() => {
     const handle = audioRef.current;
     if (!handle) return;
     if (playing) {
       try {
+        ensureConnected();
         handle.play();
       } catch (err) {
         onError?.(err instanceof Error ? err : new Error(String(err)));
@@ -103,6 +119,7 @@ export function MediaElementBed(props: Props) {
         // ignore
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- connect once per play arm
   }, [playing, onError]);
 
   return (
@@ -116,28 +133,14 @@ export function MediaElementBed(props: Props) {
       autoPlay={false}
       preload="auto"
       onLoad={() => {
-        try {
-          const handle = audioRef.current;
-          if (!handle) return;
-          // Tear down prior route if onLoad fires again after a respawn.
+        // Deliberately do not connect into the live graph here (M6).
+        if (playing) {
           try {
-            mediaRef.current?.me.disconnect();
-            mediaRef.current?.gain.disconnect();
-          } catch {
-            // ignore
+            ensureConnected();
+            audioRef.current?.play();
+          } catch (err) {
+            onError?.(err instanceof Error ? err : new Error(String(err)));
           }
-          const me = context.createMediaElementSource(handle);
-          const gain = context.createGain();
-          gain.gain.value = dbToGain(gainDb);
-          me.connect(gain);
-          gain.connect(destination);
-          mediaRef.current = { me, gain };
-          prevPosRef.current = 0;
-          loopIndexRef.current = 0;
-          onReady?.();
-          if (playing) handle.play();
-        } catch (err) {
-          onError?.(err instanceof Error ? err : new Error(String(err)));
         }
       }}
       onError={(err) => {

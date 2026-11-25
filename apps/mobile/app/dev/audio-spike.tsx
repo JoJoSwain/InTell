@@ -94,6 +94,7 @@ function AudioSpikeBody() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [stress, setStress] = useState(false);
   const [narration24k, setNarration24k] = useState(true);
   const [streamBed, setStreamBed] = useState(false);
@@ -106,6 +107,7 @@ function AudioSpikeBody() {
   > | null>(null);
   const [diag, setDiag] = useState<EngineDiagnostics | null>(null);
   const [status, setStatus] = useState("idle");
+  const [busyHint, setBusyHint] = useState<string | null>(null);
 
   const topUpOneShots = useCallback((reason: string) => {
     const engine = engineRef.current;
@@ -242,6 +244,8 @@ function AudioSpikeBody() {
         );
         unsubs.push(
           engine.onInterruption((e) => {
+            if (e === "began") setPaused(true);
+            if (e === "ended") setPaused(false);
             void appendSpikeLog({
               type: "interruption",
               event: e,
@@ -251,11 +255,29 @@ function AudioSpikeBody() {
         );
         unsubs.push(
           engine.onRemoteCommand((c) => {
+            if (c === "pause") setPaused(true);
+            if (c === "play") setPaused(false);
             void appendSpikeLog({
               type: "remoteCommand",
               command: c,
               appState: engine.getAppState(),
             });
+          }),
+        );
+        unsubs.push(
+          engine.onSessionBusy((state) => {
+            if (state === "audioBusy") {
+              // Denied resume: stay paused with Play enabled (B·S3 review 2).
+              setBusyHint("audio busy");
+              setPaused(true);
+            } else if (state === "notificationDenied") {
+              setBusyHint(
+                "notification permission denied — lock-screen controls may not appear",
+              );
+            } else {
+              setBusyHint(null);
+            }
+            void appendSpikeLog({ type: "sessionBusy", state });
           }),
         );
         unsubs.push(
@@ -408,11 +430,52 @@ function AudioSpikeBody() {
     [],
   );
 
+  const resumeMix = useCallback(async () => {
+    const engine = engineRef.current;
+    if (!engine || !running) return;
+    try {
+      setStatus("resuming");
+      const ok = await engine.getSession().userPlay();
+      if (!ok) {
+        setBusyHint("audio busy");
+        setStatus("audio busy");
+        setPaused(true);
+        return;
+      }
+      setPaused(false);
+      setStatus("running");
+      setDiag(engine.getDiagnostics());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("error");
+    }
+  }, [running]);
+
   const startFullMix = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine || !ready) return;
+    if (running && paused) {
+      await resumeMix();
+      return;
+    }
     try {
       setStatus("starting");
+      setBusyHint(null);
+      // Notification permission from Start (user gesture); then MediaSession + FGS.
+      const sessionOk = await engine.beginMixSession({
+        title: "InTell audio spike",
+        artist: "Test",
+      });
+      if (!sessionOk) {
+        setBusyHint("audio busy");
+        setStatus("audio busy");
+        return;
+      }
+      if (engine.getSession().hadNotificationDenied()) {
+        setBusyHint(
+          "notification permission denied — lock-screen controls may not appear",
+        );
+      }
       engine.setVoiceBudget(stressMode.current ? STRESS_BUDGET : NORMAL_BUDGET);
       await engine.prepareMixStart();
       engine.startHeartbeats();
@@ -479,6 +542,7 @@ function AudioSpikeBody() {
       });
 
       setRunning(true);
+      setPaused(false);
       setStatus(
         streamBedMode.current
           ? "running (T1c MediaElement bed)"
@@ -489,7 +553,7 @@ function AudioSpikeBody() {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
     }
-  }, [ready, topUpOneShots]);
+  }, [ready, running, paused, resumeMix, topUpOneShots]);
 
   const toggleNarration = useCallback(() => {
     const engine = engineRef.current;
@@ -552,6 +616,7 @@ function AudioSpikeBody() {
     bedRef.current = null;
     narrationRef.current = null;
     setRunning(false);
+    setPaused(false);
     setStatus("stopped");
     const d = engine.getDiagnostics();
     const stats = engine.getLedgerStats();
@@ -577,6 +642,7 @@ function AudioSpikeBody() {
         probe-bed-2min-stereo.m4a to files/spikes/.
       </Text>
       <Text style={styles.status}>Status: {status}</Text>
+      {busyHint ? <Text style={styles.error}>{busyHint}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {/* Only mount when T1c is armed — preload/onLoad otherwise races the buffer bed and has crashed AudioTrack. */}
@@ -602,9 +668,9 @@ function AudioSpikeBody() {
       ) : null}
 
       <Btn
-        label="Start full mix"
-        onPress={startFullMix}
-        disabled={!ready || running}
+        label={running && paused ? "Play (resume)" : "Start full mix"}
+        onPress={() => void startFullMix()}
+        disabled={!ready || (running && !paused)}
       />
       <Btn
         label="Toggle narration"

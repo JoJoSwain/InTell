@@ -7,6 +7,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   });
   plugins.push(["expo-secure-store", { configureAndroidBackup: false }]);
   plugins.push("./plugins/withBackupSplit");
+  plugins.push("./plugins/withAudioSession");
   plugins.push([
     "expo-location",
     {
