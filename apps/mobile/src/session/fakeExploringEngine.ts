@@ -10,8 +10,11 @@ import type {
   NowPlayingMeta,
   VoiceHandle,
 } from "@intell/shared";
+import { BUS_DEFAULT_DB } from "@intell/shared";
 import type { AudioSessionController } from "../audio/session/AudioSessionController";
 import type { ExploringEngine, VoiceEndedEvent } from "./enginePort";
+
+const KNOWN_BUSES = new Set<string>(Object.keys(BUS_DEFAULT_DB));
 
 type RemoteCmd =
   | "play"
@@ -250,8 +253,15 @@ export class FakeExploringEngine implements ExploringEngine {
     return { id: "bed" };
   }
 
-  setGain(): void {
-    // no-op
+  setGain(
+    target: VoiceHandle | LoopGroupHandle | BusId,
+    _gainDb?: number,
+    _rampMs?: number,
+  ): void {
+    // RC7: match real engine — unknown bus throws so tests catch missing buses.
+    if (typeof target === "string" && !KNOWN_BUSES.has(target)) {
+      throw new Error(`Unknown bus ${target}`);
+    }
   }
 
   setStemGain(): void {

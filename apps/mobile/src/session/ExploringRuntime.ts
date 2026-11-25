@@ -748,6 +748,7 @@ export class ExploringRuntime {
             void this.deps.engine.getSession().update({ title, artist: "InTell" }, "playing");
           },
           onHapticTrigger: undefined,
+          onAssetFailed: (sha) => this.reportAssetFailed(sha),
         },
         this.voices,
       );
@@ -758,12 +759,13 @@ export class ExploringRuntime {
         if (voice?.id) this.narrationVoiceId = voice.id;
       }
     } catch (e) {
+      const message = e instanceof Error ? e.message : "failed";
+      pushAudioBreadcrumb(`applyCommands ${message}`);
       const sha =
         e && typeof e === "object" && "sha" in e
           ? String((e as { sha: string }).sha)
           : null;
       if (sha) await this.reportAssetFailed(sha);
-      console.info("director command apply failed");
     }
   }
 

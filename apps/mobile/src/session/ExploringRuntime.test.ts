@@ -776,6 +776,26 @@ describe("ExploringRuntime single resume (F3)", () => {
   });
 });
 
+describe("ExploringRuntime moment bus / apply batch (RC7)", () => {
+  it("scan executes playNarration and leaves a live voice", async () => {
+    const { engine, runtime } = await setup();
+    // Strict fake throws on unknown bus — moment must be known (BUS_DEFAULT_DB).
+    expect(() => engine.setGain("moment", 0, 0)).not.toThrow();
+
+    await runtime.dispatch({
+      type: "scan",
+      at: nowBase(),
+      markerHash: "marker-hash-phys",
+    });
+    await flush();
+
+    expect(runtime.getSession().playing?.fragmentId).toBe("phys");
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+    expect(engine.getNarrationDiag()?.id).toBeTruthy();
+    runtime.dispose();
+  });
+});
+
 describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("interruption remount keeps playing with a new live voice", async () => {
     const { engine, runtime } = await setup();

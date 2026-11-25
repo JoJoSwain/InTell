@@ -7,6 +7,7 @@ import {
   type LoopGroupHandle,
   type NowPlayingMeta,
   type VoiceHandle,
+  BUS_DEFAULT_DB,
   DuckingPolicy,
   VoiceLedger,
   type VoiceLedgerStats,
@@ -24,15 +25,18 @@ import {
   type StereoPannerNode,
 } from "react-native-audio-api";
 import { AppState, type AppStateStatus } from "react-native";
-import { BufferLruCache } from "./lruCache";
-import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
-import { shouldRunTourLoop } from "./spikeGate";
 import {
   AudioSessionController,
   shouldDemoteSessionOnSuspend,
   type FocusEffect,
   type SessionBusyState,
 } from "../session";
+import { ENGINE_BUS_IDS } from "./engineBuses";
+import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
+import { BufferLruCache } from "./lruCache";
+import { shouldRunTourLoop } from "./spikeGate";
+
+export { ENGINE_BUS_IDS } from "./engineBuses";
 
 type Unsubscribe = () => void;
 
@@ -221,11 +225,10 @@ export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
     master.connect(context.destination);
     master.connect(analyser);
 
-    const busIds: BusId[] = ["story", "music", "surroundings", "ui"];
     const buses: Partial<Record<BusId, GainNode>> = {};
-    for (const bus of busIds) {
+    for (const bus of ENGINE_BUS_IDS) {
       const g = context.createGain();
-      g.gain.value = dbToGain(DuckingPolicy.BUS_DEFAULT_DB[bus]);
+      g.gain.value = dbToGain(BUS_DEFAULT_DB[bus]);
       g.connect(master);
       buses[bus] = g;
     }
