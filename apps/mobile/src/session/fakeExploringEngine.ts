@@ -103,6 +103,8 @@ export class FakeExploringEngine implements ExploringEngine {
   readonly session = new FakeAudioSession();
   audioSec = 0;
   loads: string[] = [];
+  /** Full load args for play-path contract tests (URI + decode Hz). */
+  loadCalls: { sha: string; uri: string; sampleRate?: number }[] = [];
   playedNarration: { sha: string; title: string }[] = [];
   /** Narration attempts refused while still suspended (C4). */
   refusedNarration = 0;
@@ -165,8 +167,9 @@ export class FakeExploringEngine implements ExploringEngine {
     return this.audioSec;
   }
 
-  async load(sha: string, _uri: string, _sampleRate?: number): Promise<BufferHandle> {
+  async load(sha: string, uri: string, sampleRate?: number): Promise<BufferHandle> {
     this.loads.push(sha);
+    this.loadCalls.push({ sha, uri, sampleRate });
     return { sha, durationMs: 2_000 };
   }
 

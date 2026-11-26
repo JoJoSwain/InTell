@@ -1,0 +1,181 @@
+/**
+ * M6 reset Step 1: end-to-end play path through real buildPackedSession,
+ * ExploringRuntime, applyDirectorCommands, and the strict fake engine.
+ */
+import { GrovePack } from "@intell/shared";
+import { migrate } from "../db/migrate";
+import { openNodeSqlite } from "../db/nodeSqlite";
+import { listCompletions, upsertAsset, upsertPack } from "../db/repos";
+import type { LocationService } from "../location/LocationService";
+import { buildDemo, fixtureId } from "../map/fixtures";
+import {
+  clearAudioBreadcrumbs,
+  getAudioBreadcrumbs,
+} from "../audio/session/audioBreadcrumbs";
+import { ExploringRuntime } from "./ExploringRuntime";
+import { FakeExploringEngine } from "./fakeExploringEngine";
+import { useSessionStore } from "./SessionStore";
+
+const MARKER_HASH = "aa".repeat(32);
+const NARR_SHA = "ab".repeat(32);
+const BARE_ASSET_PATH = `/data/user/0/org.replaceplace.intell/files/assets/${NARR_SHA}.m4a`;
+
+class FakeLocation {
+  mode: "idle" | "foreground" | "balanced" | "high" = "idle";
+  private onFix: ((f: {
+    at: number;
+    lat: number;
+    lng: number;
+    accuracyM: number;
+  }) => void) | null = null;
+  private onStop: (() => void) | null = null;
+
+  setFixListener(
+    listener: ((f: {
+      at: number;
+      lat: number;
+      lng: number;
+      accuracyM: number;
+    }) => void) | null,
+  ): void {
+    this.onFix = listener;
+  }
+
+  setStopRequestListener(listener: (() => void) | null): void {
+    this.onStop = listener;
+  }
+
+  async setMode(mode: "idle" | "foreground" | "balanced" | "high"): Promise<void> {
+    this.mode = mode === "balanced" ? "high" : mode;
+  }
+
+  async onAppBecameActive(): Promise<void> {
+    // no-op
+  }
+
+  isAppActive(): boolean {
+    return true;
+  }
+
+  getMode(): "idle" | "foreground" | "balanced" | "high" {
+    return this.mode;
+  }
+
+  requestStop(): void {
+    this.onStop?.();
+  }
+}
+
+async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function demoGroveWithPhysicalScanTarget() {
+  const demo = buildDemo();
+  const targetId = fixtureId(10);
+  const fragments = demo.grove.fragments.map((fragment) => {
+    if (fragment.id !== targetId) return fragment;
+    const { radiusM: _radius, ...rest } = fragment;
+    return {
+      ...rest,
+      visibility: "physical" as const,
+      markerHash: MARKER_HASH,
+    };
+  });
+  return GrovePack.parse({ ...demo.grove, fragments });
+}
+
+describe("ExploringRuntime play path (M6 reset Step 1)", () => {
+  it("scan → file:// load @ 24 kHz → playNarration → natural end → completion", async () => {
+    const db = openNodeSqlite();
+    await migrate(db);
+    const demo = buildDemo();
+    const grove = demoGroveWithPhysicalScanTarget();
+    const now = new Date().toISOString();
+    await upsertPack(db, {
+      scope: "grove",
+      id: grove.groveId,
+      version: grove.packVersion,
+      manifest_json: JSON.stringify(grove),
+      installed_at: now,
+    });
+    await upsertPack(db, {
+      scope: "region",
+      id: demo.region.regionId,
+      version: demo.region.packVersion,
+      manifest_json: JSON.stringify(demo.region),
+      installed_at: now,
+    });
+    await upsertAsset(db, {
+      sha: NARR_SHA,
+      ext: "m4a",
+      bytes: 1,
+      local_uri: BARE_ASSET_PATH,
+      last_used_at: now,
+    });
+
+    const engine = new FakeExploringEngine();
+    const location = new FakeLocation();
+    clearAudioBreadcrumbs();
+    useSessionStore.getState().resetUi();
+
+    const runtime = new ExploringRuntime({
+      db,
+      location: location as unknown as LocationService,
+      engine,
+      // No packedForTest — real reloadPacks → buildPackedSession + file:// prefix.
+    });
+    await runtime.start();
+    await flush();
+
+    expect(runtime.getSession().phase).toBe("idle");
+    const playsBefore = engine.playedNarration.length;
+    clearAudioBreadcrumbs();
+
+    await runtime.dispatch({
+      type: "scan",
+      at: Date.now(),
+      markerHash: MARKER_HASH,
+    });
+    await flush();
+
+    expect(runtime.getSession().playing?.fragmentId).toBe(fixtureId(10));
+    expect(engine.playedNarration.length).toBe(playsBefore + 1);
+    expect(engine.getNarrationDiag()?.id).toBeTruthy();
+    expect(engine.getNarrationDiag()?.paused).toBe(false);
+    expect(engine.masterLinear).toBe(1);
+
+    const narrLoad = engine.loadCalls.find((c) => c.sha === NARR_SHA);
+    expect(narrLoad).toBeTruthy();
+    expect(narrLoad!.uri).toBe(`file://${BARE_ASSET_PATH}`);
+    expect(narrLoad!.sampleRate).toBe(24_000);
+
+    const crumbs = getAudioBreadcrumbs().map((c) => c.message);
+    expect(crumbs.some((m) => m.includes("cmd-fail"))).toBe(false);
+    expect(crumbs.some((m) => m.includes("cmd playNarration"))).toBe(true);
+    // load may arrive via an explicit `load` command or via playNarration's own load.
+    expect(
+      crumbs.some((m) => m.includes(`cmd load ${NARR_SHA.slice(0, 8)}`)) ||
+        narrLoad != null,
+    ).toBe(true);
+
+    const voiceId = engine.getNarrationDiag()!.id;
+    await engine.emitVoiceEnded({
+      voiceId,
+      kind: "narration",
+      reason: "ended",
+    });
+    await flush();
+
+    expect(runtime.getSession().playing).toBeNull();
+    const completions = await listCompletions(db);
+    expect(completions.some((c) => c.fragment_id === fixtureId(10))).toBe(true);
+    expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
+    expect(useSessionStore.getState().afterglow).not.toBeNull();
+
+    runtime.dispose();
+  });
+});
