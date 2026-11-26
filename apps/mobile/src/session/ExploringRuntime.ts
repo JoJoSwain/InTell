@@ -535,6 +535,11 @@ export class ExploringRuntime {
     }
 
     const wasExploring = this.session.phase === "exploring";
+    const queuedBefore = this.session.queued?.fragmentId ?? null;
+
+    if (event.type === "narrationEnded") {
+      pushAudioBreadcrumb(`narrationEnded ${event.reason}`);
+    }
 
     const world = {
       ...this.packed.world,
@@ -549,6 +554,24 @@ export class ExploringRuntime {
     const result = stepSession(this.session, enriched, world);
     this.session = result.state;
     useSessionStore.getState().setSession(this.session, result.story);
+
+    for (const effect of result.effects) {
+      if (effect.type === "play") {
+        pushAudioBreadcrumb(
+          `play ${effect.fragmentId.slice(0, 8)} ${effect.version.timeWindow}`,
+        );
+      } else if (effect.type === "showTeaser") {
+        pushAudioBreadcrumb(
+          `showTeaser ${effect.reason} ${effect.fragmentId.slice(0, 8)}`,
+        );
+      } else if (effect.type === "stopNarration") {
+        pushAudioBreadcrumb("stopNarration");
+      }
+    }
+    const queuedAfter = result.state.queued?.fragmentId ?? null;
+    if (queuedAfter && queuedAfter !== queuedBefore) {
+      pushAudioBreadcrumb(`queued ${queuedAfter.slice(0, 8)}`);
+    }
 
     // C1: start silent session clock when we become exploring
     if (this.session.phase === "exploring" && !wasExploring) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -6,7 +6,7 @@ import {
   Text,
   TextInput,
 } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { installDemoGrove, installStressGrove } from "../../src/map/installFixtures";
 import {
   counts,
@@ -26,6 +26,10 @@ const allowDataScreen =
   process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
   process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true";
 
+const walkDeepLinks =
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true";
+
 export default function DataDevScreen() {
   if (!allowDataScreen) return <Redirect href="/" />;
   return <DataDevBody />;
@@ -33,6 +37,11 @@ export default function DataDevScreen() {
 
 function DataDevBody() {
   const runtime = useExploringRuntime();
+  const params = useLocalSearchParams<{
+    install?: string | string[];
+    sync?: string | string[];
+    reset?: string | string[];
+  }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [releaseId, setReleaseId] = useState("");
@@ -40,6 +49,7 @@ function DataDevBody() {
   const [status, setStatus] = useState("Idle");
   const [tally, setTally] = useState<DataCounts | null>(null);
   const [diagText, setDiagText] = useState("—");
+  const deepLinkRan = useRef(false);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -87,6 +97,43 @@ function DataDevBody() {
     }
   }
 
+  // Walk-only deep links (M6 reset Step 3): install=id,id&sync=1 | reset=1
+  useEffect(() => {
+    if (!walkDeepLinks || deepLinkRan.current) return;
+    const installRaw = Array.isArray(params.install)
+      ? params.install[0]
+      : params.install;
+    const syncRaw = Array.isArray(params.sync) ? params.sync[0] : params.sync;
+    const resetRaw = Array.isArray(params.reset) ? params.reset[0] : params.reset;
+    const wantReset = resetRaw === "1" || resetRaw === "true";
+    const groveIds = (installRaw ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const wantSync = syncRaw === "1" || syncRaw === "true";
+    if (!wantReset && groveIds.length === 0) return;
+    if (wantReset && !runtime) return;
+    deepLinkRan.current = true;
+    // Defer so setState is not synchronous inside the effect body (lint).
+    const handle = setTimeout(() => {
+      void run("Deep link", async () => {
+        if (wantReset) {
+          if (!runtime) throw new Error("runtime not ready");
+          await runtime.resetSessionKeepPacks();
+        }
+        for (const id of groveIds) {
+          await installGrove(id);
+        }
+        if (wantSync) {
+          await syncNow("wifi", async () => true);
+        }
+        // Packs land in SQLite; reload the in-memory world (M6 reset step 4).
+        if (runtime) await runtime.reloadPacks();
+      });
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [params.install, params.sync, params.reset, runtime]);
+
   return (
     <ScrollView contentContainerStyle={styles.root}>
       <Text style={styles.title}>Data layer</Text>
@@ -110,12 +157,18 @@ function DataDevBody() {
           run("Resetting session", async () => {
             if (!runtime) throw new Error("runtime not ready");
             await runtime.resetSessionKeepPacks();
+            await runtime.reloadPacks();
           })
         }
       />
       <DevButton
         label="Sync"
-        onPress={() => run("Syncing", () => syncNow("wifi", async () => true))}
+        onPress={() =>
+          run("Syncing", async () => {
+            await syncNow("wifi", async () => true);
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <TextInput
         accessibilityLabel="Grove id"
@@ -128,13 +181,31 @@ function DataDevBody() {
       />
       <DevButton
         label="Install grove"
-        onPress={() => run("Installing grove", () => installGrove(groveId.trim()))}
+        onPress={() =>
+          run("Installing grove", async () => {
+            await installGrove(groveId.trim());
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <DevButton label="Refresh counts" onPress={() => run("Counting", async () => undefined)} />
-      <DevButton label={strings.installDemo} onPress={() => run("Installing demo", () => installDemoGrove())} />
+      <DevButton
+        label={strings.installDemo}
+        onPress={() =>
+          run("Installing demo", async () => {
+            await installDemoGrove();
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
+      />
       <DevButton
         label={strings.installStress}
-        onPress={() => run("Installing stress grove", () => installStressGrove())}
+        onPress={() =>
+          run("Installing stress grove", async () => {
+            await installStressGrove();
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <TextInput
         accessibilityLabel="Staff email"
@@ -167,7 +238,12 @@ function DataDevBody() {
       />
       <DevButton
         label="Fetch preview"
-        onPress={() => run("Fetching preview", () => fetchPreview(releaseId.trim()))}
+        onPress={() =>
+          run("Fetching preview", async () => {
+            await fetchPreview(releaseId.trim());
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <DevButton label="Sign out" onPress={() => run("Signing out", () => signOut())} />
     </ScrollView>

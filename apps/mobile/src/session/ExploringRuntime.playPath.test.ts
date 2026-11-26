@@ -156,6 +156,11 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     const crumbs = getAudioBreadcrumbs().map((c) => c.message);
     expect(crumbs.some((m) => m.includes("cmd-fail"))).toBe(false);
     expect(crumbs.some((m) => m.includes("cmd playNarration"))).toBe(true);
+    expect(
+      crumbs.some((m) =>
+        m.startsWith(`play ${fixtureId(10).slice(0, 8)} `),
+      ),
+    ).toBe(true);
     // load may arrive via an explicit `load` command or via playNarration's own load.
     expect(
       crumbs.some((m) => m.includes(`cmd load ${NARR_SHA.slice(0, 8)}`)) ||
@@ -175,6 +180,81 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     expect(completions.some((c) => c.fragment_id === fixtureId(10))).toBe(true);
     expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
     expect(useSessionStore.getState().afterglow).not.toBeNull();
+    expect(
+      getAudioBreadcrumbs().some((c) => c.message === "narrationEnded natural"),
+    ).toBe(true);
+
+    runtime.dispose();
+  });
+
+  it("reloadPacks after late install makes a scan find the marker", async () => {
+    const db = openNodeSqlite();
+    await migrate(db);
+    const demo = buildDemo();
+    const grove = demoGroveWithPhysicalScanTarget();
+    const now = new Date().toISOString();
+    // Region only at start — mirrors install after the runtime already built its world.
+    await upsertPack(db, {
+      scope: "region",
+      id: demo.region.regionId,
+      version: demo.region.packVersion,
+      manifest_json: JSON.stringify(demo.region),
+      installed_at: now,
+    });
+
+    const engine = new FakeExploringEngine();
+    const location = new FakeLocation();
+    clearAudioBreadcrumbs();
+    useSessionStore.getState().resetUi();
+
+    const runtime = new ExploringRuntime({
+      db,
+      location: location as unknown as LocationService,
+      engine,
+    });
+    await runtime.start();
+    await flush();
+
+    await runtime.dispatch({
+      type: "scan",
+      at: Date.now(),
+      markerHash: MARKER_HASH,
+    });
+    await flush();
+    expect(runtime.getSession().playing).toBeNull();
+    expect(engine.playedNarration.length).toBe(0);
+
+    await upsertPack(db, {
+      scope: "grove",
+      id: grove.groveId,
+      version: grove.packVersion,
+      manifest_json: JSON.stringify(grove),
+      installed_at: now,
+    });
+    await upsertAsset(db, {
+      sha: NARR_SHA,
+      ext: "m4a",
+      bytes: 1,
+      local_uri: BARE_ASSET_PATH,
+      last_used_at: now,
+    });
+    await runtime.reloadPacks();
+
+    clearAudioBreadcrumbs();
+    await runtime.dispatch({
+      type: "scan",
+      at: Date.now(),
+      markerHash: MARKER_HASH,
+    });
+    await flush();
+
+    expect(runtime.getSession().playing?.fragmentId).toBe(fixtureId(10));
+    expect(engine.playedNarration.length).toBe(1);
+    expect(
+      getAudioBreadcrumbs().some((c) =>
+        c.message.startsWith(`play ${fixtureId(10).slice(0, 8)} `),
+      ),
+    ).toBe(true);
 
     runtime.dispose();
   });
