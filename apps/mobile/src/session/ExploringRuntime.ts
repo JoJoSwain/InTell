@@ -95,8 +95,8 @@ export class ExploringRuntime {
   private endingSession = false;
   /** Prevents window sync from re-entering dispatch (C2). */
   private inWindowSync = false;
-  /** Last wall time we emitted an `out=` breadcrumb while narration was live. */
-  private lastOutBreadcrumbAt = 0;
+  /** Last wall time we emitted a periodic `diag` breadcrumb (M6 step 4b). */
+  private lastDiagBreadcrumbAt = 0;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -211,6 +211,28 @@ export class ExploringRuntime {
       outDb: this.deps.engine.getOutputLevelDb?.() ?? null,
       breadcrumbs: getAudioBreadcrumbs(),
     };
+  }
+
+  /**
+   * Step 4b: release-visible one-liner for logcat (no coordinates / marker codes).
+   * `diag ctx=… master=… started=… narr=<id8>|none paused=… pos=… out=… phase=… playing=…`
+   */
+  private pushDiagBreadcrumb(): void {
+    const s = this.getAudioDiagnosticsSnapshot();
+    const narr =
+      s.narration?.id != null && s.narration.id.length > 0
+        ? s.narration.id.slice(0, 8)
+        : "none";
+    const paused = s.narration != null ? String(s.narration.paused) : "false";
+    const pos =
+      s.narration != null ? Math.round(s.narration.positionMs) : 0;
+    const out =
+      s.outDb != null && Number.isFinite(s.outDb)
+        ? String(Math.round(s.outDb))
+        : "n/a";
+    pushAudioBreadcrumb(
+      `diag ctx=${s.contextState} master=${s.masterGain.toFixed(3)} started=${s.sessionStarted} narr=${narr} paused=${paused} pos=${pos} out=${out} phase=${s.sessionPhase} playing=${s.playing}`,
+    );
   }
 
   /**
@@ -567,6 +589,8 @@ export class ExploringRuntime {
       } else if (effect.type === "stopNarration") {
         pushAudioBreadcrumb("stopNarration");
       }
+      // Step 4b: one diag line after every session effect (logcat evidence).
+      this.pushDiagBreadcrumb();
     }
     const queuedAfter = result.state.queued?.fragmentId ?? null;
     if (queuedAfter && queuedAfter !== queuedBefore) {
@@ -852,17 +876,15 @@ export class ExploringRuntime {
 
     await this.runSessionTimers(at);
 
-    // Review 5: prove audible render without an ear — `out=-NN dB` every 5 s.
+    // Step 4b: while exploring or narration is live, one `diag` line every 5 s.
+    const narrLive =
+      this.session.playing != null && this.session.playing.pausedAt === null;
     if (
-      this.session.playing != null &&
-      this.session.playing.pausedAt === null &&
-      at - this.lastOutBreadcrumbAt >= 5_000
+      (this.session.phase === "exploring" || narrLive) &&
+      at - this.lastDiagBreadcrumbAt >= 5_000
     ) {
-      const outDb = this.deps.engine.getOutputLevelDb?.();
-      if (outDb != null && Number.isFinite(outDb)) {
-        this.lastOutBreadcrumbAt = at;
-        pushAudioBreadcrumb(`out=${Math.round(outDb)} dB`);
-      }
+      this.lastDiagBreadcrumbAt = at;
+      this.pushDiagBreadcrumb();
     }
 
     if (!this.packed) return;

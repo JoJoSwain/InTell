@@ -161,6 +161,16 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
         m.startsWith(`play ${fixtureId(10).slice(0, 8)} `),
       ),
     ).toBe(true);
+    expect(
+      crumbs.some(
+        (m) =>
+          m.startsWith("diag ctx=") &&
+          m.includes("started=") &&
+          m.includes("narr=") &&
+          !m.includes(" lat=") &&
+          !m.includes("lng="),
+      ),
+    ).toBe(true);
     // load may arrive via an explicit `load` command or via playNarration's own load.
     expect(
       crumbs.some((m) => m.includes(`cmd load ${NARR_SHA.slice(0, 8)}`)) ||
@@ -256,6 +266,91 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
       ),
     ).toBe(true);
 
+    runtime.dispose();
+  });
+
+  it("emits a periodic diag breadcrumb every 5 s while exploring", async () => {
+    const db = openNodeSqlite();
+    await migrate(db);
+    const demo = buildDemo();
+    const grove = demoGroveWithPhysicalScanTarget();
+    const now = new Date().toISOString();
+    await upsertPack(db, {
+      scope: "grove",
+      id: grove.groveId,
+      version: grove.packVersion,
+      manifest_json: JSON.stringify(grove),
+      installed_at: now,
+    });
+    await upsertPack(db, {
+      scope: "region",
+      id: demo.region.regionId,
+      version: demo.region.packVersion,
+      manifest_json: JSON.stringify(demo.region),
+      installed_at: now,
+    });
+    await upsertAsset(db, {
+      sha: NARR_SHA,
+      ext: "m4a",
+      bytes: 1,
+      local_uri: BARE_ASSET_PATH,
+      last_used_at: now,
+    });
+
+    const engine = new FakeExploringEngine();
+    const location = new FakeLocation();
+    clearAudioBreadcrumbs();
+    useSessionStore.getState().resetUi();
+
+    const runtime = new ExploringRuntime({
+      db,
+      location: location as unknown as LocationService,
+      engine,
+    });
+    await runtime.start();
+    await flush();
+
+    let wall = 1_700_000_000_000;
+    const nowSpy = jest.spyOn(Date, "now").mockImplementation(() => wall);
+
+    await runtime.dispatch({
+      type: "scan",
+      at: wall,
+      markerHash: MARKER_HASH,
+    });
+    await flush();
+    expect(runtime.getSession().phase).toBe("exploring");
+
+    expect(engine.isSessionClockRunning()).toBe(true);
+
+    clearAudioBreadcrumbs();
+    wall += 5_000;
+    engine.emitTick(1);
+    await flush();
+    await flush();
+    expect(engine.tickNotifyCount).toBeGreaterThan(0);
+    expect(
+      getAudioBreadcrumbs().some((c) => c.message.startsWith("diag ctx=")),
+    ).toBe(true);
+
+    clearAudioBreadcrumbs();
+    wall += 4_999;
+    engine.emitTick(2);
+    await flush();
+    await flush();
+    expect(
+      getAudioBreadcrumbs().some((c) => c.message.startsWith("diag ctx=")),
+    ).toBe(false);
+
+    wall += 1;
+    engine.emitTick(3);
+    await flush();
+    await flush();
+    expect(
+      getAudioBreadcrumbs().some((c) => c.message.startsWith("diag ctx=")),
+    ).toBe(true);
+
+    nowSpy.mockRestore();
     runtime.dispose();
   });
 });
