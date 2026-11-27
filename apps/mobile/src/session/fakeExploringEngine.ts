@@ -30,9 +30,21 @@ export class FakeAudioSession {
   focusRequests = 0;
   /** When true, the next start() returns false (F2). */
   denyNextStart = false;
+  /**
+   * When set, `start()` awaits this before completing (R1: stop-during-handlePlay).
+   * Cleared after the wait.
+   */
+  startBarrier: Promise<void> | null = null;
+  /** True while `start()` is blocked on `startBarrier`. */
+  startWaiting = false;
   private busy: "ok" | "audioBusy" | "notificationDenied" = "ok";
-  private mode: "userPaused" | "playing" | "ducked" | "suspendedTransient" =
-    "userPaused";
+  private mode:
+    | "userPaused"
+    | "playing"
+    | "ducked"
+    | "suspendedTransient"
+    | "suspendedLoss"
+    | "noisyPaused" = "userPaused";
   private remote: ((c: string) => void | Promise<void>) | null = null;
 
   isStarted(): boolean {
@@ -53,6 +65,13 @@ export class FakeAudioSession {
 
   async start(_meta: { title: string; artist: string }): Promise<boolean> {
     this.focusRequests += 1;
+    if (this.startBarrier) {
+      this.startWaiting = true;
+      const barrier = this.startBarrier;
+      this.startBarrier = null;
+      await barrier;
+      this.startWaiting = false;
+    }
     if (this.denyNextStart) {
       this.denyNextStart = false;
       this.busy = "audioBusy";
@@ -167,9 +186,30 @@ export class FakeExploringEngine implements ExploringEngine {
     return this.audioSec;
   }
 
+  /**
+   * When set, the next `load()` awaits this before completing (R1 review:
+   * pause-during-decode / prefetch tests). Cleared after the wait.
+   */
+  loadBarrier: Promise<void> | null = null;
+  /** True while `load()` is blocked on `loadBarrier`. */
+  loadWaiting = false;
+  /** When true, the next load rejects after any barrier. */
+  failNextLoad = false;
+
   async load(sha: string, uri: string, sampleRate?: number): Promise<BufferHandle> {
     this.loads.push(sha);
     this.loadCalls.push({ sha, uri, sampleRate });
+    if (this.loadBarrier) {
+      this.loadWaiting = true;
+      const barrier = this.loadBarrier;
+      this.loadBarrier = null;
+      await barrier;
+      this.loadWaiting = false;
+    }
+    if (this.failNextLoad) {
+      this.failNextLoad = false;
+      throw new Error(`load failed: ${sha}`);
+    }
     return { sha, durationMs: 2_000 };
   }
 

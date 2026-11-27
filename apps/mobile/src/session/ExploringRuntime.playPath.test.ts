@@ -198,6 +198,8 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
       reason: "ended",
     });
     await flush();
+    await runtime.whenIdle();
+    await flush();
 
     expect(runtime.getSession().playing).toBeNull();
     const completions = await listCompletions(db);
@@ -213,6 +215,7 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     clearAudioBreadcrumbs();
     await runtime.stopExploring();
     await flush();
+    await runtime.whenIdle();
     const stopCrumbs = getAudioBreadcrumbs().map((c) => c.message);
     expect(stopCrumbs).toContain("sessionEnded");
     expect(stopCrumbs.every(noCoordPair)).toBe(true);
@@ -353,6 +356,7 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     wall += 5_000;
     engine.emitTick(1);
     await flush();
+    await runtime.whenIdle();
     await flush();
     expect(engine.tickNotifyCount).toBeGreaterThan(0);
     expect(
@@ -363,6 +367,7 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     wall += 4_999;
     engine.emitTick(2);
     await flush();
+    await runtime.whenIdle();
     await flush();
     expect(
       getAudioBreadcrumbs().some((c) => c.message.startsWith("diag ctx=")),
@@ -371,6 +376,7 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     wall += 1;
     engine.emitTick(3);
     await flush();
+    await runtime.whenIdle();
     await flush();
     expect(
       getAudioBreadcrumbs().some((c) => c.message.startsWith("diag ctx=")),
