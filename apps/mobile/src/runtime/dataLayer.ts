@@ -7,7 +7,7 @@ import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
 import { randomUUID } from "expo-crypto";
 import IntellStorage from "intell-storage";
-import { installPack } from "../packs/install";
+import { installPack, MissingObjectError } from "../packs/install";
 import { transportFromNetworkType, type Transport } from "../packs/policy";
 import { syncContent } from "../packs/sync";
 import { clearPreview, storePreview } from "../preview/session";
@@ -187,7 +187,15 @@ export async function installGrove(groveId: string): Promise<void> {
     assetDirectory: layer.assetDirectory,
     stagingDirectory: layer.stagingDirectory,
   });
-  await runSync(layer, "wifi", async () => false);
+  // Region (or other) packs may reference ambience that is missing from local
+  // public-media; the grove itself is already installed — don't fail the action.
+  try {
+    await runSync(layer, "wifi", async () => false);
+  } catch (error) {
+    if (error instanceof MissingObjectError) return;
+    if (error instanceof Error && /storage object missing/i.test(error.message)) return;
+    throw error;
+  }
 }
 
 export async function syncNow(transport: Transport, confirmCellular: () => Promise<boolean>): Promise<void> {

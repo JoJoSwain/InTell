@@ -1,4 +1,9 @@
-import { GrovePack, RegionPack, type PackIndexEntry, type PackManifest } from "@intell/shared";
+import {
+  GrovePackDevice,
+  RegionPackDevice,
+  type PackIndexEntry,
+  type PackManifest,
+} from "@intell/shared";
 import type { SqlDriver } from "../db/driver";
 import { deleteAsset, deletePack, getAsset, listAssets, listPacks, type PackRow } from "../db/repos";
 import type { FileStore } from "../files/store";
@@ -73,7 +78,8 @@ function rawObject(pack: PackRow): Record<string, unknown> | null {
 function parsedManifest(pack: PackRow): PackManifest | null {
   const raw = rawObject(pack);
   if (!raw) return null;
-  const result = pack.scope === "region" ? RegionPack.safeParse(raw) : GrovePack.safeParse(raw);
+  const result =
+    pack.scope === "region" ? RegionPackDevice.safeParse(raw) : GrovePackDevice.safeParse(raw);
   return result.success ? result.data : null;
 }
 

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -13,7 +14,12 @@ import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -34,6 +40,11 @@ class SessionMetaRecord : Record {
 
 @OptIn(UnstableApi::class)
 class AudioSessionModule : Module() {
+  companion object {
+    const val STOP_EXPLORING_ACTION = "stop_exploring"
+    private const val TAG = "AudioSession"
+  }
+
   private val mainHandler = Handler(Looper.getMainLooper())
   private var focusController: FocusController? = null
   private var mixPlayer: MixPlayer? = null
@@ -42,6 +53,7 @@ class AudioSessionModule : Module() {
   private var routeObserver: RouteObserver? = null
   private var serviceBound = false
   private var pendingStart: (() -> Unit)? = null
+  private val stopExploringCommand = SessionCommand(STOP_EXPLORING_ACTION, Bundle.EMPTY)
 
   private val serviceConnection =
     object : ServiceConnection {
@@ -121,13 +133,14 @@ class AudioSessionModule : Module() {
       android.util.Log.i(TAG, "contextState after resume: $state")
     }
 
+    /** Release-visible breadcrumbs — Log.w survives R8 Log.i stripping (M6 review 5). */
+    AsyncFunction("logBreadcrumb") { message: String ->
+      android.util.Log.w("InTellAudio", message)
+    }
+
     OnDestroy {
       mainHandler.post { stopSession() }
     }
-  }
-
-  companion object {
-    private const val TAG = "AudioSession"
   }
 
   private val context: Context
@@ -172,9 +185,46 @@ class AudioSessionModule : Module() {
       // so Media3 promotes FGS inside the ~5 s window.
       player.setPlayback(true)
 
+      val stopButton =
+        CommandButton.Builder(CommandButton.ICON_STOP)
+          .setDisplayName("Stop exploring")
+          .setSessionCommand(stopExploringCommand)
+          .setEnabled(true)
+          .build()
       val session =
         MediaSession.Builder(ctx, player)
           .setId("intell-mix")
+          .setCallback(
+            object : MediaSession.Callback {
+              override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+              ): MediaSession.ConnectionResult {
+                val sessionCommands =
+                  MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                    .buildUpon()
+                    .add(stopExploringCommand)
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                  .setAvailableSessionCommands(sessionCommands)
+                  .setCustomLayout(listOf(stopButton))
+                  .build()
+              }
+
+              override fun onCustomCommand(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                customCommand: SessionCommand,
+                args: Bundle,
+              ): ListenableFuture<SessionResult> {
+                if (customCommand.customAction == STOP_EXPLORING_ACTION) {
+                  sendEvent("remote", mapOf("command" to "stopExploring"))
+                  return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+              }
+            },
+          )
           .build()
       mediaSession = session
     } else {

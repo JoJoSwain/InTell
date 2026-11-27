@@ -1,22 +1,89 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Redirect } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { installDemoGrove, installStressGrove } from "../../src/map/installFixtures";
-import { counts, fetchPreview, installGrove, signIn, signOut, syncNow, type DataCounts } from "../../src/runtime/dataLayer";
+import {
+  counts,
+  fetchPreview,
+  installGrove,
+  signIn,
+  signOut,
+  syncNow,
+  type DataCounts,
+} from "../../src/runtime/dataLayer";
+import { useExploringRuntime } from "../../src/session/ExploringProvider";
 import { strings } from "../../src/ui/strings";
 
+/** Dev builds, or local USB walk release builds that bake cleartext to 127.0.0.1. */
+const allowDataScreen =
+  __DEV__ ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true";
+
+const walkDeepLinks =
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "1" ||
+  process.env.EXPO_PUBLIC_ALLOW_LOCAL_CLEARTEXT === "true";
+
 export default function DataDevScreen() {
-  if (!__DEV__) return <Redirect href="/" />;
+  if (!allowDataScreen) return <Redirect href="/" />;
   return <DataDevBody />;
 }
 
 function DataDevBody() {
+  const runtime = useExploringRuntime();
+  const params = useLocalSearchParams<{
+    install?: string | string[];
+    sync?: string | string[];
+    reset?: string | string[];
+  }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [releaseId, setReleaseId] = useState("");
   const [groveId, setGroveId] = useState("");
   const [status, setStatus] = useState("Idle");
   const [tally, setTally] = useState<DataCounts | null>(null);
+  const [diagText, setDiagText] = useState("—");
+  const deepLinkRan = useRef(false);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!runtime) {
+        setDiagText("runtime not ready");
+        return;
+      }
+      const s = runtime.getAudioDiagnosticsSnapshot();
+      const crumbs = s.breadcrumbs
+        .slice(-12)
+        .map((c) => `${new Date(c.at).toISOString().slice(11, 19)} ${c.message}`)
+        .join("\n");
+      const narr = s.narration
+        ? `${s.narration.id} paused=${s.narration.paused} posMs=${Math.round(s.narration.positionMs)}`
+        : "none";
+      const out =
+        s.outDb != null && Number.isFinite(s.outDb)
+          ? `${Math.round(s.outDb)} dB`
+          : "n/a";
+      setDiagText(
+        [
+          `ctx=${s.contextState} master=${s.masterGain.toFixed(3)}`,
+          `focus=${s.focusMode} busy=${s.busy} sessionStarted=${s.sessionStarted}`,
+          `narration: ${narr}`,
+          `out=${out}`,
+          `director.suspended=${s.directorSuspended}`,
+          `session phase=${s.sessionPhase} playing=${s.playing}`,
+          "--- breadcrumbs ---",
+          crumbs || "(empty)",
+        ].join("\n"),
+      );
+    }, 500);
+    return () => clearInterval(id);
+  }, [runtime]);
 
   async function run(label: string, action: () => Promise<void>): Promise<void> {
     setStatus(label);
@@ -30,8 +97,45 @@ function DataDevBody() {
     }
   }
 
+  // Walk-only deep links (M6 reset Step 3): install=id,id&sync=1 | reset=1
+  useEffect(() => {
+    if (!walkDeepLinks || deepLinkRan.current) return;
+    const installRaw = Array.isArray(params.install)
+      ? params.install[0]
+      : params.install;
+    const syncRaw = Array.isArray(params.sync) ? params.sync[0] : params.sync;
+    const resetRaw = Array.isArray(params.reset) ? params.reset[0] : params.reset;
+    const wantReset = resetRaw === "1" || resetRaw === "true";
+    const groveIds = (installRaw ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const wantSync = syncRaw === "1" || syncRaw === "true";
+    if (!wantReset && groveIds.length === 0) return;
+    if (wantReset && !runtime) return;
+    deepLinkRan.current = true;
+    // Defer so setState is not synchronous inside the effect body (lint).
+    const handle = setTimeout(() => {
+      void run("Deep link", async () => {
+        if (wantReset) {
+          if (!runtime) throw new Error("runtime not ready");
+          await runtime.resetSessionKeepPacks();
+        }
+        for (const id of groveIds) {
+          await installGrove(id);
+        }
+        if (wantSync) {
+          await syncNow("wifi", async () => true);
+        }
+        // Packs land in SQLite; reload the in-memory world (M6 reset step 4).
+        if (runtime) await runtime.reloadPacks();
+      });
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [params.install, params.sync, params.reset, runtime]);
+
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root}>
       <Text style={styles.title}>Data layer</Text>
       <Text accessibilityRole="text">{status}</Text>
       {tally ? (
@@ -39,9 +143,32 @@ function DataDevBody() {
           {`Packs ${tally.packs}, assets ${tally.assets}, preview ${tally.preview}`}
         </Text>
       ) : null}
+      <Text style={styles.section}>{strings.audioDiagnostics}</Text>
+      <Text
+        accessibilityRole="text"
+        accessibilityLabel={strings.audioDiagnostics}
+        style={styles.diag}
+      >
+        {diagText}
+      </Text>
+      <DevButton
+        label={strings.resetSessionKeepPacks}
+        onPress={() =>
+          run("Resetting session", async () => {
+            if (!runtime) throw new Error("runtime not ready");
+            await runtime.resetSessionKeepPacks();
+            await runtime.reloadPacks();
+          })
+        }
+      />
       <DevButton
         label="Sync"
-        onPress={() => run("Syncing", () => syncNow("wifi", async () => true))}
+        onPress={() =>
+          run("Syncing", async () => {
+            await syncNow("wifi", async () => true);
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <TextInput
         accessibilityLabel="Grove id"
@@ -54,13 +181,31 @@ function DataDevBody() {
       />
       <DevButton
         label="Install grove"
-        onPress={() => run("Installing grove", () => installGrove(groveId.trim()))}
+        onPress={() =>
+          run("Installing grove", async () => {
+            await installGrove(groveId.trim());
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <DevButton label="Refresh counts" onPress={() => run("Counting", async () => undefined)} />
-      <DevButton label={strings.installDemo} onPress={() => run("Installing demo", () => installDemoGrove())} />
+      <DevButton
+        label={strings.installDemo}
+        onPress={() =>
+          run("Installing demo", async () => {
+            await installDemoGrove();
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
+      />
       <DevButton
         label={strings.installStress}
-        onPress={() => run("Installing stress grove", () => installStressGrove())}
+        onPress={() =>
+          run("Installing stress grove", async () => {
+            await installStressGrove();
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <TextInput
         accessibilityLabel="Staff email"
@@ -93,10 +238,15 @@ function DataDevBody() {
       />
       <DevButton
         label="Fetch preview"
-        onPress={() => run("Fetching preview", () => fetchPreview(releaseId.trim()))}
+        onPress={() =>
+          run("Fetching preview", async () => {
+            await fetchPreview(releaseId.trim());
+            if (runtime) await runtime.reloadPacks();
+          })
+        }
       />
       <DevButton label="Sign out" onPress={() => run("Signing out", () => signOut())} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -109,8 +259,18 @@ function DevButton({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 24, gap: 12, backgroundColor: "#F6F2EA" },
+  root: { padding: 24, gap: 12, backgroundColor: "#F6F2EA" },
   title: { fontSize: 22, fontFamily: "Georgia", color: "#1F2419" },
+  section: { marginTop: 8, fontSize: 16, fontWeight: "600", color: "#1F2419" },
+  diag: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "#1F2419",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DDD6C7",
+  },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#DDD6C7",

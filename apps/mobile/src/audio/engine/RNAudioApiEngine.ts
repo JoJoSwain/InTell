@@ -7,6 +7,7 @@ import {
   type LoopGroupHandle,
   type NowPlayingMeta,
   type VoiceHandle,
+  BUS_DEFAULT_DB,
   DuckingPolicy,
   VoiceLedger,
   type VoiceLedgerStats,
@@ -17,20 +18,25 @@ import {
   AudioContext,
   AudioManager,
   decodeAudioData,
+  type AnalyserNode,
   type AudioBuffer,
   type AudioBufferSourceNode,
   type GainNode,
   type StereoPannerNode,
 } from "react-native-audio-api";
 import { AppState, type AppStateStatus } from "react-native";
-import { BufferLruCache } from "./lruCache";
-import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
 import {
   AudioSessionController,
   shouldDemoteSessionOnSuspend,
   type FocusEffect,
   type SessionBusyState,
 } from "../session";
+import { ENGINE_BUS_IDS } from "./engineBuses";
+import { equalPowerCurve, rampGainHeld } from "./gainAutomation";
+import { BufferLruCache } from "./lruCache";
+import { shouldRunTourLoop } from "./spikeGate";
+
+export { ENGINE_BUS_IDS } from "./engineBuses";
 
 type Unsubscribe = () => void;
 
@@ -92,9 +98,13 @@ function enforceMinFade(fadeMs: number): number {
  * Platform session owned by `audio-session` (not the library).
  * UI code must import this only through the AudioEngine interface (plus spike helpers).
  */
-export class RNAudioApiEngine implements AudioEngine {
+/** Omit onRemoteCommand so we can widen it with stopExploring (M6 F6). */
+export class RNAudioApiEngine implements Omit<AudioEngine, "onRemoteCommand"> {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  /** Master-bus analyser for output-level diagnostics (review 5). */
+  private analyser: AnalyserNode | null = null;
+  private analyserTimeDomain: Float32Array | null = null;
   private buses: Partial<Record<BusId, GainNode>> = {};
   private cache: BufferLruCache | null = null;
   private voices = new Map<string, VoiceState>();
@@ -112,6 +122,16 @@ export class RNAudioApiEngine implements AudioEngine {
   private mixContextStartSec: number | null = null;
   private initWallMs = 0;
   private mixActive = false;
+  /**
+   * Production exploring clock (C1). Silent heartbeats only — no focus, no tour loop.
+   * Independent of `mixActive` (spike).
+   */
+  private sessionClockActive = false;
+  /**
+   * Spike-only paths (tour loop, tour narration template). Set by `enableSpikeMode`
+   * / `prepareMixStart`. Production ExploringRuntime never enables this.
+   */
+  private spikeMode = false;
   /** Linear master multiplier while ducked (1 = unducked). */
   private duckFactor = 1;
   private unduckedMasterLinear = 1;
@@ -123,7 +143,15 @@ export class RNAudioApiEngine implements AudioEngine {
     (p: { positionMs: number; durationMs: number }) => void
   >();
   private remoteSubs = new Set<
-    (c: "play" | "pause" | "skipForward" | "skipBackward" | "next") => void
+    (
+      c:
+        | "play"
+        | "pause"
+        | "skipForward"
+        | "skipBackward"
+        | "next"
+        | "stopExploring",
+    ) => void
   >();
   private appStateSubs = new Set<(state: AppStateStatus) => void>();
   private notificationSubs = new Set<(visible: boolean) => void>();
@@ -189,13 +217,18 @@ export class RNAudioApiEngine implements AudioEngine {
 
     const master = context.createGain();
     master.gain.value = 1;
+    // Side-tap only: never put AnalyserNode on the critical path to destination
+    // (some RN Audio API builds don't pass audio through analyser reliably).
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
     master.connect(context.destination);
+    master.connect(analyser);
 
-    const busIds: BusId[] = ["story", "music", "surroundings", "ui"];
     const buses: Partial<Record<BusId, GainNode>> = {};
-    for (const bus of busIds) {
+    for (const bus of ENGINE_BUS_IDS) {
       const g = context.createGain();
-      g.gain.value = dbToGain(DuckingPolicy.BUS_DEFAULT_DB[bus]);
+      g.gain.value = dbToGain(BUS_DEFAULT_DB[bus]);
       g.connect(master);
       buses[bus] = g;
     }
@@ -208,6 +241,8 @@ export class RNAudioApiEngine implements AudioEngine {
 
     this.context = context;
     this.master = master;
+    this.analyser = analyser;
+    this.analyserTimeDomain = new Float32Array(analyser.fftSize);
     this.buses = buses;
     this.cache = new BufferLruCache(context.sampleRate);
     this.silentBuffer = silent;
@@ -265,28 +300,13 @@ export class RNAudioApiEngine implements AudioEngine {
    * then reset the wall/context clock baseline so clockGapMs is not carried over.
    */
   async prepareMixStart(): Promise<void> {
+    await this.resumeContextIfSuspended();
+    this.restoreMasterGain();
     const ctx = this.requireContext();
-    const master = this.master;
-    // stop-all schedules suspend on a silent source's onended; don't race it.
-    const deadline = Date.now() + 2000;
-    while (this.suspendPending && Date.now() < deadline) {
-      await new Promise<void>((r) => setTimeout(r, 20));
-    }
-    if (ctx.state === "suspended") {
-      try {
-        await ctx.resume();
-      } catch (err) {
-        console.warn("[audio-spike] prepareMixStart resume failed", err);
-      }
-    }
-    // fadeMasterAndSuspend ramps master to ~0; resume alone leaves that mute.
-    if (master) {
-      const now = ctx.currentTime;
-      rampGainHeld(master.gain, now, 1, 0);
-    }
     this.mixWallStartMs = Date.now();
     this.mixContextStartSec = ctx.currentTime;
     this.mixActive = true;
+    this.spikeMode = true;
     this.clockWindowWallStartMs = Date.now();
     this.clockWindowContextStartSec = ctx.currentTime;
     this.clockRateLowWindows = 0;
@@ -294,6 +314,40 @@ export class RNAudioApiEngine implements AudioEngine {
     this.requestFocus();
     this.ensureHeartbeats();
     this.tick();
+  }
+
+  /**
+   * Exploring session audio clock (C1 / C4). Schedules silent heartbeats so `onTick`
+   * keeps firing while exploring — including during afterglow with no narration.
+   * Resumes a suspended context (after Stop / pause) so heartbeats can fire.
+   * Does **not** request audio focus (entering a grove must not pause a podcast).
+   * Does **not** restore master gain (narration start does that).
+   * Does **not** enable the B·S2 tour loop.
+   */
+  startSessionClock(): void {
+    this.sessionClockActive = true;
+    void this.resumeContextIfSuspended().then(() => {
+      if (!this.sessionClockActive || this.disposed) return;
+      this.ensureHeartbeats();
+      this.tick();
+    });
+  }
+
+  stopSessionClock(): void {
+    this.sessionClockActive = false;
+  }
+
+  isSessionClockRunning(): boolean {
+    return this.sessionClockActive;
+  }
+
+  /** Spike screen only — enables tour-loop / tour-template behaviour. */
+  enableSpikeMode(enabled = true): void {
+    this.spikeMode = enabled;
+  }
+
+  isSpikeMode(): boolean {
+    return this.spikeMode;
   }
 
   startHeartbeats(): void {
@@ -394,6 +448,30 @@ export class RNAudioApiEngine implements AudioEngine {
     this.ensureHeartbeats();
     await this.fadeMasterAndSuspend(fade, "stop-all");
     await this.endMixSession();
+  }
+
+  /** Alias for ExploringRuntime session end (B7). */
+  async stopAll(fadeMs = 500): Promise<void> {
+    await this.stopAllMix(fadeMs);
+  }
+
+  /**
+   * Seek narration to an absolute position (R5 skip-back). No-op without narration.
+   */
+  seekNarration(positionMs: number): void {
+    const narration = [...this.voices.values()].find(
+      (v) => v.kind === "narration",
+    );
+    if (!narration?.meta) return;
+    const sha = [...this.buffers.entries()].find(
+      ([, b]) => b.buffer === narration.buffer,
+    )?.[0];
+    if (!sha) return;
+    this.playNarration(
+      { sha, durationMs: narration.durationMs },
+      narration.meta,
+      Math.max(0, positionMs),
+    );
   }
 
   onSettled(
@@ -498,7 +576,18 @@ export class RNAudioApiEngine implements AudioEngine {
       this.buffers.delete(sha);
     }
 
-    const input: string | number = /^\d+$/.test(uri) ? Number(uri) : uri;
+    // Release Android: decodeAudioData treats non-file:// strings as bundled
+    // raw assets → "Could not read asset bytes". Pack local_uri is often a bare path.
+    const input: string | number = /^\d+$/.test(uri)
+      ? Number(uri)
+      : uri.startsWith("file:") ||
+          uri.startsWith("content:") ||
+          uri.startsWith("http:") ||
+          uri.startsWith("https:")
+        ? uri
+        : uri.startsWith("/")
+          ? `file://${uri}`
+          : `file:///${uri}`;
     // Standalone decodeAudioData accepts an optional sampleRate; context.decode
     // always uses context.sampleRate.
     const buffer = await decodeAudioData(input, sampleRate);
@@ -529,6 +618,10 @@ export class RNAudioApiEngine implements AudioEngine {
     meta: NowPlayingMeta,
     startAtMs?: number,
   ): VoiceHandle {
+    // C4: after Stop, context is suspended and master is ~0 — same as
+    // prepareMixStart minus spike clock / tour bits.
+    this.prepareNarrationStart();
+
     const ctx = this.requireContext();
     const internal = this.requireBuffer(h.sha);
     this.stopNarrationInternal(enforceMinFade(0));
@@ -574,16 +667,19 @@ export class RNAudioApiEngine implements AudioEngine {
     this.narrationActive = true;
     this.applyDucking(DuckingPolicy.DUCK_ATTACK_MS);
     void this.showNotification(meta, "playing", offsetSec * 1000, internal.durationMs);
-    this.requestFocus();
 
-    if (this.mixActive) {
+    // Tour auto-replay is spike-only (C1). Production never sets spikeMode.
+    if (this.spikeMode) {
       this.tourNarrationTemplate = { h, meta };
       this.lastTourNarrationStartSec = when;
       console.log("[audio-spike] tourNarrationStart", { whenSec: when });
     }
 
+    // RC6: explicit stop/replace must report "cancelled", never "ended".
     source.onended = () => {
-      this.releaseVoice(voiceId, "ended", { missedSweep: false });
+      const live = this.voices.get(voiceId);
+      const reason = live?.pendingReleaseReason ?? "ended";
+      this.releaseVoice(voiceId, reason, { missedSweep: false });
       if (![...this.voices.values()].some((v) => v.kind === "narration")) {
         this.narrationActive = false;
         this.applyDucking(DuckingPolicy.DUCK_RELEASE_MS);
@@ -1013,11 +1109,64 @@ export class RNAudioApiEngine implements AudioEngine {
 
   onRemoteCommand(
     cb: (
-      c: "play" | "pause" | "skipForward" | "skipBackward" | "next",
+      c:
+        | "play"
+        | "pause"
+        | "skipForward"
+        | "skipBackward"
+        | "next"
+        | "stopExploring",
     ) => void,
   ): Unsubscribe {
     this.remoteSubs.add(cb);
     return () => this.remoteSubs.delete(cb);
+  }
+
+  getMasterGainLinear(): number {
+    return this.master?.gain.value ?? this.unduckedMasterLinear;
+  }
+
+  /**
+   * Master-bus RMS in dBFS from the AnalyserNode (review 5).
+   * Silence ≈ −90 or lower; narration typically −35…−15.
+   */
+  getOutputLevelDb(): number | null {
+    const analyser = this.analyser;
+    const buf = this.analyserTimeDomain;
+    if (!analyser || !buf) return null;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i += 1) {
+      const s = buf[i] ?? 0;
+      sum += s * s;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, buf.length));
+    if (rms <= 1e-8) return -100;
+    return 20 * Math.log10(rms);
+  }
+
+  getNarrationDiag(): {
+    id: string;
+    paused: boolean;
+    positionMs: number;
+  } | null {
+    const narration = [...this.voices.values()].find(
+      (v) => v.kind === "narration",
+    );
+    if (!narration) return null;
+    const ctx = this.context;
+    let positionMs = narration.pauseOffsetSec * 1000;
+    if (!narration.paused && ctx) {
+      positionMs =
+        (narration.offsetSec +
+          (ctx.currentTime - narration.startedAtContextTime)) *
+        1000;
+    }
+    return {
+      id: narration.id,
+      paused: narration.paused,
+      positionMs,
+    };
   }
 
   getDiagnostics(): EngineDiagnostics {
@@ -1204,7 +1353,7 @@ export class RNAudioApiEngine implements AudioEngine {
 
       for (const cb of this.tickSubs) cb(now);
 
-      if (this.mixActive || this.settledPending) {
+      if (this.mixActive || this.settledPending || this.sessionClockActive) {
         this.ensureHeartbeats();
       }
     } finally {
@@ -1237,11 +1386,20 @@ export class RNAudioApiEngine implements AudioEngine {
   }
 
   private maybeRunTourLoop(nowSec: number): void {
-    if (!this.mixActive || !this.tourNarrationTemplate) return;
+    if (
+      !shouldRunTourLoop(
+        this.spikeMode,
+        this.mixActive,
+        this.tourNarrationTemplate != null,
+      )
+    ) {
+      return;
+    }
     if (nowSec - this.lastTourNarrationStartSec < TOUR_NARRATION_PERIOD_SEC) {
       return;
     }
     const template = this.tourNarrationTemplate;
+    if (!template) return;
     console.log("[audio-spike] tourNarrationRestart", { atSec: nowSec });
     this.playNarration(template.h, template.meta, 0);
   }
@@ -1425,6 +1583,7 @@ export class RNAudioApiEngine implements AudioEngine {
       void this.applyFocusEffect(effect);
     });
     // Play/pause audio work is done by the focus effect from userPlay/userPause.
+    // F6: ExploringRuntime subscribes via onRemoteCommand — do not let it overwrite this.
     this.session.setRemoteHandler(async (command) => {
       if (command === "play") {
         for (const cb of this.remoteSubs) cb("play");
@@ -1437,6 +1596,10 @@ export class RNAudioApiEngine implements AudioEngine {
       if (command === "skipBack") {
         this.skipNarrationBack(10_000);
         for (const cb of this.remoteSubs) cb("skipBackward");
+        return;
+      }
+      if (command === "stopExploring") {
+        for (const cb of this.remoteSubs) cb("stopExploring");
       }
     });
     this.session.setBusyHandler((state) => {
@@ -1502,6 +1665,45 @@ export class RNAudioApiEngine implements AudioEngine {
     this.duckFactor = db === 0 ? 1 : dbToGain(db);
     const target = Math.max(0.0001, this.unduckedMasterLinear * this.duckFactor);
     rampGainHeld(master.gain, ctx.currentTime, target, 80);
+  }
+
+  /**
+   * C4 narration start: focus first, resume if suspended, restore master gain.
+   * Sync gain restore so the voice is audible as soon as the context runs;
+   * resume is async (stop-all may still be settling).
+   */
+  private prepareNarrationStart(): void {
+    this.requestFocus();
+    void this.resumeContextIfSuspended();
+    this.restoreMasterGain();
+  }
+
+  /** Wait out a pending suspend, then resume — no focus, no master gain. */
+  private async resumeContextIfSuspended(): Promise<void> {
+    const ctx = this.context;
+    if (!ctx) return;
+    // stop-all schedules suspend on a silent source's onended; don't race it.
+    const deadline = Date.now() + 2000;
+    while (this.suspendPending && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 20));
+    }
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch (err) {
+        console.warn("[audio] resumeContextIfSuspended failed", err);
+      }
+    }
+  }
+
+  /** fadeMasterAndSuspend leaves master near 0; resume alone stays muted. */
+  private restoreMasterGain(): void {
+    const ctx = this.context;
+    const master = this.master;
+    if (!ctx || !master) return;
+    this.unduckedMasterLinear = 1;
+    this.duckFactor = 1;
+    rampGainHeld(master.gain, ctx.currentTime, 1, 0);
   }
 
   private async fadeMasterAndSuspend(
