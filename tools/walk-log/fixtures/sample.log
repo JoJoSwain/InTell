@@ -1,0 +1,29 @@
+--------- beginning of main
+11-25 10:00:00.000  1234  1234 W InTellAudio: sessionStarted
+11-25 10:00:00.010  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=none paused=false pos=0 out=-90 phase=exploring playing=false
+11-25 10:00:05.000  1234  1234 W InTellAudio: groveEntered aaaaaaaa
+11-25 10:00:05.020  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=none paused=false pos=0 out=-88 phase=exploring playing=false
+11-25 10:00:10.000  1234  1234 W InTellAudio: fix acc=8
+11-25 10:00:12.000  1234  1234 W InTellAudio: play bbbbbbbb day
+11-25 10:00:12.050  1234  1234 W InTellAudio: cmd load deadbeef
+11-25 10:00:12.100  1234  1234 W InTellAudio: cmd playNarration deadbeef
+11-25 10:00:12.150  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=bbbbbbbb paused=false pos=0 out=-12 phase=exploring playing=true
+11-25 10:00:20.000  1234  1234 W InTellAudio: fix acc=12
+11-25 10:00:22.000  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=bbbbbbbb paused=false pos=8000 out=-85 phase=exploring playing=true
+11-25 10:00:40.000  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=bbbbbbbb paused=false pos=26000 out=-87 phase=exploring playing=true
+11-25 10:00:45.000  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=bbbbbbbb paused=false pos=31000 out=-10 phase=exploring playing=true
+11-25 10:00:50.000  1234  1234 W InTellAudio: narrationEnded natural
+11-25 10:00:50.020  1234  1234 W InTellAudio: completed bbbbbbbb
+11-25 10:00:50.040  1234  1234 W InTellAudio: unlocked cccccccc
+11-25 10:00:50.060  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=none paused=false pos=0 out=-90 phase=exploring playing=false
+11-25 10:01:00.000  1234  1234 W InTellAudio: showTeaser locked dddddddd
+11-25 10:01:05.000  1234  1234 W InTellAudio: play eeeeeeee night
+11-25 10:01:05.050  1234  1234 W InTellAudio: queued ffffffff
+11-25 10:01:05.100  1234  1234 W InTellAudio: diag ctx=running master=1.000 started=true narr=eeeeeeee paused=false pos=0 out=-8 phase=exploring playing=true
+11-25 10:01:20.000  1234  1234 W InTellAudio: narrationEnded interrupted
+11-25 10:01:20.020  1234  1234 W InTellAudio: stopNarration
+11-25 10:01:20.040  1234  1234 W InTellAudio: diag ctx=running master=0.000 started=true narr=none paused=false pos=0 out=-90 phase=exploring playing=false
+11-25 10:01:30.000  1234  1234 W InTellAudio: cmd-fail load cafebabe missing asset
+11-25 10:01:40.000  1234  1234 W InTellAudio: sessionEnded
+11-25 10:01:40.010  1234  1234 W InTellAudio: someUnknownThing ignore-me
+11-25 10:01:41.000  1234  1234 W InTellAudio: play ignored because 40.7600, -111.8880 looks like coords
