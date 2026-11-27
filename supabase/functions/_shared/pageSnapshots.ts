@@ -5,18 +5,29 @@ export type SnapshotRow = {
   published_at: string;
 };
 
-type SnapshotQuery = {
-  select: (cols: string) => SnapshotQuery;
-  eq: (col: string, value: string) => SnapshotQuery;
-  order: (col: string, opts: { ascending: boolean }) => SnapshotQuery;
-  range: (
-    from: number,
-    to: number,
-  ) => Promise<{ data: SnapshotRow[] | null; error: { message: string } | null }>;
-};
-
-type SnapshotClient = {
-  from: (table: string) => SnapshotQuery;
+/**
+ * Structural client for paging. Nested so it matches PostgREST's real chain
+ * (`from` → `select` → `eq` → `order` → `range`) and the unit-test fake.
+ */
+export type SnapshotClient = {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (col: string, value: string) => {
+        order: (
+          col: string,
+          opts: { ascending: boolean },
+        ) => {
+          range: (
+            from: number,
+            to: number,
+          ) => Promise<{
+            data: SnapshotRow[] | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
 };
 
 /**

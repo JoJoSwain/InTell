@@ -283,7 +283,9 @@ export async function assembleRegionPackObject(
     builtAt: maxTs(watermarks),
     timezone: region.timezone,
     sunReference: { lat: sunReference.lat, lng: sunReference.lng },
-    ambienceProfiles: ambienceProfiles.sort((a, b) => a.slug.localeCompare(b.slug)),
+    ambienceProfiles: ambienceProfiles.sort((a, b) =>
+      String(a.slug).localeCompare(String(b.slug)),
+    ),
     landcover: landcoverOut,
     ambienceZones: ambienceZones.sort((a, b) => String(a.id).localeCompare(String(b.id))),
     musicZones: musicZones.sort((a, b) => String(a.id).localeCompare(String(b.id))),
