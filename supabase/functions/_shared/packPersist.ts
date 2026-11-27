@@ -167,8 +167,41 @@ export async function persistPackIfChanged(
   });
   if (insErr) throw new Error(`pack_builds insert: ${insErr.message}`);
 
+  // Live builds supersede prior live rows for this scope so the keep-set below
+  // can drop their storage objects. Release-tagged builds stay non-live until
+  // go-live; those leave the current live row alone until a later live rebuild.
+  if (live) {
+    const { error: demoteErr } = await client
+      .from("pack_builds")
+      .update({ live: false })
+      .eq("scope", input.scope)
+      .eq("scope_id", input.scopeId)
+      .eq("live", true)
+      .neq("version", newVersion);
+    if (demoteErr) {
+      throw new Error(`demote prior live packs: ${demoteErr.message}`);
+    }
+  }
+
+  // Keep every still-live manifest for this scope, plus the build we just wrote
+  // (which may be non-live until go-live). Deletes only other prefix files.
+  const { data: liveBuilds, error: liveErr } = await client
+    .from("pack_builds")
+    .select("manifest_path")
+    .eq("scope", input.scope)
+    .eq("scope_id", input.scopeId)
+    .eq("live", true);
+  if (liveErr) throw new Error(`list live manifests: ${liveErr.message}`);
+
+  const keep = new Set<string>([path]);
+  for (const row of liveBuilds ?? []) {
+    if (typeof row.manifest_path === "string" && row.manifest_path.length > 0) {
+      keep.add(row.manifest_path);
+    }
+  }
+
   const prefix = `packs/${input.scope}/${input.scopeId}`;
-  await deletePublicPrefixExcept(client, prefix, new Set([path]));
+  await deletePublicPrefixExcept(client, prefix, keep);
 
   await copyPackAssets(client, input.assetShas);
 
