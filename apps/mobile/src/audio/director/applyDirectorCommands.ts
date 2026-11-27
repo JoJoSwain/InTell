@@ -78,22 +78,22 @@ export async function applyDirectorCommands(
     try {
       switch (command.type) {
         case "load": {
+          // Prefetch: start decode without awaiting so the runtime serial queue
+          // stays free for pause/stop. Failures report via onAssetFailed later.
           const uri = deps.resolveUri(command.sha);
           if (!uri) {
             pushAudioBreadcrumb(`no-uri load ${sha8(command.sha)}`);
             break;
           }
-          try {
-            await deps.engine.load(command.sha, uri, command.decodeHz);
-          } catch (cause) {
-            const err = new Error(`load failed: ${command.sha}`) as Error & {
-              sha: string;
-            };
-            err.sha = command.sha;
-            err.cause = cause;
-            throw err;
-          }
+          const sha = command.sha;
           breadcrumbApplied(command);
+          void deps.engine.load(sha, uri, command.decodeHz).catch((cause) => {
+            const message = cause instanceof Error ? cause.message : "failed";
+            pushAudioBreadcrumb(
+              `cmd-fail load ${sha8(sha)} ${message}`.trim(),
+            );
+            void deps.onAssetFailed?.(sha);
+          });
           break;
         }
         case "unload":
@@ -182,11 +182,10 @@ export async function applyDirectorCommands(
       );
       if (
         sha &&
-        (command.type === "load" ||
-          command.type === "playNarration" ||
-          command.type === "playMoment")
+        (command.type === "playNarration" || command.type === "playMoment")
       ) {
-        await deps.onAssetFailed?.(sha);
+        // Never await: runtime wires this to serial() and awaiting would deadlock.
+        void deps.onAssetFailed?.(sha);
       }
       // Continue with the next command (RC7).
     }

@@ -21,16 +21,23 @@ let processStart: Promise<ExploringRuntime> | null = null;
 async function ensureProcessRuntime(): Promise<ExploringRuntime> {
   if (!processStart) {
     processStart = (async () => {
-      const { db } = await dataLayer();
-      processLocation ??= new LocationService();
-      processEngine ??= new RNAudioApiEngine() as unknown as ExploringEngine;
-      const runtime = getExploringRuntime({
-        db,
-        location: processLocation,
-        engine: processEngine,
-      });
-      await runtime.start();
-      return runtime;
+      try {
+        const { db } = await dataLayer();
+        processLocation ??= new LocationService();
+        processEngine ??= new RNAudioApiEngine() as unknown as ExploringEngine;
+        const runtime = getExploringRuntime({
+          db,
+          location: processLocation,
+          engine: processEngine,
+        });
+        // RNAudioApiEngine.init() is idempotent (returns if context exists).
+        await runtime.start();
+        return runtime;
+      } catch (err) {
+        // Next mount may retry — engine.init is safe to call again.
+        processStart = null;
+        throw err;
+      }
     })();
   }
   return processStart;

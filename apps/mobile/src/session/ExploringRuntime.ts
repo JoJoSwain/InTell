@@ -135,6 +135,15 @@ export class ExploringRuntime {
    * so a remount cannot start audio while still paused.
    */
   private deferredInterruptionEnded = false;
+  /** Coalesce onTick: at most one queued task; read latest audioSec when it runs. */
+  private latestTickAudioSec: number | null = null;
+  private tickScheduled = false;
+  /** Coalesce onNarrationProgress the same way. */
+  private latestProgress: { positionMs: number; durationMs: number } | null =
+    null;
+  private progressScheduled = false;
+  /** Tests: how many times onAudioClockNow ran (coalesce checks). */
+  private audioClockRunCount = 0;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -163,18 +172,39 @@ export class ExploringRuntime {
     return this.pauseOwner;
   }
 
+  /** Tests: coalesce — how many onAudioClockNow runs since start. */
+  getAudioClockRunCountForTest(): number {
+    return this.audioClockRunCount;
+  }
+
   /**
-   * Resolves when the serial queue is idle. Engine callbacks enqueue and return
-   * at once — tests await this after `emitVoiceEnded` / `stopAll` / remotes.
+   * Resolves when the serial queue is idle, including work enqueued by a task
+   * that just finished. Engine callbacks enqueue and return at once — tests
+   * await this after `emitVoiceEnded` / `stopAll` / remotes.
    */
-  whenIdle(): Promise<void> {
-    return this.chain;
+  async whenIdle(): Promise<void> {
+    let cur = this.chain;
+    for (;;) {
+      await cur;
+      if (cur === this.chain) return;
+      cur = this.chain;
+    }
   }
 
   private serial(task: () => Promise<void>): Promise<void> {
     const run = this.chain.then(task, task);
     this.chain = run.catch(() => undefined);
     return run;
+  }
+
+  /**
+   * Tests: enqueue a bare prefetch `load` through applyCommands (fire-and-forget
+   * decode). Resolves when the apply task finishes, not when decode finishes.
+   */
+  injectPrefetchLoadForTest(sha: string, decodeHz = 48_000): Promise<void> {
+    return this.serial(() =>
+      this.applyCommands([{ type: "load", sha, decodeHz }]),
+    );
   }
 
   async start(): Promise<void> {
@@ -387,7 +417,15 @@ export class ExploringRuntime {
     const { engine } = this.deps;
     this.unsubs.push(
       engine.onTick((audioSec) => {
-        void this.serial(() => this.onAudioClockNow(audioSec));
+        this.latestTickAudioSec = audioSec;
+        if (this.tickScheduled) return;
+        this.tickScheduled = true;
+        void this.serial(async () => {
+          this.tickScheduled = false;
+          const sec = this.latestTickAudioSec;
+          if (sec == null) return;
+          await this.onAudioClockNow(sec);
+        });
       }),
     );
     this.unsubs.push(
@@ -398,7 +436,15 @@ export class ExploringRuntime {
     );
     this.unsubs.push(
       engine.onNarrationProgress((p) => {
-        void this.serial(() => this.onNarrationProgressNow(p));
+        this.latestProgress = p;
+        if (this.progressScheduled) return;
+        this.progressScheduled = true;
+        void this.serial(async () => {
+          this.progressScheduled = false;
+          const latest = this.latestProgress;
+          if (!latest) return;
+          await this.onNarrationProgressNow(latest);
+        });
       }),
     );
     this.unsubs.push(
@@ -559,78 +605,113 @@ export class ExploringRuntime {
     await this.dispatchNow({ type: "stop", at: Date.now() });
   }
 
+  /**
+   * Flip the overlay at tap time (outside the queue), then enqueue pause/resume
+   * with that captured intent so a prefetch decode cannot delay the UI.
+   */
   async togglePause(): Promise<void> {
-    await this.serial(() => this.togglePauseNow());
-  }
-
-  private async togglePauseNow(): Promise<void> {
     const overlay = useSessionStore.getState().overlay;
     if (!overlay) return;
-    // Natural end clears playing but used to leave the overlay up — dismiss
-    // instead of a dead Pause control (A2).
+    // A2: natural end can leave the overlay up — dismiss instead of a dead Pause.
     if (!this.session.playing) {
       pushAudioBreadcrumb("togglePause:noop no-playing");
       useSessionStore.getState().setOverlay(null);
       return;
     }
-    const audioSession = this.deps.engine.getSession();
-    if (overlay.paused) {
+    const wantPause = !overlay.paused;
+    useSessionStore.getState().setOverlay({
+      ...overlay,
+      paused: wantPause,
+      busyHint: wantPause ? overlay.busyHint : undefined,
+    });
+    if (wantPause) {
+      pushAudioBreadcrumb("togglePause:pause");
+      this.pauseOwner = "listener";
+      await this.serial(() => this.pauseNow());
+    } else {
       pushAudioBreadcrumb("togglePause:resume");
-      // Apply deferred / pending interruption-ended before audio so remount
-      // lands on the resume path, not while still listener-paused.
-      await this.applyDeferredInterruptionEndedIfNeeded();
-      // F2: focus-denied start never opened the native session — retry start.
-      if (!audioSession.isStarted()) {
-        const ok = await audioSession.start({
-          title: overlay.title,
-          artist: "InTell",
-        });
-        pushAudioBreadcrumb(`resume:start ok=${ok}`);
-        if (!ok) {
+      await this.serial(() => this.resumeNow());
+    }
+  }
+
+  /** Queued pause — uses session state, not the overlay. */
+  private async pauseNow(): Promise<void> {
+    if (!this.session.playing) {
+      useSessionStore.getState().setOverlay(null);
+      return;
+    }
+    if (this.session.playing.pausedAt !== null) return;
+    this.pauseOwner = "listener";
+    await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
+    await this.deps.engine.getSession().userPause();
+    // Re-assert after a queued resumeNow may have cleared optimistic paused.
+    const overlay = useSessionStore.getState().overlay;
+    if (overlay) {
+      useSessionStore.getState().setOverlay({ ...overlay, paused: true });
+    }
+  }
+
+  /** Queued resume — uses session state, not the overlay. */
+  private async resumeNow(): Promise<void> {
+    if (!this.session.playing) {
+      useSessionStore.getState().setOverlay(null);
+      return;
+    }
+    if (this.session.playing.pausedAt === null) return;
+    const overlay = useSessionStore.getState().overlay;
+    const audioSession = this.deps.engine.getSession();
+    // Apply deferred / pending interruption-ended before audio so remount
+    // lands on the resume path, not while still listener-paused.
+    await this.applyDeferredInterruptionEndedIfNeeded();
+    // F2: focus-denied start never opened the native session — retry start.
+    if (!audioSession.isStarted()) {
+      const ok = await audioSession.start({
+        title: overlay?.title ?? "",
+        artist: "InTell",
+      });
+      pushAudioBreadcrumb(`resume:start ok=${ok}`);
+      if (!ok) {
+        if (overlay) {
           useSessionStore.getState().setOverlay({
             ...overlay,
             paused: true,
             busyHint: strings.audioBusyTap,
           });
-          return;
         }
-        const play = useSessionStore.getState().playRequest;
-        const story = useSessionStore.getState().story;
-        if (play && story) {
-          const asset =
-            this.packed?.meta[play.fragmentId]?.narrationByWindow[
-              play.version.timeWindow
-            ];
-          await this.directorSessionEffect(
-            {
-              type: "play",
-              fragmentId: play.fragmentId,
-              revisionNo: play.revisionNo,
-              sha: asset?.sha,
-              title: asset?.title ?? overlay.title,
-              breathPointsMs: asset?.breathPointsMs,
-              durationMs: asset?.durationMs,
-            },
-            story,
-          );
-        }
-      } else {
-        await audioSession.userPlay();
+        return;
       }
-      await this.dispatchNow({ type: "narrationResumed", at: Date.now() });
-      this.pauseOwner = null;
+      const play = useSessionStore.getState().playRequest;
+      const story = useSessionStore.getState().story;
+      if (play && story) {
+        const asset =
+          this.packed?.meta[play.fragmentId]?.narrationByWindow[
+            play.version.timeWindow
+          ];
+        await this.directorSessionEffect(
+          {
+            type: "play",
+            fragmentId: play.fragmentId,
+            revisionNo: play.revisionNo,
+            sha: asset?.sha,
+            title: asset?.title ?? overlay?.title ?? "",
+            breathPointsMs: asset?.breathPointsMs,
+            durationMs: asset?.durationMs,
+          },
+          story,
+        );
+      }
+    } else {
+      await audioSession.userPlay();
+    }
+    await this.dispatchNow({ type: "narrationResumed", at: Date.now() });
+    this.pauseOwner = null;
+    const after = useSessionStore.getState().overlay;
+    if (after) {
       useSessionStore.getState().setOverlay({
-        ...overlay,
+        ...after,
         paused: false,
         busyHint: undefined,
       });
-    } else {
-      // Optimistic UI before await — keeps Pause→Resume snappy if focus work lags.
-      pushAudioBreadcrumb("togglePause:pause");
-      this.pauseOwner = "listener";
-      useSessionStore.getState().setOverlay({ ...overlay, paused: true });
-      await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
-      await audioSession.userPause();
     }
   }
 
@@ -938,7 +1019,6 @@ export class ExploringRuntime {
     }
 
     const audioSession = this.deps.engine.getSession();
-    let focusAcquired = audioSession.isStarted();
     if (!audioSession.isStarted()) {
       const ok = await audioSession.start({ title, artist: "InTell" });
       pushAudioBreadcrumb(`handlePlay:start ok=${ok} title=${title}`);
@@ -959,7 +1039,6 @@ export class ExploringRuntime {
         });
         return;
       }
-      focusAcquired = true;
     } else {
       await audioSession.update({ title, artist: "InTell" }, "playing");
       if (!this.stillWantPlay(play.fragmentId)) {
@@ -988,7 +1067,6 @@ export class ExploringRuntime {
       },
       story,
     );
-    void focusAcquired;
   }
 
   private async directorSessionEffect(
@@ -1036,7 +1114,10 @@ export class ExploringRuntime {
             void this.deps.engine.getSession().update({ title, artist: "InTell" }, "playing");
           },
           onHapticTrigger: undefined,
-          onAssetFailed: (sha) => this.reportAssetFailed(sha),
+          // Prefetch load failures arrive after applyCommands returns — enqueue.
+          onAssetFailed: (sha) => {
+            void this.serial(() => this.reportAssetFailed(sha));
+          },
         },
         this.voices,
       );
@@ -1104,6 +1185,7 @@ export class ExploringRuntime {
   /** B4 / C1: engine audio-clock tick — session tick + director heartbeat while exploring. */
   private async onAudioClockNow(audioSec: number): Promise<void> {
     if (this.disposed || this.session.phase !== "exploring") return;
+    this.audioClockRunCount += 1;
     this.lastHeartbeatAudioSec = audioSec;
     const at = Date.now();
 

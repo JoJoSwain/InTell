@@ -186,9 +186,30 @@ export class FakeExploringEngine implements ExploringEngine {
     return this.audioSec;
   }
 
+  /**
+   * When set, the next `load()` awaits this before completing (R1 review:
+   * pause-during-decode / prefetch tests). Cleared after the wait.
+   */
+  loadBarrier: Promise<void> | null = null;
+  /** True while `load()` is blocked on `loadBarrier`. */
+  loadWaiting = false;
+  /** When true, the next load rejects after any barrier. */
+  failNextLoad = false;
+
   async load(sha: string, uri: string, sampleRate?: number): Promise<BufferHandle> {
     this.loads.push(sha);
     this.loadCalls.push({ sha, uri, sampleRate });
+    if (this.loadBarrier) {
+      this.loadWaiting = true;
+      const barrier = this.loadBarrier;
+      this.loadBarrier = null;
+      await barrier;
+      this.loadWaiting = false;
+    }
+    if (this.failNextLoad) {
+      this.failNextLoad = false;
+      throw new Error(`load failed: ${sha}`);
+    }
     return { sha, durationMs: 2_000 };
   }
 

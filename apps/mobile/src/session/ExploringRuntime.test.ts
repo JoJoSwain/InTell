@@ -1139,5 +1139,148 @@ describe("ExploringRuntime R1 serial / ownership", () => {
     ).toBe(true);
     runtime2.dispose();
   });
+
+  it("8: Pause tap during blocked load shows paused at once; session pauses after", async () => {
+    const { engine, runtime } = await setup();
+    const t0 = nowBase();
+    // First fix alone — do not arm loadBarrier yet (groveEntered may prefetch).
+    await runtime.injectFix({ at: t0, lat: LAT, lng: LNG, accuracyM: 5 });
+    await idle(runtime);
+
+    let release!: () => void;
+    const barrier = new Promise<void>((r) => {
+      release = r;
+    });
+    engine.loadBarrier = barrier;
+
+    // Second fix starts play; playNarration awaits load and blocks the queue.
+    const playWork = runtime.injectFix({
+      at: t0 + 1_000,
+      lat: LAT,
+      lng: LNG,
+      accuracyM: 5,
+    });
+    for (let i = 0; i < 40 && !engine.loadWaiting; i++) {
+      await flush();
+    }
+    expect(engine.loadWaiting).toBe(true);
+    expect(useSessionStore.getState().overlay).not.toBeNull();
+
+    const pauseWork = runtime.togglePause();
+    expect(useSessionStore.getState().overlay?.paused).toBe(true);
+    // Session not paused yet — pauseNow is still behind the blocked play load.
+    expect(runtime.getSession().playing?.pausedAt ?? null).toBeNull();
+
+    release();
+    await playWork;
+    await pauseWork;
+    await idle(runtime);
+
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+    expect(engine.session.getMode()).toBe("userPaused");
+    runtime.dispose();
+  });
+
+  it("9: never-resolving prefetch does not block togglePause or stop", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+
+    engine.loadBarrier = new Promise<void>(() => {
+      /* never resolves */
+    });
+    const prefetch = runtime.injectPrefetchLoadForTest(SHA2);
+    for (let i = 0; i < 40 && !engine.loadWaiting; i++) {
+      await flush();
+    }
+    expect(engine.loadWaiting).toBe(true);
+    await prefetch;
+
+    await runtime.togglePause();
+    await idle(runtime);
+    expect(useSessionStore.getState().overlay?.paused).toBe(true);
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    await runtime.stopExploring();
+    await idle(runtime);
+    expect(runtime.getSession().phase).toBe("idle");
+    runtime.dispose();
+  });
+
+  it("10: prefetch failure after apply still lands in director.failedShas", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+
+    let release!: () => void;
+    const barrier = new Promise<void>((r) => {
+      release = r;
+    });
+    engine.loadBarrier = barrier;
+    engine.failNextLoad = true;
+
+    const prefetch = runtime.injectPrefetchLoadForTest(SHA2);
+    for (let i = 0; i < 40 && !engine.loadWaiting; i++) {
+      await flush();
+    }
+    expect(engine.loadWaiting).toBe(true);
+    await prefetch;
+    expect(runtime.getDirector().failedShas).not.toContain(SHA2);
+
+    release();
+    await idle(runtime);
+
+    expect(runtime.getDirector().failedShas).toContain(SHA2);
+    runtime.dispose();
+  });
+
+  it("11: five ticks while blocked coalesce to one clock run with latest audioSec", async () => {
+    const { engine, runtime } = await setup();
+    let release!: () => void;
+    const barrier = new Promise<void>((r) => {
+      release = r;
+    });
+    engine.loadBarrier = barrier;
+
+    const playWork = twoFixes(runtime, nowBase());
+    for (let i = 0; i < 40 && !engine.loadWaiting; i++) {
+      await flush();
+    }
+    expect(engine.loadWaiting).toBe(true);
+
+    const runsBefore = runtime.getAudioClockRunCountForTest();
+    engine.emitTick(1);
+    engine.emitTick(2);
+    engine.emitTick(3);
+    engine.emitTick(4);
+    engine.emitTick(5);
+
+    release();
+    await playWork;
+    await idle(runtime);
+
+    expect(runtime.getAudioClockRunCountForTest()).toBe(runsBefore + 1);
+    expect(runtime.getDirector().audioClockSec).toBe(5);
+    runtime.dispose();
+  });
+
+  it("12: pause, resume, pause tapped quickly ends paused", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+
+    const a = runtime.togglePause();
+    const b = runtime.togglePause();
+    const c = runtime.togglePause();
+    expect(useSessionStore.getState().overlay?.paused).toBe(true);
+    await Promise.all([a, b, c]);
+    await idle(runtime);
+
+    expect(useSessionStore.getState().overlay?.paused).toBe(true);
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+    expect(engine.session.getMode()).toBe("userPaused");
+    runtime.dispose();
+  });
 });
 
