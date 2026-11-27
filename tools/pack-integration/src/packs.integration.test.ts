@@ -683,6 +683,126 @@ describe.sequential("M3a pack integration", () => {
     });
   }, 60_000);
 
+  it("F1: live manifest stays until superseded; retired file removed on next rebuild", async () => {
+    const groveId = DEMO.groveId;
+    const { data: indexBefore, error: idxErr } = await anon.rpc("get_pack_index");
+    expect(idxErr).toBeNull();
+    const liveRow = (
+      indexBefore as { scope: string; id: string; manifestPath: string; version: number }[]
+    ).find((r) => r.scope === "grove" && r.id === groveId);
+    expect(liveRow?.manifestPath).toBeTruthy();
+    const priorLivePath = liveRow!.manifestPath;
+    const priorVersion = liveRow!.version;
+
+    const { data: priorBlob, error: priorDl } = await anon.storage
+      .from("public-media")
+      .download(priorLivePath);
+    expect(priorDl).toBeNull();
+    expect(priorBlob).toBeTruthy();
+
+    // Release-tagged (non-live) rebuild for a scope that already has a live pack.
+    const releaseId = randomUUID();
+    await svc.from("releases").insert({
+      id: releaseId,
+      name: "integration f1 live manifest",
+      status: "draft",
+    });
+    await svc
+      .from("groves")
+      .update({ name: { en: `F1Keep-${Date.now()}` } })
+      .eq("id", groveId);
+    // Snapshot change so content_sha differs (packs read published_snapshots).
+    const { data: snap } = await svc
+      .from("published_snapshots")
+      .select("data")
+      .eq("entity", "grove")
+      .eq("entity_id", groveId)
+      .single();
+    const snapData = {
+      ...(snap?.data as Record<string, unknown>),
+      name: { en: `F1Snap-${Date.now()}` },
+    };
+    await svc
+      .from("published_snapshots")
+      .update({ data: snapData })
+      .eq("entity", "grove")
+      .eq("entity_id", groveId);
+
+    const buildRes = await invoke("build-pack", {
+      grove_id: groveId,
+      release_id: releaseId,
+      reason: "f1-keep-live-manifest",
+    });
+    expect(buildRes.ok, await buildRes.text()).toBe(true);
+
+    const { data: pending } = await svc
+      .from("pack_builds")
+      .select("version, live, manifest_path")
+      .eq("scope", "grove")
+      .eq("scope_id", groveId)
+      .eq("release_id", releaseId)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    expect(pending?.live).toBe(false);
+    expect(pending?.version).toBeGreaterThan(priorVersion);
+
+    // Before go-live: index still points at the prior live manifest, and it must exist.
+    const { data: indexMid } = await anon.rpc("get_pack_index");
+    const midRow = (
+      indexMid as { scope: string; id: string; manifestPath: string }[]
+    ).find((r) => r.scope === "grove" && r.id === groveId);
+    expect(midRow?.manifestPath).toBe(priorLivePath);
+    const { data: midBlob, error: midDl } = await anon.storage
+      .from("public-media")
+      .download(priorLivePath);
+    expect(midDl, "live manifest missing before go-live").toBeNull();
+    expect(midBlob).toBeTruthy();
+    const { data: pendingBlob, error: pendingDl } = await anon.storage
+      .from("public-media")
+      .download(pending!.manifest_path as string);
+    expect(pendingDl, "non-live release manifest should also exist").toBeNull();
+    expect(pendingBlob).toBeTruthy();
+
+    // Go-live this release's builds, then one more live rebuild to drop the retired file.
+    const { error: liveErr } = await svc.rpc("fn_release_go_live", {
+      p_release_id: releaseId,
+    });
+    expect(liveErr).toBeNull();
+
+    await svc
+      .from("published_snapshots")
+      .update({
+        data: {
+          ...snapData,
+          name: { en: `F1After-${Date.now()}` },
+        },
+      })
+      .eq("entity", "grove")
+      .eq("entity_id", groveId);
+
+    const rebuild = await invoke("build-pack", {
+      grove_id: groveId,
+      reason: "f1-supersede-retired",
+    });
+    expect(rebuild.ok, await rebuild.text()).toBe(true);
+    await drainJobs();
+
+    const { data: gone, error: goneDl } = await anon.storage
+      .from("public-media")
+      .download(priorLivePath);
+    expect(goneDl, "retired live manifest should be deleted after next rebuild").toBeTruthy();
+    expect(gone).toBeNull();
+
+    const after = await fetchLiveGrovePack(groveId);
+    expect(after.path).not.toBe(priorLivePath);
+    const { data: afterBlob, error: afterDl } = await anon.storage
+      .from("public-media")
+      .download(after.path);
+    expect(afterDl).toBeNull();
+    expect(afterBlob).toBeTruthy();
+  }, 240_000);
+
   it("atomic go-live: index keeps prior live versions until publishing release completes", async () => {
     const releaseId = randomUUID();
     const vBefore1 = (await fetchLiveGrovePack(DEMO.groveId)).version;
