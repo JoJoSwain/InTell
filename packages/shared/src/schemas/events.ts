@@ -144,7 +144,9 @@ function readClientEventId(raw: unknown): string | undefined {
     return undefined;
   }
   const id = (raw as { clientEventId?: unknown }).clientEventId;
-  return typeof id === "string" ? id : undefined;
+  if (typeof id !== "string") return undefined;
+  // Failure results only echo clientEventId when it is a real UUID.
+  return Uuid.safeParse(id).success ? id : undefined;
 }
 
 /**
@@ -160,7 +162,10 @@ export function parseTelemetryEvent(raw: unknown): ParseTelemetryResult {
   if (obj.v !== EVENT_SCHEMA_VERSION) {
     return { ok: false, reason: "bad_version", clientEventId };
   }
-  if (typeof obj.name !== "string" || !(obj.name in eventPropsSchemas)) {
+  if (
+    typeof obj.name !== "string" ||
+    !Object.prototype.hasOwnProperty.call(eventPropsSchemas, obj.name)
+  ) {
     return { ok: false, reason: "unknown_name", clientEventId };
   }
   const name = obj.name as EventName;
