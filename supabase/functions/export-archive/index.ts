@@ -3,9 +3,13 @@ import { requireStaffEditor } from "../_shared/auth.ts";
 import { serviceClient } from "../_shared/clients.ts";
 import { json } from "../_shared/http.ts";
 import {
+  ARCHIVE_TTL_SEC,
+  archiveExpiresAt,
   exportAuditInsert,
   handleExportArchive,
+  signManifestAssets,
   type ExportFile,
+  type ManifestAssetInput,
 } from "./handler.ts";
 
 type Svc = ReturnType<typeof serviceClient>;
@@ -187,29 +191,45 @@ async function buildArchiveFiles(
     content: `# Indigeny notes\n\n${indigenyMd}`,
   });
 
+  const unsigned: ManifestAssetInput[] = [
+    ...(audioAssets ?? []).map((a) => ({
+      sha256: a.sha256 as string,
+      kind: a.kind as string,
+      storagePath: a.staging_path as string,
+      media: "audio" as const,
+      isPublic: Boolean(a.is_public),
+      ext: a.ext as string,
+    })),
+    ...(imageAssets ?? []).map((a) => ({
+      sha256: a.sha256 as string,
+      kind: "image",
+      storagePath: a.staging_path as string,
+      media: "image" as const,
+      isPublic: Boolean(a.is_public),
+      ext: a.ext as string,
+    })),
+  ];
+
+  const expiresAt = archiveExpiresAt(Date.now(), ARCHIVE_TTL_SEC);
+  const assets = await signManifestAssets(
+    unsigned,
+    expiresAt,
+    async (bucket, objectPath) => {
+      const { data, error } = await svc.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, ARCHIVE_TTL_SEC);
+      if (error || !data?.signedUrl) return null;
+      return data.signedUrl;
+    },
+  );
+
   const manifest = {
     version: 1,
     generatedAt: new Date().toISOString(),
     regionId: regionId ?? null,
-    note: "Audio bytes are not included in v1; use staging_path / public pack paths to fetch separately.",
-    assets: [
-      ...(audioAssets ?? []).map((a) => ({
-        sha256: a.sha256,
-        kind: a.kind,
-        storagePath: a.staging_path,
-        media: "audio" as const,
-        isPublic: a.is_public,
-        ext: a.ext,
-      })),
-      ...(imageAssets ?? []).map((a) => ({
-        sha256: a.sha256,
-        kind: "image",
-        storagePath: a.staging_path,
-        media: "image" as const,
-        isPublic: a.is_public,
-        ext: a.ext,
-      })),
-    ],
+    note:
+      "Asset bytes are not in the zip. Run tools/archive-audio on this folder within one hour of export (signed URLs expire).",
+    assets,
   };
   files.push({
     path: "manifest.json",

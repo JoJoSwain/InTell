@@ -87,11 +87,11 @@ LocationService ──fix──► SessionStore ──state──► AudioDirect
 ```
 - **PackStore:** installed manifests, asset cache, `completions`, `unlocks`, `visits` and so on (DATA_MODEL §14).
 - **SessionStore** (Zustand, persisted to `kv`): the session state machine (§3.2) and `StoryState` (AUDIO_SPEC §4.1).
-- **AudioDirector:** pure `directorStep` in `packages/shared` (A6). Wakes on a **5 s audio-clock heartbeat** plus state changes (location, session effects, engine events). Composes ambience, music, hush, ducking and the A5 rules into a target mix, then diffs to engine commands.
+- **AudioDirector:** pure `directorStep` in `packages/shared` (A6). Wakes on the engine's silent-heartbeat **session clock** (`startSessionClock` / `stopSessionClock`; roughly every 5 s) plus state changes (location, session effects, engine events). Composes ambience, music, hush, ducking and the A5 rules into a target mix, then diffs to engine commands.
 - **MapLayers:** derived from the pack, `completions`, the current time window and the session, via `unlock.ts` and `timeWindow.ts`.
 
 ### 3.2 Session state machine
-A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`directorStep` / `hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each session event as epoch ms (`at`). The AudioDirector’s periodic wake is the **5 s audio-clock heartbeat** (not a 1 s wall timer); wall-clock ms still ride on every director input for hush, afterglow and mix recovery.
+A pure reducer in `packages/shared` (`story/session.ts`, A4): events in, state and effects out. The phone persists the state to `kv` (`parseSessionState`) and carries out the effects. Hush belongs to the AudioDirector (`directorStep` / `hush.ts`), which reads `storyStateOf(...)`, not to the session machine. Time arrives on each session event as epoch ms (`at`). The session and AudioDirector clock is the engine's silent-heartbeat **session clock** (`startSessionClock` / `stopSessionClock`). It runs while exploring and never requests audio focus. Location fixes also drive `tick` as a backup. The time window is recomputed on every dispatch. Wall-clock ms still ride on every director input for hush, afterglow and mix recovery.
 ```
 idle
  ├─ fix (inside a grove piece) | scan → exploring  (needs sessionId on the event)
@@ -112,9 +112,14 @@ exploring { groveIds, currentGroveId, playing?, queued?, afterglowEndsAt?, lastI
 ```
 
 ### 3.3 Location
-- Foreground ("While Using") permission only. iOS `UIBackgroundModes: ["audio","location"]`, `showsBackgroundLocationIndicator: true`, `activityType: fitness`. Android foreground service: notification "InTell is playing your Grove" with a Stop action; no `ACCESS_BACKGROUND_LOCATION`.
-- Accuracy: `Balanced`, 10 m interval, while > 150 m from every candidate; `High`, 5 m interval, within 150 m.
-- Without a session: foreground watch only, for the puck and Grove entry.
+- Foreground ("While Using") permission only. iOS `UIBackgroundModes: ["audio","location"]`, `showsBackgroundLocationIndicator: true`, `activityType: fitness`. No `ACCESS_BACKGROUND_LOCATION`.
+- **During a session**, location runs at **High accuracy for the whole session** (5 m distance interval, roughly 2–5 s). There is no Balanced ↔ High switching. Android 14+ will not let the location foreground service restart from the background, and expo-location refuses to start it unless the app is in the foreground; on Android, Balanced is roughly 100 m (network-level) and never meets the trigger tolerance.
+- **Without a session**, there is an on-screen watch, also at High accuracy, for the puck and Grove entry.
+- **A session can only start while the app is on screen.** Once it has started, the phone can be locked and pocketed.
+- **Two foreground services:**
+  - **media playback** (the `audio-session` module): playback controls, plus a **Stop exploring** custom command on the notification and the lock screen
+  - **location** (expo-location): the notification "InTell is playing your Grove"; tapping it opens the app
+- **One location source at a time**, and fixes must be strictly newer than the last one.
 - **Embark (M5, ADR 0005 §5):** nearest grove = straight-line distance from the current fix to each grove's `opening` point in the pack index (no network needed). On a mode choice, the phone sends `{groveId, mode, origin}` to the `embark` relay and draws the returned polyline on the home map with Maps SDK; a slim bar shows mode, distance and time; Refresh re-requests. No spoken guidance. Arrival within the opening root's radius clears the route. The origin is never written to SQLite, telemetry or logs.
 - **Backup (ADR 0005 §1; M5a decision D6):**
   - **The SQLite database (progress) is backed up.** It lives where the OS backup includes it: iOS Application Support, not marked excluded; Android Auto Backup, with the database included in `dataExtractionRules`/`fullBackupContent`.

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCHIVE_TTL_SEC,
+  archiveExpiresAt,
   exportAuditInsert,
   handleExportArchive,
+  parseStagingPath,
+  signManifestAssets,
   type ExportDeps,
 } from "../../../supabase/functions/export-archive/handler.ts";
 
@@ -70,6 +74,42 @@ describe("export-archive handler", () => {
     expect(all.action).toBe("export_archive");
     expect(all.detail.scope).toBe("all");
     expect(all.actor).toBe(actor);
+  });
+
+  it("signs every manifest asset with a url and expiresAt", async () => {
+    const expiresAt = archiveExpiresAt(1_700_000_000_000, ARCHIVE_TTL_SEC);
+    expect(parseStagingPath("staging-audio/abc.m4a")).toEqual({
+      bucket: "staging-audio",
+      objectPath: "abc.m4a",
+    });
+    const signed = await signManifestAssets(
+      [
+        {
+          sha256: "aaa",
+          kind: "narration",
+          storagePath: "staging-audio/aaa.m4a",
+          media: "audio",
+          isPublic: false,
+          ext: "m4a",
+        },
+        {
+          sha256: "bbb",
+          kind: "image",
+          storagePath: "staging-images/bbb.png",
+          media: "image",
+          isPublic: true,
+          ext: "png",
+        },
+      ],
+      expiresAt,
+      async (bucket, objectPath) =>
+        `https://signed.test/${bucket}/${objectPath}?token=1`,
+    );
+    expect(signed).toHaveLength(2);
+    for (const asset of signed) {
+      expect(asset.url).toMatch(/^https:\/\/signed\.test\//);
+      expect(asset.expiresAt).toBe(expiresAt);
+    }
   });
 
   it("returns 404 when region is missing", async () => {
