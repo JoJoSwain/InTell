@@ -95,6 +95,30 @@ describe("parseTelemetryEvent", () => {
     ).toMatchObject({ ok: false, reason: "invalid_props" });
   });
 
+  it('treats name "constructor" as unknown_name', () => {
+    expect(
+      parseTelemetryEvent({
+        v: 1,
+        clientEventId: id,
+        name: "constructor",
+        occurredAt,
+        props: {},
+      }),
+    ).toEqual({ ok: false, reason: "unknown_name", clientEventId: id });
+  });
+
+  it("omits a non-UUID clientEventId from failure results", () => {
+    expect(
+      parseTelemetryEvent({
+        v: 1,
+        clientEventId: "not-a-uuid",
+        name: "seed_planted",
+        occurredAt,
+        props: {},
+      }),
+    ).toEqual({ ok: false, reason: "unknown_name" });
+  });
+
   it("rejects coordinates-shaped free props on empty events", () => {
     expect(
       parseTelemetryEvent({
