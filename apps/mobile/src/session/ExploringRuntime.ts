@@ -68,6 +68,9 @@ function newSessionId(): string {
   return randomUUID();
 }
 
+/** Last 8 chars of a UUID — walk pack ids share a "cccccccc" prefix. */
+const tail8 = (id: string) => id.slice(-8);
+
 export type ExploringRuntimeDeps = {
   db: SqlDriver;
   location: LocationService;
@@ -97,6 +100,8 @@ export class ExploringRuntime {
   private inWindowSync = false;
   /** Last wall time we emitted a periodic `diag` breadcrumb (M6 step 4b). */
   private lastDiagBreadcrumbAt = 0;
+  /** Last wall time we emitted a throttled `fix acc=` breadcrumb. */
+  private lastFixAccBreadcrumbAt = 0;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -578,23 +583,44 @@ export class ExploringRuntime {
     useSessionStore.getState().setSession(this.session, result.story);
 
     for (const effect of result.effects) {
-      if (effect.type === "play") {
+      if (effect.type === "sessionStarted") {
+        pushAudioBreadcrumb("sessionStarted");
+      } else if (effect.type === "sessionEnded") {
+        pushAudioBreadcrumb("sessionEnded");
+      } else if (effect.type === "groveEntered") {
+        pushAudioBreadcrumb(`groveEntered ${tail8(effect.groveId)}`);
+      } else if (effect.type === "play") {
         pushAudioBreadcrumb(
-          `play ${effect.fragmentId.slice(0, 8)} ${effect.version.timeWindow}`,
+          `play ${tail8(effect.fragmentId)} ${effect.version.timeWindow}`,
         );
       } else if (effect.type === "showTeaser") {
         pushAudioBreadcrumb(
-          `showTeaser ${effect.reason} ${effect.fragmentId.slice(0, 8)}`,
+          `showTeaser ${effect.reason} ${tail8(effect.fragmentId)}`,
         );
       } else if (effect.type === "stopNarration") {
         pushAudioBreadcrumb("stopNarration");
+      } else if (effect.type === "writeUnlocks") {
+        for (const fragmentId of effect.fragmentIds) {
+          pushAudioBreadcrumb(`unlocked ${tail8(fragmentId)}`);
+        }
+      } else if (effect.type === "recordCompletion") {
+        pushAudioBreadcrumb(`completed ${tail8(effect.fragmentId)}`);
       }
       // Step 4b: one diag line after every session effect (logcat evidence).
       this.pushDiagBreadcrumb();
     }
     const queuedAfter = result.state.queued?.fragmentId ?? null;
     if (queuedAfter && queuedAfter !== queuedBefore) {
-      pushAudioBreadcrumb(`queued ${queuedAfter.slice(0, 8)}`);
+      pushAudioBreadcrumb(`queued ${tail8(queuedAfter)}`);
+    }
+
+    if (event.type === "fix") {
+      const at = event.at;
+      if (at - this.lastFixAccBreadcrumbAt >= 10_000) {
+        this.lastFixAccBreadcrumbAt = at;
+        const acc = Math.round(event.accuracyM);
+        pushAudioBreadcrumb(`fix acc=${acc}`);
+      }
     }
 
     // C1: start silent session clock when we become exploring
@@ -744,7 +770,9 @@ export class ExploringRuntime {
       await audioSession.userPlay();
     }
 
-    pushAudioBreadcrumb(`handlePlay:directorPlay fragment=${play.fragmentId}`);
+    pushAudioBreadcrumb(
+      `handlePlay:directorPlay fragment=${tail8(play.fragmentId)}`,
+    );
     await this.directorSessionEffect(
       {
         type: "play",

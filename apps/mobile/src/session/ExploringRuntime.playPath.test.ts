@@ -153,14 +153,13 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     expect(narrLoad!.uri).toBe(`file://${BARE_ASSET_PATH}`);
     expect(narrLoad!.sampleRate).toBe(24_000);
 
+    const fragTail = fixtureId(10).slice(-8);
     const crumbs = getAudioBreadcrumbs().map((c) => c.message);
     expect(crumbs.some((m) => m.includes("cmd-fail"))).toBe(false);
     expect(crumbs.some((m) => m.includes("cmd playNarration"))).toBe(true);
-    expect(
-      crumbs.some((m) =>
-        m.startsWith(`play ${fixtureId(10).slice(0, 8)} `),
-      ),
-    ).toBe(true);
+    expect(crumbs).toContain("sessionStarted");
+    expect(crumbs.some((m) => m.startsWith("groveEntered "))).toBe(true);
+    expect(crumbs.some((m) => m.startsWith(`play ${fragTail} `))).toBe(true);
     expect(
       crumbs.some(
         (m) =>
@@ -176,6 +175,21 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
       crumbs.some((m) => m.includes(`cmd load ${NARR_SHA.slice(0, 8)}`)) ||
         narrLoad != null,
     ).toBe(true);
+    const noCoordPair = (m: string) =>
+      !/-?\d{1,3}\.\d+[,\s]+-?\d{1,3}\.\d+/.test(m);
+    expect(crumbs.every(noCoordPair)).toBe(true);
+
+    clearAudioBreadcrumbs();
+    await runtime.injectFix({
+      at: Date.now(),
+      lat: 40.76,
+      lng: -111.891,
+      accuracyM: 12.4,
+    });
+    await flush();
+    const afterFix = getAudioBreadcrumbs().map((c) => c.message);
+    expect(afterFix.some((m) => m === "fix acc=12")).toBe(true);
+    expect(afterFix.every(noCoordPair)).toBe(true);
 
     const voiceId = engine.getNarrationDiag()!.id;
     await engine.emitVoiceEnded({
@@ -190,9 +204,18 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     expect(completions.some((c) => c.fragment_id === fixtureId(10))).toBe(true);
     expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
     expect(useSessionStore.getState().afterglow).not.toBeNull();
-    expect(
-      getAudioBreadcrumbs().some((c) => c.message === "narrationEnded natural"),
-    ).toBe(true);
+    const endCrumbs = getAudioBreadcrumbs().map((c) => c.message);
+    expect(endCrumbs).toContain("narrationEnded natural");
+    expect(endCrumbs).toContain(`completed ${fragTail}`);
+    expect(endCrumbs.some((m) => m.startsWith("unlocked "))).toBe(true);
+    expect(endCrumbs.every(noCoordPair)).toBe(true);
+
+    clearAudioBreadcrumbs();
+    await runtime.stopExploring();
+    await flush();
+    const stopCrumbs = getAudioBreadcrumbs().map((c) => c.message);
+    expect(stopCrumbs).toContain("sessionEnded");
+    expect(stopCrumbs.every(noCoordPair)).toBe(true);
 
     runtime.dispose();
   });
@@ -262,9 +285,12 @@ describe("ExploringRuntime play path (M6 reset Step 1)", () => {
     expect(engine.playedNarration.length).toBe(1);
     expect(
       getAudioBreadcrumbs().some((c) =>
-        c.message.startsWith(`play ${fixtureId(10).slice(0, 8)} `),
+        c.message.startsWith(`play ${fixtureId(10).slice(-8)} `),
       ),
     ).toBe(true);
+    expect(getAudioBreadcrumbs().map((c) => c.message)).toContain(
+      "sessionStarted",
+    );
 
     runtime.dispose();
   });
