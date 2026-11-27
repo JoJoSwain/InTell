@@ -17,7 +17,8 @@ pnpm --filter @intell/mobile typecheck # pass
 pnpm --filter @intell/mobile test      # 132 passed
 ```
 
-Release build: `SKIP_INSTALL=1 node local/m6-walk-test/run-release-build.mjs` (no install).
+- PR: https://github.com/JoJoSwain/InTell/pull/43 — CI `check` + `db` green (first `db` run flaked on pack-storage Object not found; rerun passed).
+- Release build: `SKIP_INSTALL=1 SKIP_PREBUILD=1` with `JAVA_HOME` = Android Studio JBR — ALL BUILD CHECKS PASSED; APK not installed.
 
 ## Not done
 
