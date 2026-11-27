@@ -83,6 +83,29 @@ export type ExploringRuntimeDeps = {
   packedForTest?: PackedSession;
 };
 
+/** Listener (overlay / lock screen / headset / becoming-noisy) vs system (focus loss). */
+type PauseOwner = "listener" | "system";
+
+/** Process-wide runtime+engine: React remounts must not create a second pair (A10). */
+let exploringRuntimeSingleton: ExploringRuntime | null = null;
+
+/**
+ * One ExploringRuntime per JS process. First call constructs; later calls return
+ * the same instance (deps ignored). Tests that need a fresh instance use
+ * `new ExploringRuntime` and/or `resetExploringRuntimeSingletonForTests`.
+ */
+export function getExploringRuntime(deps: ExploringRuntimeDeps): ExploringRuntime {
+  if (!exploringRuntimeSingleton) {
+    exploringRuntimeSingleton = new ExploringRuntime(deps);
+  }
+  return exploringRuntimeSingleton;
+}
+
+/** Clears the process singleton after `dispose()` in tests. */
+export function resetExploringRuntimeSingletonForTests(): void {
+  exploringRuntimeSingleton = null;
+}
+
 export class ExploringRuntime {
   private session: SessionState = loadSessionState(null);
   private director: DirectorState;
@@ -92,6 +115,7 @@ export class ExploringRuntime {
   private unsubs: (() => void)[] = [];
   private voices = new Map();
   private disposed = false;
+  private bootstrapped = false;
   private narrationVoiceId: string | null = null;
   private lastWindow: TimeWindow | null = null;
   private lastHeartbeatAudioSec = 0;
@@ -102,6 +126,15 @@ export class ExploringRuntime {
   private lastDiagBreadcrumbAt = 0;
   /** Last wall time we emitted a throttled `fix acc=` breadcrumb. */
   private lastFixAccBreadcrumbAt = 0;
+  /** Serialises every public entry and engine callback (MOB-1). */
+  private chain: Promise<void> = Promise.resolve();
+  /** Who owns the current pause; memory only (no kv). */
+  private pauseOwner: PauseOwner | null = null;
+  /**
+   * Listener-owned pause: defer interruption-ended director step until resume
+   * so a remount cannot start audio while still paused.
+   */
+  private deferredInterruptionEnded = false;
 
   constructor(private readonly deps: ExploringRuntimeDeps) {
     this.director = initialDirectorState({
@@ -120,10 +153,39 @@ export class ExploringRuntime {
     return this.deps.engine.getSession();
   }
 
+  /** Engine held by this runtime (tests: singleton remount). */
+  getEngine(): ExploringEngine {
+    return this.deps.engine;
+  }
+
+  /** Who owns the current pause (`null` when not paused by ownership). Tests. */
+  getPauseOwnerForTest(): PauseOwner | null {
+    return this.pauseOwner;
+  }
+
+  /**
+   * Resolves when the serial queue is idle. Engine callbacks enqueue and return
+   * at once — tests await this after `emitVoiceEnded` / `stopAll` / remotes.
+   */
+  whenIdle(): Promise<void> {
+    return this.chain;
+  }
+
+  private serial(task: () => Promise<void>): Promise<void> {
+    const run = this.chain.then(task, task);
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
   async start(): Promise<void> {
+    await this.serial(() => this.startNow());
+  }
+
+  private async startNow(): Promise<void> {
+    if (this.disposed || this.bootstrapped) return;
     await this.deps.engine.init({ mixWithOthers: false });
-    await this.reloadSettings();
-    await this.reloadPacks();
+    await this.reloadSettingsNow();
+    await this.reloadPacksNow();
     const sessionRaw = await getKv(this.deps.db, SESSION_KV_KEY);
     const directorRaw = await getKv(this.deps.db, DIRECTOR_KV_KEY);
     this.session = loadSessionState(sessionRaw);
@@ -133,8 +195,8 @@ export class ExploringRuntime {
       dayKey: localDayKey(new Date(), this.packed?.timeZone ?? "UTC"),
     });
     const settings = m6DirectorSettings(this.director.settings.route);
-    // F1: engine is empty after restart — reset emitted mix so the next step
-    // re-emits playNarration; clear suspended so loads/plays aren't blocked.
+    // F1: engine is empty after a real process restart — reset emitted mix so
+    // the next step re-emits playNarration; clear suspended so loads aren't blocked.
     this.director = {
       ...this.director,
       settings,
@@ -145,25 +207,36 @@ export class ExploringRuntime {
     // F1: no stale overlay from a previous process.
     useSessionStore.getState().setOverlay(null);
 
-    this.wireLocation();
-    this.wireEngine();
-    this.wireAudioSessionRemotes();
-
-    this.appSub = AppState.addEventListener("change", (next: AppStateStatus) => {
-      if (next === "active") void this.deps.location.onAppBecameActive();
-    });
-
     // F1: restored `playing` has no voice in this process — end as interrupted.
+    // Also clear director.narration so a later story step cannot remount an
+    // orphan playNarration with no session behind it (A10).
     if (this.session.playing) {
       const at = Date.now();
       const playedMs = computedPlayedMs(this.session.playing, at);
       pushAudioBreadcrumb(`start:interrupt-stale playedMs=${playedMs}`);
-      await this.dispatch({
+      await this.dispatchNow({
         type: "narrationEnded",
         at,
         reason: "interrupted",
         playedMs,
       });
+      this.director = {
+        ...this.director,
+        narration: {
+          playing: false,
+          fragmentId: null,
+          sha: null,
+          startedAtSec: null,
+          endsAtSec: null,
+          positionMs: 0,
+          breathPointsMs: [],
+          meta: null,
+        },
+        lastEmitted: emptyTargetMix(this.director.settings.route),
+        suspended: false,
+      };
+      this.pauseOwner = null;
+      this.deferredInterruptionEnded = false;
     }
 
     await this.dispatchWindowIfNeeded(Date.now(), true);
@@ -180,6 +253,17 @@ export class ExploringRuntime {
     } else {
       await this.deps.location.setMode("foreground");
     }
+
+    // Wire last so ticks/fixes cannot interleave with bootstrap.
+    this.wireLocation();
+    this.wireEngine();
+    this.wireAudioSessionRemotes();
+
+    this.appSub = AppState.addEventListener("change", (next: AppStateStatus) => {
+      if (next === "active") void this.deps.location.onAppBecameActive();
+    });
+
+    this.bootstrapped = true;
   }
 
   getDirector(): DirectorState {
@@ -244,9 +328,13 @@ export class ExploringRuntime {
    * F5: stop audio + location, clear session/director kv. Packs stay installed.
    */
   async resetSessionKeepPacks(): Promise<void> {
+    await this.serial(() => this.resetSessionKeepPacksNow());
+  }
+
+  private async resetSessionKeepPacksNow(): Promise<void> {
     pushAudioBreadcrumb("resetSessionKeepPacks");
     try {
-      await this.stopExploring();
+      await this.stopExploringNow();
     } catch {
       // may already be idle
     }
@@ -262,10 +350,13 @@ export class ExploringRuntime {
     });
     this.director = { ...this.director, settings: m6DirectorSettings() };
     this.narrationVoiceId = null;
+    this.pauseOwner = null;
+    this.deferredInterruptionEnded = false;
     useSessionStore.getState().setSession(this.session, null);
     useSessionStore.getState().resetUi();
   }
 
+  /** Tests only — production Provider never disposes the process singleton. */
   dispose(): void {
     this.disposed = true;
     this.deps.engine.stopSessionClock();
@@ -277,16 +368,18 @@ export class ExploringRuntime {
 
   private wireLocation(): void {
     this.deps.location.setFixListener((fix) => {
-      void this.dispatch({
-        type: "fix",
-        at: fix.at,
-        lat: fix.lat,
-        lng: fix.lng,
-        accuracyM: fix.accuracyM,
-      });
+      void this.serial(() =>
+        this.dispatchNow({
+          type: "fix",
+          at: fix.at,
+          lat: fix.lat,
+          lng: fix.lng,
+          accuracyM: fix.accuracyM,
+        }),
+      );
     });
     this.deps.location.setStopRequestListener(() => {
-      void this.dispatch({ type: "stop", at: Date.now() });
+      void this.serial(() => this.dispatchNow({ type: "stop", at: Date.now() }));
     });
   }
 
@@ -294,28 +387,28 @@ export class ExploringRuntime {
     const { engine } = this.deps;
     this.unsubs.push(
       engine.onTick((audioSec) => {
-        void this.onAudioClock(audioSec);
+        void this.serial(() => this.onAudioClockNow(audioSec));
       }),
     );
     this.unsubs.push(
       engine.onVoiceEnded((e) => {
-        // Return the promise so fake engines can await the full chain in tests.
-        return this.onVoiceEnded(e);
+        // Enqueue and return at once — never await from the engine (deadlock).
+        void this.serial(() => this.onVoiceEndedNow(e));
       }),
     );
     this.unsubs.push(
       engine.onNarrationProgress((p) => {
-        void this.onNarrationProgress(p);
+        void this.serial(() => this.onNarrationProgressNow(p));
       }),
     );
     this.unsubs.push(
       engine.onInterruption((phase) => {
-        void this.onInterruption(phase);
+        void this.serial(() => this.onInterruptionNow(phase));
       }),
     );
     this.unsubs.push(
       engine.onRouteChange((route) => {
-        void this.onRoute(route);
+        void this.serial(() => this.onRouteNow(route));
       }),
     );
   }
@@ -324,45 +417,55 @@ export class ExploringRuntime {
   private wireAudioSessionRemotes(): void {
     this.unsubs.push(
       this.deps.engine.onRemoteCommand((command) => {
-        void (async () => {
-          if (command === "stopExploring") {
-            pushAudioBreadcrumb("remote:stopExploring");
-            await this.dispatch({ type: "stop", at: Date.now() });
-            return;
-          }
-          if (!this.session.playing) return;
-          if (command === "pause") {
-            pushAudioBreadcrumb("remote:pause");
-            await this.dispatch({ type: "narrationPaused", at: Date.now() });
-            const overlay = useSessionStore.getState().overlay;
-            if (overlay) {
-              useSessionStore.getState().setOverlay({ ...overlay, paused: true });
-            }
-            return;
-          }
-          if (command === "play") {
-            pushAudioBreadcrumb("remote:play");
-            await this.dispatch({ type: "narrationResumed", at: Date.now() });
-            const overlay = useSessionStore.getState().overlay;
-            if (overlay) {
-              useSessionStore.getState().setOverlay({
-                ...overlay,
-                paused: false,
-                busyHint: undefined,
-              });
-            }
-            return;
-          }
-          // skipBackward: engine already sought; sync engine voice id (RC6).
-          if (command === "skipBackward") {
-            this.syncNarrationVoiceIdFromEngine();
-          }
-        })();
+        void this.serial(() => this.handleRemoteNow(command));
       }),
     );
   }
 
+  private async handleRemoteNow(command: string): Promise<void> {
+    if (this.disposed) return;
+    if (command === "stopExploring") {
+      pushAudioBreadcrumb("remote:stopExploring");
+      await this.dispatchNow({ type: "stop", at: Date.now() });
+      return;
+    }
+    if (!this.session.playing) return;
+    if (command === "pause") {
+      pushAudioBreadcrumb("remote:pause");
+      this.pauseOwner = "listener";
+      await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
+      const overlay = useSessionStore.getState().overlay;
+      if (overlay) {
+        useSessionStore.getState().setOverlay({ ...overlay, paused: true });
+      }
+      return;
+    }
+    if (command === "play") {
+      pushAudioBreadcrumb("remote:play");
+      await this.applyDeferredInterruptionEndedIfNeeded();
+      await this.dispatchNow({ type: "narrationResumed", at: Date.now() });
+      this.pauseOwner = null;
+      const overlay = useSessionStore.getState().overlay;
+      if (overlay) {
+        useSessionStore.getState().setOverlay({
+          ...overlay,
+          paused: false,
+          busyHint: undefined,
+        });
+      }
+      return;
+    }
+    // skipBackward: engine already sought; sync engine voice id (RC6).
+    if (command === "skipBackward") {
+      this.syncNarrationVoiceIdFromEngine();
+    }
+  }
+
   async reloadSettings(): Promise<void> {
+    await this.serial(() => this.reloadSettingsNow());
+  }
+
+  private async reloadSettingsNow(): Promise<void> {
     const accessible = parseBoolKv(
       await getKv(this.deps.db, ACCESSIBLE_TRIGGER_KEY),
       DEFAULT_EXPLORING_SETTINGS.accessibleTrigger,
@@ -384,6 +487,10 @@ export class ExploringRuntime {
   }
 
   async reloadPacks(): Promise<void> {
+    await this.serial(() => this.reloadPacksNow());
+  }
+
+  private async reloadPacksNow(): Promise<void> {
     const completions = (await listCompletions(this.deps.db)).map((row) => ({
       fragmentId: row.fragment_id,
       revisionNo: row.revision_no,
@@ -434,17 +541,29 @@ export class ExploringRuntime {
   }
 
   async scanCode(code: string): Promise<void> {
+    await this.serial(() => this.scanCodeNow(code));
+  }
+
+  private async scanCodeNow(code: string): Promise<void> {
     const markerHash = await hashMarkerCode(code);
     // Hash only — never log the raw code (AGENTS.md).
     pushAudioBreadcrumb(`scan hash=${markerHash.slice(0, 8)}`);
-    await this.dispatch({ type: "scan", at: Date.now(), markerHash });
+    await this.dispatchNow({ type: "scan", at: Date.now(), markerHash });
   }
 
   async stopExploring(): Promise<void> {
-    await this.dispatch({ type: "stop", at: Date.now() });
+    await this.serial(() => this.stopExploringNow());
+  }
+
+  private async stopExploringNow(): Promise<void> {
+    await this.dispatchNow({ type: "stop", at: Date.now() });
   }
 
   async togglePause(): Promise<void> {
+    await this.serial(() => this.togglePauseNow());
+  }
+
+  private async togglePauseNow(): Promise<void> {
     const overlay = useSessionStore.getState().overlay;
     if (!overlay) return;
     // Natural end clears playing but used to leave the overlay up — dismiss
@@ -457,6 +576,9 @@ export class ExploringRuntime {
     const audioSession = this.deps.engine.getSession();
     if (overlay.paused) {
       pushAudioBreadcrumb("togglePause:resume");
+      // Apply deferred / pending interruption-ended before audio so remount
+      // lands on the resume path, not while still listener-paused.
+      await this.applyDeferredInterruptionEndedIfNeeded();
       // F2: focus-denied start never opened the native session — retry start.
       if (!audioSession.isStarted()) {
         const ok = await audioSession.start({
@@ -495,7 +617,8 @@ export class ExploringRuntime {
       } else {
         await audioSession.userPlay();
       }
-      await this.dispatch({ type: "narrationResumed", at: Date.now() });
+      await this.dispatchNow({ type: "narrationResumed", at: Date.now() });
+      this.pauseOwner = null;
       useSessionStore.getState().setOverlay({
         ...overlay,
         paused: false,
@@ -504,13 +627,18 @@ export class ExploringRuntime {
     } else {
       // Optimistic UI before await — keeps Pause→Resume snappy if focus work lags.
       pushAudioBreadcrumb("togglePause:pause");
+      this.pauseOwner = "listener";
       useSessionStore.getState().setOverlay({ ...overlay, paused: true });
-      await this.dispatch({ type: "narrationPaused", at: Date.now() });
+      await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
       await audioSession.userPause();
     }
   }
 
   skipBack(): void {
+    void this.serial(() => this.skipBackNow());
+  }
+
+  private async skipBackNow(): Promise<void> {
     const position = this.director.narration.positionMs;
     const next = backSkipMs(position);
     this.deps.engine.seekNarration?.(next);
@@ -530,13 +658,15 @@ export class ExploringRuntime {
     lng: number;
     accuracyM: number;
   }): Promise<void> {
-    await this.dispatch({
-      type: "fix",
-      at: fix.at,
-      lat: fix.lat,
-      lng: fix.lng,
-      accuracyM: fix.accuracyM,
-    });
+    await this.serial(() =>
+      this.dispatchNow({
+        type: "fix",
+        at: fix.at,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyM: fix.accuracyM,
+      }),
+    );
   }
 
   /** Simulate engine narration end (tests). */
@@ -544,17 +674,23 @@ export class ExploringRuntime {
     reason: "natural" | "stopped" | "interrupted",
     playedMs: number,
   ): Promise<void> {
-    await this.dispatch({
-      type: "narrationEnded",
-      at: Date.now(),
-      reason,
-      playedMs,
-    });
+    await this.serial(() =>
+      this.dispatchNow({
+        type: "narrationEnded",
+        at: Date.now(),
+        reason,
+        playedMs,
+      }),
+    );
   }
 
   async dispatch(event: SessionEvent): Promise<void> {
+    await this.serial(() => this.dispatchNow(event));
+  }
+
+  private async dispatchNow(event: SessionEvent): Promise<void> {
     if (this.disposed) return;
-    if (!this.packed) await this.reloadPacks();
+    if (!this.packed) await this.reloadPacksNow();
     if (!this.packed) return;
 
     // C2: recompute Day/Night before every step (not only on audio ticks).
@@ -596,6 +732,8 @@ export class ExploringRuntime {
     // overlay on every narration end so Pause can't linger as a no-op.
     if (event.type === "narrationEnded") {
       useSessionStore.getState().setOverlay(null);
+      this.pauseOwner = null;
+      this.deferredInterruptionEnded = false;
     }
 
     for (const effect of result.effects) {
@@ -653,7 +791,7 @@ export class ExploringRuntime {
         await this.deps.location.setMode(mode);
       },
       onPlay: async (play) => {
-        await this.handlePlay(play, result.story);
+        await this.handlePlayNow(play, result.story);
       },
       onStopNarration: async () => {
         useSessionStore.getState().setOverlay(null);
@@ -710,7 +848,7 @@ export class ExploringRuntime {
         (e) => e.type === "recordCompletion" || e.type === "writeUnlocks",
       )
     ) {
-      await this.reloadPacks();
+      await this.reloadPacksNow();
     }
   }
 
@@ -718,6 +856,8 @@ export class ExploringRuntime {
     if (this.endingSession) return;
     this.endingSession = true;
     try {
+      this.pauseOwner = null;
+      this.deferredInterruptionEnded = false;
       // C1: stop silent heartbeats
       this.deps.engine.stopSessionClock();
       // B7: fade-stop narration, end media session, stop location ≤ 5 s
@@ -741,7 +881,36 @@ export class ExploringRuntime {
     }
   }
 
-  private async handlePlay(play: PlayRequest, story: StoryState): Promise<void> {
+  private stillWantPlay(fragmentId: string): boolean {
+    return (
+      this.session.phase === "exploring" &&
+      this.session.playing?.fragmentId === fragmentId
+    );
+  }
+
+  private async abandonPlay(
+    play: PlayRequest,
+    focusAcquired: boolean,
+  ): Promise<void> {
+    pushAudioBreadcrumb(`play-abandoned ${tail8(play.fragmentId)}`);
+    const overlay = useSessionStore.getState().overlay;
+    if (
+      overlay?.fragmentId === play.fragmentId &&
+      this.session.playing?.fragmentId !== play.fragmentId
+    ) {
+      useSessionStore.getState().setOverlay(null);
+    }
+    // Defense in depth: release focus/notification if start won a race with stop.
+    if (focusAcquired && this.session.phase !== "exploring") {
+      try {
+        await this.deps.engine.getSession().stop();
+      } catch {
+        // best-effort
+      }
+    }
+  }
+
+  private async handlePlayNow(play: PlayRequest, story: StoryState): Promise<void> {
     const meta = this.packed?.meta[play.fragmentId];
     const asset = meta?.narrationByWindow[play.version.timeWindow];
     const title = asset?.title ?? "";
@@ -763,14 +932,23 @@ export class ExploringRuntime {
     } catch {
       // G3 best-effort
     }
+    if (!this.stillWantPlay(play.fragmentId)) {
+      await this.abandonPlay(play, false);
+      return;
+    }
 
     const audioSession = this.deps.engine.getSession();
+    let focusAcquired = audioSession.isStarted();
     if (!audioSession.isStarted()) {
       const ok = await audioSession.start({ title, artist: "InTell" });
       pushAudioBreadcrumb(`handlePlay:start ok=${ok} title=${title}`);
+      if (!this.stillWantPlay(play.fragmentId)) {
+        await this.abandonPlay(play, ok);
+        return;
+      }
       // F2: focus denied — pause UI, do not hand the director a playing narration.
       if (!ok) {
-        await this.dispatch({ type: "narrationPaused", at: Date.now() });
+        await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
         useSessionStore.getState().setOverlay({
           title,
           tier,
@@ -781,9 +959,18 @@ export class ExploringRuntime {
         });
         return;
       }
+      focusAcquired = true;
     } else {
       await audioSession.update({ title, artist: "InTell" }, "playing");
+      if (!this.stillWantPlay(play.fragmentId)) {
+        await this.abandonPlay(play, true);
+        return;
+      }
       await audioSession.userPlay();
+      if (!this.stillWantPlay(play.fragmentId)) {
+        await this.abandonPlay(play, true);
+        return;
+      }
     }
 
     pushAudioBreadcrumb(
@@ -801,6 +988,7 @@ export class ExploringRuntime {
       },
       story,
     );
+    void focusAcquired;
   }
 
   private async directorSessionEffect(
@@ -813,19 +1001,20 @@ export class ExploringRuntime {
     const world = buildM6DirectorWorld(this.packed, groveId);
     const audioSec = this.safeAudioSec();
     const wallAtMs = Date.now();
-    let next = directorStep(
+    const first = directorStep(
       this.director,
       { type: "story", story, audioSec, wallAtMs },
       world,
     );
-    this.director = next.state;
-    next = directorStep(
+    this.director = first.state;
+    const second = directorStep(
       this.director,
       { type: "sessionEffect", effect, audioSec, wallAtMs },
       world,
     );
-    this.director = next.state;
-    await this.applyCommands(next.commands);
+    this.director = second.state;
+    // MOB-2: apply every step's commands (matches admin Simulator).
+    await this.applyCommands([...first.commands, ...second.commands]);
     if (this.session.phase === "exploring") {
       await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
     }
@@ -901,19 +1090,19 @@ export class ExploringRuntime {
    */
   private async runSessionTimers(at: number): Promise<void> {
     if (this.disposed || this.session.phase !== "exploring") return;
-    await this.dispatch({ type: "tick", at });
+    await this.dispatchNow({ type: "tick", at });
     if (
       this.session.afterglowEndsAt !== null &&
       at >= this.session.afterglowEndsAt
     ) {
-      await this.dispatch({ type: "afterglowElapsed", at });
+      await this.dispatchNow({ type: "afterglowElapsed", at });
       useSessionStore.getState().setAfterglow(null);
       useSessionStore.getState().setUnlockBanner(false);
     }
   }
 
   /** B4 / C1: engine audio-clock tick — session tick + director heartbeat while exploring. */
-  private async onAudioClock(audioSec: number): Promise<void> {
+  private async onAudioClockNow(audioSec: number): Promise<void> {
     if (this.disposed || this.session.phase !== "exploring") return;
     this.lastHeartbeatAudioSec = audioSec;
     const at = Date.now();
@@ -948,7 +1137,7 @@ export class ExploringRuntime {
     await this.applyCommands(result.commands);
   }
 
-  private async onVoiceEnded(e: {
+  private async onVoiceEndedNow(e: {
     voiceId: string;
     kind: string;
     reason: "ended" | "cancelled";
@@ -1024,7 +1213,7 @@ export class ExploringRuntime {
           ? "stopped"
           : "interrupted";
     this.narrationVoiceId = null;
-    await this.dispatch({
+    await this.dispatchNow({
       type: "narrationEnded",
       at: Date.now(),
       reason,
@@ -1032,7 +1221,7 @@ export class ExploringRuntime {
     });
   }
 
-  private async onNarrationProgress(p: {
+  private async onNarrationProgressNow(p: {
     positionMs: number;
     durationMs: number;
   }): Promise<void> {
@@ -1052,6 +1241,11 @@ export class ExploringRuntime {
       world,
     );
     this.director = result.state;
+    // MOB-2: apply progress-step commands (preloads / M7 stems).
+    await this.applyCommands(result.commands);
+    if (result.commands.length > 0 && this.session.phase === "exploring") {
+      await setKv(this.deps.db, DIRECTOR_KV_KEY, directorJsonForDisk(this.director));
+    }
     const overlay = useSessionStore.getState().overlay;
     if (overlay && p.durationMs > 0) {
       useSessionStore.getState().setOverlay({
@@ -1061,9 +1255,8 @@ export class ExploringRuntime {
     }
   }
 
-  private async onInterruption(phase: "began" | "ended"): Promise<void> {
+  private async onInterruptionNow(phase: "began" | "ended"): Promise<void> {
     if (!this.packed) return;
-    const playing = this.session.playing != null && this.session.playing.pausedAt === null;
     const groveId =
       this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
     const world = buildM6DirectorWorld(this.packed, groveId);
@@ -1073,9 +1266,19 @@ export class ExploringRuntime {
     if (phase === "began") {
       // B3 guard: only pause session when something is playing
       if (this.session.playing && this.session.playing.pausedAt === null) {
-        await this.dispatch({ type: "narrationPaused", at: Date.now() });
+        await this.dispatchNow({ type: "narrationPaused", at: Date.now() });
         const overlay = useSessionStore.getState().overlay;
         if (overlay) useSessionStore.getState().setOverlay({ ...overlay, paused: true });
+      }
+      // Ownership: becoming-noisy / userPaused → listener; focus loss → system.
+      // Never overwrite an existing listener pause with system.
+      if (this.pauseOwner !== "listener") {
+        const mode = this.deps.engine.getSession().getMode();
+        if (mode === "noisyPaused" || mode === "userPaused") {
+          this.pauseOwner = "listener";
+        } else {
+          this.pauseOwner = "system";
+        }
       }
       const result = directorStep(
         this.director,
@@ -1097,6 +1300,51 @@ export class ExploringRuntime {
     }
 
     // ended
+    if (this.pauseOwner === "listener") {
+      // Defer remount until the listener resumes — remount-while-paused starts audio.
+      this.deferredInterruptionEnded = true;
+      return;
+    }
+    // Listener resume may already have applied the director step (userPlay → ended
+    // enqueued behind togglePause). Skip a second remount.
+    if (!this.director.suspended && !this.deferredInterruptionEnded) {
+      return;
+    }
+    this.deferredInterruptionEnded = false;
+    await this.applyInterruptionEndedDirector(world, audioSec, wallAtMs);
+    if (this.session.playing && this.session.playing.pausedAt !== null) {
+      await this.dispatchNow({ type: "narrationResumed", at: Date.now() });
+      const overlay = useSessionStore.getState().overlay;
+      if (overlay) {
+        useSessionStore.getState().setOverlay({
+          ...overlay,
+          paused: false,
+          busyHint: undefined,
+        });
+      }
+    }
+    this.pauseOwner = null;
+  }
+
+  private async applyDeferredInterruptionEndedIfNeeded(): Promise<void> {
+    if (!this.deferredInterruptionEnded && !this.director.suspended) return;
+    this.deferredInterruptionEnded = false;
+    if (!this.packed) return;
+    const groveId =
+      this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
+    const world = buildM6DirectorWorld(this.packed, groveId);
+    await this.applyInterruptionEndedDirector(
+      world,
+      this.safeAudioSec(),
+      Date.now(),
+    );
+  }
+
+  private async applyInterruptionEndedDirector(
+    world: ReturnType<typeof buildM6DirectorWorld>,
+    audioSec: number,
+    wallAtMs: number,
+  ): Promise<void> {
     const result = directorStep(
       this.director,
       {
@@ -1110,27 +1358,15 @@ export class ExploringRuntime {
     );
     this.director = result.state;
     // F3: focus path owns resumeAfterFade; filter director resume to avoid a double resume.
-    // Keep playNarration remounts.
+    // Keep playNarration remounts (resume at last breath point — R1 tuning later).
     await this.applyCommands(
       result.commands.filter(
         (c) => c.type !== "suspend" && c.type !== "resume",
       ),
     );
-    if (this.session.playing && this.session.playing.pausedAt !== null) {
-      await this.dispatch({ type: "narrationResumed", at: Date.now() });
-      const overlay = useSessionStore.getState().overlay;
-      if (overlay) {
-        useSessionStore.getState().setOverlay({
-          ...overlay,
-          paused: false,
-          busyHint: undefined,
-        });
-      }
-    }
-    void playing;
   }
 
-  private async onRoute(route: AudioRoute): Promise<void> {
+  private async onRouteNow(route: AudioRoute): Promise<void> {
     if (!this.packed) return;
     const groveId =
       this.session.currentGroveId ?? this.packed.world.groves[0]?.id ?? "unknown";
@@ -1171,7 +1407,7 @@ export class ExploringRuntime {
       // First computation — still dispatch so the machine has the window
     }
     if (prev !== null || force) {
-      await this.dispatch({ type: "windowChanged", at, timeWindow: window });
+      await this.dispatchNow({ type: "windowChanged", at, timeWindow: window });
     }
   }
 }
