@@ -111,12 +111,9 @@ export async function handleExportArchive(
     ? `intell-archive-${built.scope.regionId}.zip`
     : "intell-archive.zip";
   deps.log("ok");
-  // Deno DOM typings reject Uint8Array<ArrayBufferLike> as BodyInit/BlobPart.
-  const body = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  );
-  return new Response(body, {
+  // Deno DOM typings reject Uint8Array<ArrayBufferLike> as BodyInit.
+  const zipBody = new Uint8Array(bytes) as unknown as BodyInit;
+  return new Response(zipBody, {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
