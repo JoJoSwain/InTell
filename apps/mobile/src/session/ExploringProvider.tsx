@@ -1,8 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { dataLayer } from "../runtime/dataLayer";
 import { LocationService } from "../location/LocationService";
 import { RNAudioApiEngine } from "../audio/engine/RNAudioApiEngine";
-import { ExploringRuntime } from "./ExploringRuntime";
+import {
+  getExploringRuntime,
+  type ExploringRuntime,
+} from "./ExploringRuntime";
 import type { ExploringEngine } from "./enginePort";
 import "../location/locationTask";
 
@@ -10,40 +13,48 @@ type Ctx = { runtime: ExploringRuntime | null };
 
 const ExploringContext = createContext<Ctx>({ runtime: null });
 
+/** Process-wide: React remount must not create a second engine/runtime (A10). */
+let processLocation: LocationService | null = null;
+let processEngine: ExploringEngine | null = null;
+let processStart: Promise<ExploringRuntime> | null = null;
+
+async function ensureProcessRuntime(): Promise<ExploringRuntime> {
+  if (!processStart) {
+    processStart = (async () => {
+      const { db } = await dataLayer();
+      processLocation ??= new LocationService();
+      processEngine ??= new RNAudioApiEngine() as unknown as ExploringEngine;
+      const runtime = getExploringRuntime({
+        db,
+        location: processLocation,
+        engine: processEngine,
+      });
+      await runtime.start();
+      return runtime;
+    })();
+  }
+  return processStart;
+}
+
 export function useExploringRuntime(): ExploringRuntime | null {
   return useContext(ExploringContext).runtime;
 }
 
 export function ExploringProvider(props: { children: ReactNode }) {
   const [runtime, setRuntime] = useState<ExploringRuntime | null>(null);
-  const started = useRef(false);
-  const runtimeRef = useRef<ExploringRuntime | null>(null);
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     let alive = true;
-    const location = new LocationService();
-    const engine = new RNAudioApiEngine() as unknown as ExploringEngine;
-    void dataLayer()
-      .then(async ({ db }) => {
-        // B1: one RNAudioApiEngine — its internal AudioSessionController is the session.
-        const next = new ExploringRuntime({ db, location, engine });
-        await next.start();
-        if (!alive) {
-          next.dispose();
-          return;
-        }
-        runtimeRef.current = next;
-        setRuntime(next);
+    void ensureProcessRuntime()
+      .then((next) => {
+        if (alive) setRuntime(next);
       })
       .catch(() => {
         console.info("exploring runtime failed to start");
       });
+    // Never dispose on unmount — the runtime and engine are one per process.
     return () => {
       alive = false;
-      runtimeRef.current?.dispose();
-      runtimeRef.current = null;
     };
   }, []);
 
