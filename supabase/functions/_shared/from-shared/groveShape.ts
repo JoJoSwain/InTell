@@ -246,7 +246,7 @@ function buildRings(disks: readonly Disk[]): BuiltRing[] {
       const start = unique[i];
       const end = unique[(i + 1) % unique.length];
       if (!start || !end) continue;
-      let startAngle = angleAt(disk, start);
+      const startAngle = angleAt(disk, start);
       let endAngle = angleAt(disk, end);
       if (endAngle <= startAngle) endAngle += Math.PI * 2;
       const span = endAngle - startAngle;

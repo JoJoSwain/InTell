@@ -47,7 +47,8 @@ jobs:
         with:
           deno-version: v2.x
       - run: pnpm db:check-functions
-      - run: deno lint supabase/functions
+      # no-import-prefix excluded in supabase/functions/deno.json: edge fns use npm: import maps.
+      - run: deno lint --config supabase/functions/deno.json supabase/functions
       - run: pnpm db:check-edge-shared
       # seed-tones/ is gitignored; generate before upload in db:setup-local
       - run: pnpm db:seed-media-meta

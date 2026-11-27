@@ -160,7 +160,6 @@ export function crossLinkTip(
   if (lastExit === null) {
     return { lat: round7(toward.lat), lng: round7(toward.lng) };
   }
-  const exit = { x: end.x * lastExit, y: end.y * lastExit };
   const remain = length * (1 - lastExit);
   const step = Math.min(CROSS_LINK_TIP_M, remain);
   let tipT = lastExit + (length === 0 ? 0 : step / length);

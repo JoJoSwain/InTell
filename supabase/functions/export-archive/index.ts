@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
         };
       }
     },
-    zip: async (files) => {
+    zip: (files) => {
       const zip = new JSZip();
       for (const f of files) {
         zip.file(f.path, f.content);
