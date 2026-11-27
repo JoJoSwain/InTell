@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  decodeDump,
   formatSummary,
   formatTimeline,
   parseWalkLog,
@@ -43,7 +44,8 @@ async function main(argv) {
     return;
   }
 
-  const text = await fs.readFile(path.resolve(logPath), "utf8");
+  const bytes = await fs.readFile(path.resolve(logPath));
+  const text = decodeDump(bytes);
   /** @type {Record<string, string>} */
   let names = {};
   if (namesPath) {

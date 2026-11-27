@@ -15,6 +15,11 @@
  *   sha8?: string,
  *   outDb?: number | null,
  *   playing?: boolean,
+ *   ok?: boolean,
+ *   remoteCmd?: string,
+ *   playedMs?: number,
+ *   applyMessage?: string,
+ *   assetType?: string,
  *   diag?: Record<string, string>,
  * }} WalkEvent */
 
@@ -23,6 +28,33 @@ const TAG = /(?:^|\s)(?:W\/)?InTellAudio(?:\([^)]*\))?:\s*(.*)$/;
 /** Drop lines that look like they embed a lat/lng pair. */
 const LAT_LNG =
   /(-?\d{1,3}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)/;
+
+/**
+ * Decode a log dump. PowerShell 5's `>` writes UTF-16 LE (often with BOM).
+ * @param {Uint8Array | Buffer} bytes
+ * @returns {string}
+ */
+export function decodeDump(bytes) {
+  const buf =
+    bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  // TextDecoder wants the WHATWG labels ("utf-8" / "utf-16le"), not Node's "utf16le".
+  let encoding = "utf-8";
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+    encoding = "utf-16le";
+  } else {
+    const n = Math.min(200, buf.length);
+    let oddZeros = 0;
+    let oddCount = 0;
+    for (let i = 1; i < n; i += 2) {
+      oddCount += 1;
+      if (buf[i] === 0) oddZeros += 1;
+    }
+    if (oddCount > 0 && oddZeros === oddCount) encoding = "utf-16le";
+  }
+  let text = new TextDecoder(encoding).decode(buf);
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return text;
+}
 
 /**
  * Android logcat timestamps are often `MM-DD HH:MM:SS.mmm` without a year.
@@ -124,6 +156,42 @@ export function parseMessage(msg) {
       cmdType: m[1],
       sha8: m[2] && m[2] !== "story" ? m[2].toLowerCase() : m[2],
     };
+  }
+
+  // handlePlay:start ok=<bool> …title ignored…
+  m = msg.match(/^handlePlay:start\s+ok=(true|false)\b/i);
+  if (m) {
+    return { kind: "handlePlay:start", ok: m[1].toLowerCase() === "true" };
+  }
+
+  m = msg.match(/^resume:start\s+ok=(true|false)\b/i);
+  if (m) {
+    return { kind: "resume:start", ok: m[1].toLowerCase() === "true" };
+  }
+
+  m = msg.match(/^remote:(\S+)/i);
+  if (m) return { kind: "remote", remoteCmd: m[1] };
+
+  m = msg.match(/^scan\s+hash=([0-9a-f]{8})\b/i);
+  if (m) return { kind: "scan", sha8: m[1].toLowerCase() };
+
+  m = msg.match(/^start:interrupt-stale\s+playedMs=(-?\d+)\b/i);
+  if (m) {
+    return { kind: "start:interrupt-stale", playedMs: Number(m[1]) };
+  }
+
+  m = msg.match(/^no-uri\s+(\S+)\s+([0-9a-f]{8})\b/i);
+  if (m) {
+    return {
+      kind: "no-uri",
+      assetType: m[1],
+      sha8: m[2].toLowerCase(),
+    };
+  }
+
+  m = msg.match(/^applyCommands\s+(.+)$/i);
+  if (m) {
+    return { kind: "applyCommands", applyMessage: m[1].trim() };
   }
 
   if (/^diag\s+/i.test(msg)) {
@@ -273,12 +341,16 @@ export function summarizeWalk(events, names = {}) {
     .filter((e) => e.kind === "fix" && e.accM != null)
     .map((e) => e.accM);
   const silent = longestSilentNarrationStretch(events);
+  const audioBusy = events.filter(
+    (e) => e.kind === "handlePlay:start" && e.ok === false,
+  ).length;
 
   return {
     storiesPlayed: plays.length,
     storiesCompleted: completed.length,
     unlocks: unlocks.length,
     interruptions: interruptions.length,
+    audioBusy,
     teasersByReason,
     fixAccuracy: {
       n: accs.length,
@@ -335,6 +407,23 @@ export function formatTimeline(events, names = {}) {
       detail =
         `cmd-fail ${ev.cmdType ?? ""}${ev.sha8 ? ` ${ev.sha8}` : ""}`.trim();
     }
+    if (ev.kind === "handlePlay:start") {
+      detail = `handlePlay:start ok=${ev.ok}`;
+    }
+    if (ev.kind === "resume:start") {
+      detail = `resume:start ok=${ev.ok}`;
+    }
+    if (ev.kind === "remote") detail = `remote:${ev.remoteCmd ?? ""}`;
+    if (ev.kind === "scan") detail = `scan hash=${ev.sha8 ?? ""}`;
+    if (ev.kind === "start:interrupt-stale") {
+      detail = `start:interrupt-stale playedMs=${ev.playedMs}`;
+    }
+    if (ev.kind === "no-uri") {
+      detail = `no-uri ${ev.assetType ?? ""} ${ev.sha8 ?? ""}`.trim();
+    }
+    if (ev.kind === "applyCommands") {
+      detail = `applyCommands ${ev.applyMessage ?? ""}`.trim();
+    }
     rows.push(
       [rel, detail, label, window, out].join("\t"),
     );
@@ -351,6 +440,7 @@ export function formatSummary(summary) {
   lines.push(`stories completed: ${summary.storiesCompleted}`);
   lines.push(`unlocks: ${summary.unlocks}`);
   lines.push(`interruptions: ${summary.interruptions}`);
+  lines.push(`audio busy: ${summary.audioBusy}`);
   const teaserKeys = Object.keys(summary.teasersByReason).sort();
   if (teaserKeys.length === 0) {
     lines.push("teasers: (none)");

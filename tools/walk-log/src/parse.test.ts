@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  decodeDump,
   extractInTellMessage,
   formatTimeline,
   longestSilentNarrationStretch,
@@ -13,10 +14,8 @@ import {
 } from "./parse.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const fixture = fs.readFileSync(
-  path.join(here, "..", "fixtures", "sample.log"),
-  "utf8",
-);
+const fixturePath = path.join(here, "..", "fixtures", "sample.log");
+const fixture = fs.readFileSync(fixturePath, "utf8");
 
 describe("walk-log parse", () => {
   it("parses known message shapes", () => {
@@ -39,6 +38,61 @@ describe("walk-log parse", () => {
       "load",
     );
     expect(parseMessage("totally-unknown")).toBeNull();
+  });
+
+  it("parses start, remote, scan, and apply line kinds", () => {
+    expect(
+      parseMessage('handlePlay:start ok=true title=Walk 2 QR'),
+    ).toEqual({ kind: "handlePlay:start", ok: true });
+    expect(parseMessage("handlePlay:start ok=false")).toEqual({
+      kind: "handlePlay:start",
+      ok: false,
+    });
+    expect(parseMessage("resume:start ok=true")).toEqual({
+      kind: "resume:start",
+      ok: true,
+    });
+    expect(parseMessage("remote:pause")).toEqual({
+      kind: "remote",
+      remoteCmd: "pause",
+    });
+    expect(parseMessage("scan hash=0ae7c708")).toEqual({
+      kind: "scan",
+      sha8: "0ae7c708",
+    });
+    expect(parseMessage("start:interrupt-stale playedMs=1200")).toEqual({
+      kind: "start:interrupt-stale",
+      playedMs: 1200,
+    });
+    expect(parseMessage("no-uri narration a460e478")).toEqual({
+      kind: "no-uri",
+      assetType: "narration",
+      sha8: "a460e478",
+    });
+    expect(parseMessage("applyCommands duck master")).toEqual({
+      kind: "applyCommands",
+      applyMessage: "duck master",
+    });
+  });
+
+  it("counts handlePlay:start ok=false as audio busy", () => {
+    const events = parseWalkLog(
+      [
+        "11-25 10:00:00.000 W InTellAudio: handlePlay:start ok=false",
+        "11-25 10:00:01.000 W InTellAudio: handlePlay:start ok=true title=X",
+        "11-25 10:00:02.000 W InTellAudio: handlePlay:start ok=false",
+      ].join("\n"),
+    );
+    expect(summarizeWalk(events).audioBusy).toBe(2);
+  });
+
+  it("decodes a UTF-16LE dump with BOM to the same events as UTF-8", () => {
+    const utf8Events = parseWalkLog(fixture);
+    const bom = Buffer.from([0xff, 0xfe]);
+    const body = Buffer.from(fixture, "utf16le");
+    const decoded = decodeDump(Buffer.concat([bom, body]));
+    expect(decoded.charCodeAt(0)).not.toBe(0xfeff);
+    expect(parseWalkLog(decoded)).toEqual(utf8Events);
   });
 
   it("drops lines that look like lat/lng pairs", () => {
