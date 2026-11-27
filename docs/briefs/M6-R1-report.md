@@ -26,8 +26,8 @@ pnpm --filter @intell/mobile typecheck # pass
 pnpm --filter @intell/mobile test      # 137 passed
 ```
 
-- PR: https://github.com/JoJoSwain/InTell/pull/43 — CI `check` + `db` green (first `db` run flaked on pack-storage Object not found; rerun passed — F1, Lane A diagnosing).
-- Release build: `SKIP_INSTALL=1 SKIP_PREBUILD=1` with `JAVA_HOME` = Android Studio JBR — ALL BUILD CHECKS PASSED; APK not installed.
+- PR: https://github.com/JoJoSwain/InTell/pull/43 — review-fix push: CI `check` + `db` green (earlier `db` pack-storage Object not found flake was F1 / Lane A).
+- Release build (after review fixes): `SKIP_INSTALL=1 SKIP_PREBUILD=1` — ALL BUILD CHECKS PASSED; APK not installed.
 
 ## Not done
 
