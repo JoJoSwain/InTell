@@ -1,0 +1,8 @@
+{
+  // Edge functions resolve npm: via per-function import maps (not bare specifiers).
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  }
+}

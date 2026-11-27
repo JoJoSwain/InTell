@@ -12,6 +12,7 @@
     "db:setup-local": "node tools/db-setup-local.mjs",
     "db:sync-edge-shared": "node tools/sync-edge-shared.mjs",
     "db:check-edge-shared": "node tools/check-edge-shared.mjs",
+    "db:check-functions": "node tools/check-functions.mjs",
     "db:seed-media-upload": "node tools/seed-media-upload.mjs",
     "db:seed-media-meta": "pnpm --filter @intell/audio-fixtures generate:seed-meta",
     "db:demo-geometry": "node tools/demo-geometry/generate.mjs",

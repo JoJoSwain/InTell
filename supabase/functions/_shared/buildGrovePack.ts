@@ -460,7 +460,8 @@ export async function buildGrovePackObject(
       assetMap.set(s.assetSha, {
         sha: s.assetSha,
         ext: "m4a",
-        bytes: s.bytes,
+        // Stem bytes are optional on the snapshot; pack assets require a number.
+        bytes: s.bytes ?? 0,
         kind: "music_stem",
       });
     }

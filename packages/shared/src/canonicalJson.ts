@@ -84,5 +84,5 @@ export async function contentSha256(
   value: unknown,
   digestHex: (utf8: string) => Promise<string> | string,
 ): Promise<string> {
-  return digestHex(canonicalJson(value));
+  return await digestHex(canonicalJson(value));
 }

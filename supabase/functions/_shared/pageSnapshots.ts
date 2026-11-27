@@ -5,18 +5,13 @@ export type SnapshotRow = {
   published_at: string;
 };
 
-type SnapshotQuery = {
-  select: (cols: string) => SnapshotQuery;
-  eq: (col: string, value: string) => SnapshotQuery;
-  order: (col: string, opts: { ascending: boolean }) => SnapshotQuery;
-  range: (
-    from: number,
-    to: number,
-  ) => Promise<{ data: SnapshotRow[] | null; error: { message: string } | null }>;
-};
-
-type SnapshotClient = {
-  from: (table: string) => SnapshotQuery;
+/**
+ * Loose client for paging. PostgREST's concrete builder generics are too deep
+ * for `deno check` (TS2589) and its `range` return is Thenable, not Promise.
+ */
+export type SnapshotClient = {
+  // deno-lint-ignore no-explicit-any -- PostgREST generics / Thenable vs Promise
+  from: (table: string) => any;
 };
 
 /**
@@ -43,7 +38,7 @@ export async function pagePublishedSnapshots(
       .order("entity_id", { ascending: true })
       .range(from, to);
     if (error) throw new Error(`page ${entity} snapshots: ${error.message}`);
-    const rows = data ?? [];
+    const rows = (data ?? []) as SnapshotRow[];
     if (rows.length === 0) break;
     out.push(...rows);
     // Advance by what we actually received so a server cap below pageSize

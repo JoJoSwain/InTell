@@ -123,7 +123,7 @@ export async function persistPackIfChanged(
   }
 
   const jsonUtf8 = canonicalJson(full);
-  const { path, manifestSha256, bytes } = await uploadManifest(
+  const { path, manifestSha256 } = await uploadManifest(
     client,
     input.scope,
     input.scopeId,

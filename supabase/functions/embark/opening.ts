@@ -3,20 +3,13 @@ type OpeningRow = {
   opening_lng: number | null;
 };
 
-type OpeningQuery = {
-  select: (cols: string) => OpeningQuery;
-  eq: (col: string, value: string | boolean) => OpeningQuery;
-  not: (col: string, op: string, value: null) => OpeningQuery;
-  order: (col: string, opts: { ascending: boolean }) => OpeningQuery;
-  limit: (n: number) => OpeningQuery;
-  maybeSingle: () => Promise<{
-    data: OpeningRow | null;
-    error: { message: string } | null;
-  }>;
-};
-
+/**
+ * Loose client: PostgREST's concrete builder generics do not match a
+ * hand-rolled chainable query type under `deno check`.
+ */
 type OpeningClient = {
-  from: (table: string) => OpeningQuery;
+  // deno-lint-ignore no-explicit-any -- PostgREST generics vs chainable fake
+  from: (table: string) => any;
 };
 
 /** Live grove pack opening — same point get_pack_index exposes. */
@@ -36,13 +29,14 @@ export async function lookupLiveOpening(
     .limit(1)
     .maybeSingle();
   if (error) throw new Error("opening lookup failed");
+  const row = data as OpeningRow | null;
   if (
-    data?.opening_lat === null ||
-    data?.opening_lat === undefined ||
-    data?.opening_lng === null ||
-    data?.opening_lng === undefined
+    row?.opening_lat === null ||
+    row?.opening_lat === undefined ||
+    row?.opening_lng === null ||
+    row?.opening_lng === undefined
   ) {
     return null;
   }
-  return { lat: data.opening_lat, lng: data.opening_lng };
+  return { lat: row.opening_lat, lng: row.opening_lng };
 }
