@@ -46,8 +46,26 @@ function dropRow(
 
 /**
  * Body must already be parsed JSON. Auth (publishable key) is checked in index.
+ * Never throws: unexpected errors become a 500 JSON body.
  */
 export async function handleIngest(
+  body: unknown,
+  deps: IngestDeps,
+): Promise<Response> {
+  try {
+    return await handleIngestInner(body, deps);
+  } catch {
+    let deviceId: string | null = null;
+    if (body != null && typeof body === "object" && !Array.isArray(body)) {
+      const raw = (body as { deviceId?: unknown }).deviceId;
+      if (typeof raw === "string" && raw.length > 0) deviceId = raw;
+    }
+    deps.log(deviceId, "internal-error");
+    return json({ error: "internal error" }, 500);
+  }
+}
+
+async function handleIngestInner(
   body: unknown,
   deps: IngestDeps,
 ): Promise<Response> {

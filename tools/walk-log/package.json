@@ -1,0 +1,15 @@
+{
+  "name": "@intell/walk-log",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "walk-log": "node src/cli.mjs",
+    "lint": "node --check src/cli.mjs && node --check src/parse.mjs",
+    "typecheck": "node --check src/cli.mjs && node --check src/parse.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  }
+}
