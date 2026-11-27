@@ -111,7 +111,8 @@ export async function handleExportArchive(
     ? `intell-archive-${built.scope.regionId}.zip`
     : "intell-archive.zip";
   deps.log("ok");
-  return new Response(bytes, {
+  // Deno's DOM lib types Uint8Array as non-BodyInit; Blob is accepted.
+  return new Response(new Blob([bytes]), {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
