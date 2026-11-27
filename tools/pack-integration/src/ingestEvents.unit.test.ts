@@ -120,6 +120,41 @@ describe("ingest-events handler", () => {
     expect(inserted).toHaveLength(1);
   });
 
+  it('drops "constructor" and omits a non-UUID id from dropped', async () => {
+    const good = makeEvent(
+      "app_opened",
+      {},
+      {},
+      { clientEventId: ID_A, occurredAt: OCCURRED },
+    );
+    const constructorEvent = {
+      v: 1,
+      clientEventId: ID_B,
+      name: "constructor",
+      occurredAt: OCCURRED,
+      props: {},
+    };
+    const nonUuidId = {
+      v: 1,
+      clientEventId: "not-a-uuid",
+      name: "seed_planted",
+      occurredAt: OCCURRED,
+      props: {},
+    };
+    const { deps, inserted } = baseDeps();
+    const res = await handleIngest(
+      { deviceId: DEVICE, events: [good, constructorEvent, nonUuidId] },
+      deps,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accepted).toBe(1);
+    expect(body.dropped).toEqual([
+      { clientEventId: ID_B, reason: "unknown_name" },
+    ]);
+    expect(inserted).toHaveLength(1);
+  });
+
   it("counts duplicates from insert", async () => {
     const good = makeEvent(
       "app_opened",
