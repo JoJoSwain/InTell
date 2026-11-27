@@ -81,34 +81,45 @@
 
 ---
 
-## 6. Lane roadmap (updated 2026-11-23)
+## 6. Lane roadmap (updated 2026-11-25)
 
 Lane B (mobile) is the long pole. Lane A stays one step ahead of it, delivering the shared logic and server pieces Lane B will need, and works on admin and analytics in between.
 
-**Where we are (2026-11-23, afternoon):** `master` is at `4ed4369`.
-- **Merged today:** A2 (PRs #25 and #27) and M5b (PR #26).
-- **The map home** runs on Jordan's Pixel 11 to the design standards. Under 1% of frames stutter while panning.
-- **Staging** is current with A2: migrations, the pack-building functions and the admin. Nothing is published there yet.
-- **Next:** Lane A builds **A3**, the Embark relay. Lane B runs the **ADR 0001 audio protocol** on the Pixel, the last step before M6 can use the audio engine. M5c (Embark on the phone) and M5d (first run) wait on worksheet rows with Ashley: 4.2 and 4.4, 6.3 and 6.4, 1.6, and 2.6 (the zoomed-out map).
+**Where we are (2026-11-25):** `master` is at `d02c664` (A7 merged). The two-lane setup (S0A / S0B) is in place. **M3 is complete.**
+
+- **M4 (sound + director):** A5 Parts 1–2 (PRs #30–#32) shipped sound data, rules, packs, the sound admin and the Listening Simulator. A6 (PR #33) shipped the AudioDirector.
+- **M5a / M5b:** done (PRs #20 / #26). **M5c** (Embark on the phone) and **M5d** (first run) are still open.
+- **B·S1–B·S3:** done (PRs #34 / #35). ADR 0001 is **Accepted for Android** as the renderer with a native `audio-session` module; **iOS is pending**.
+- **M6:** in progress on Lane B (PR #36, narration / session / proximity).
+- **M11:** done — A7 analytics and dashboard (PR #37) and A7b deep device pack parsers (PR #38).
+
+**Open / follow-ups**
+- the **iOS** ADR 0001 / audio-session run
+- **bed streaming** (M7; MediaElement path was not viable on Android)
+- the **Routes API key** for the `embark` relay (staging secret; Jordan)
+- **link-domain hosting** for physical-marker QR universal links (M12)
+- removing the **debug SHA-1** before launch
 
 **Lane A (Platform)**
 0. ✅ **A1, the M5a enablers** (PR #21): `register-device`, the shared sync-diff helper, React unified at 19.3.0.
 1. ✅ **M4a:** the shared logic in `packages/shared`. The story half (geo, unlock, time-window tests, trigger) merged in PRs #22 and #23; the sound half (music, ambience, Hush) in PR #24.
-2. ✅ **A2, the derived grove boundary** (ADR 0006). Part 1 (PR #25) shipped the shared `groveShape`, MultiPolygon geometry, pulse kinds, the story web, grove pack schema 4, the builder and the CI mobile export check. Part 2 (PR #27) shipped the database and the admin: there are no drawn grove polygons, and the bbox comes from the built pack.
-2b. ▶ **A3, the Embark relay** (brief `docs/briefs/A3-embark-relay.md`): the `embark` function, the Routes API key as a function secret, a per-device daily cap, and an origin that's never stored or logged.
-3. **M4b:** admin sound design and the Listening Simulator. It carries the region-pack extension for the sound fields (M4a plan review A1; a pack schema bump, which the phone already tolerates per M5a R4), M3c N3 (the loudness Web Worker), M3e F2 (a typed pack-build error), M3h V1/V2 and M3f K1–K3.
-4. **M11:** analytics ingest, dashboard, delete-device-data and export. These can be built from TECH_SPEC §8–9 with fixtures.
-5. **Pure logic ahead of Lane B:** the session state machine (M6), AudioDirector rules (M7) and Chronicle selectors (M8), all in `packages/shared` with tests.
-6. **M9 server and admin parts,** after the Journal spec and counsel.
-7. **M12 server hardening:** Sentry scrubbing and the data-deletion checks.
+2. ✅ **A2, the derived grove boundary** (ADR 0006). Part 1 (PR #25) and Part 2 (PR #27).
+2b. ✅ **A3, the Embark relay** (PR #28): the `embark` function, Routes API key as a function secret, per-device daily cap, origin never stored or logged.
+3. ✅ **A4, the session state machine** (PR #29) in `packages/shared`.
+4. ✅ **A5 / A6 (M4b):** sound features, admin, Listening Simulator (PRs #30–#32); AudioDirector (PR #33).
+5. ✅ **M11:** analytics ingest, dashboard, `delete-device-data`, `export-archive` (A7 PR #37; A7b PR #38).
+6. **Pure logic ahead of Lane B:** Chronicle selectors (M8) in `packages/shared` with tests.
+7. **M9 server and admin parts,** after the Journal spec and counsel.
+8. **M12 server hardening:** Sentry scrubbing, data-deletion checks, link-domain hosting.
 
 **Lane B (Mobile)**
 1. ✅ **M5a** (PR #20): the device database (where the OS backup includes it), pack index, download and sync with mandatory deletion, device registration, and staff preview mode.
-2. ✅ **M5b, the map home** (PR #26), built to `docs/design/MOBILE_HOME_STANDARDS.md` and checked on the Pixel 11. iOS checks are pending until there's an Apple Developer account.
-   - ▶ **B·S1, the ADR 0001 audio protocol on Android** (brief `docs/briefs/BS1-audio-protocol.md`): T1–T9 on the Pixel with Jordan. It gates M6.
-   - **M5c, Embark:** the card, the three modes, route drawing and the beta notice. It waits for worksheet rows 4.2 and 4.4 and for A3.
-   - **M5d, first run:** the splash, brand animation, welcome cards, location explainer and app icon. It waits for worksheet rows 6.x and 1.6.
-3. **M6, then M7, then M8** (after CHRONICLE_SPEC), **then M9 mobile** (after the Journal spec and counsel), **then M12 mobile and the field tests.**
+2. ✅ **M5b, the map home** (PR #26), built to `docs/design/MOBILE_HOME_STANDARDS.md` and checked on the Pixel 11.
+3. ✅ **B·S1–B·S3** (PRs #34 / #35): ADR 0001 Android protocol and the `audio-session` module. iOS pending.
+4. ▶ **M6, narration / session / proximity** (PR #36).
+5. **M5c, Embark** on the phone (card, three modes, route drawing, beta notice) — still open; waits on worksheet rows and A3 (A3 server is done).
+6. **M5d, first run** — still open; waits on worksheet rows 6.x and 1.6.
+7. **M7** (surroundings, soundtrack, Hush; bed streaming), **M8** (after CHRONICLE_SPEC), **M9 mobile** (after Journal spec and counsel), **M12** mobile and field tests.
 
 **Docs Claude must have ready ahead of Lane B:** ✅ the home-screen standards before M5b (the remaining worksheet rows before the screens that need them), CHRONICLE_SPEC before M8, and the Journal spec (with counsel on children's privacy) before M9.
 

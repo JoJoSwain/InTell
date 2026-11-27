@@ -137,19 +137,17 @@ export default async function DashboardPage() {
 
           return (
             <section key={section.key} aria-labelledby={`dash-${section.key}`}>
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <div>
-                  <h2
-                    id={`dash-${section.key}`}
-                    className="font-serif text-xl font-semibold"
-                  >
-                    {section.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-textMuted">{section.caption}</p>
-                </div>
+              <div>
+                <h2
+                  id={`dash-${section.key}`}
+                  className="font-serif text-xl font-semibold"
+                >
+                  {section.title}
+                </h2>
+                <p className="mt-1 text-sm text-textMuted">{section.caption}</p>
                 <Link
                   href={`/dashboard/csv/${section.key}`}
-                  className="text-sm text-primary underline-offset-4 hover:underline"
+                  className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
                 >
                   Download CSV
                 </Link>
