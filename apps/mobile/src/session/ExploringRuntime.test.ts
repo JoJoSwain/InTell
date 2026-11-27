@@ -26,6 +26,10 @@ import {
 import type { PackedSession } from "./sessionWorld";
 import { useSessionStore } from "./SessionStore";
 import { strings } from "../ui/strings";
+import {
+  clearAudioBreadcrumbs,
+  getAudioBreadcrumbs,
+} from "../audio/session/audioBreadcrumbs";
 
 const GROVE_ID = "aaaaaaaa-bbbb-4ccc-8ddd-000000000010";
 const SHA1 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -878,6 +882,7 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
     await flush();
     const currentId = engine.getNarrationDiag()?.id;
     expect(currentId).toBeTruthy();
+    expect(useSessionStore.getState().overlay).not.toBeNull();
 
     await engine.emitVoiceEnded({
       voiceId: currentId!,
@@ -887,6 +892,7 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
     await flush();
 
     expect(runtime.getSession().playing).toBeNull();
+    expect(useSessionStore.getState().overlay).toBeNull();
     const completions = await listCompletions(db);
     expect(completions.some((c) => c.fragment_id === "f1")).toBe(true);
     expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
@@ -901,6 +907,43 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
     await flush();
     const after = await listCompletions(db);
     expect(after.length).toBe(before);
+    runtime.dispose();
+  });
+
+  it("natural narrationEnded clears the playing overlay", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await flush();
+    expect(useSessionStore.getState().overlay?.title).toBe("Root story");
+    const currentId = engine.getNarrationDiag()?.id;
+    expect(currentId).toBeTruthy();
+
+    await runtime.injectNarrationEnded("natural", 1_500);
+    await flush();
+
+    expect(runtime.getSession().playing).toBeNull();
+    expect(useSessionStore.getState().overlay).toBeNull();
+    runtime.dispose();
+  });
+
+  it("togglePause with overlay and nothing playing clears it", async () => {
+    const { runtime } = await setup();
+    useSessionStore.getState().setOverlay({
+      title: "Stale",
+      tier: "leaf",
+      progress: 0.5,
+      paused: false,
+      fragmentId: "f1",
+    });
+    expect(runtime.getSession().playing).toBeNull();
+    clearAudioBreadcrumbs();
+
+    await runtime.togglePause();
+
+    expect(useSessionStore.getState().overlay).toBeNull();
+    expect(getAudioBreadcrumbs().map((c) => c.message)).toContain(
+      "togglePause:noop no-playing",
+    );
     runtime.dispose();
   });
 });

@@ -446,9 +446,17 @@ export class ExploringRuntime {
 
   async togglePause(): Promise<void> {
     const overlay = useSessionStore.getState().overlay;
-    if (!overlay || !this.session.playing) return;
+    if (!overlay) return;
+    // Natural end clears playing but used to leave the overlay up — dismiss
+    // instead of a dead Pause control (A2).
+    if (!this.session.playing) {
+      pushAudioBreadcrumb("togglePause:noop no-playing");
+      useSessionStore.getState().setOverlay(null);
+      return;
+    }
     const audioSession = this.deps.engine.getSession();
     if (overlay.paused) {
+      pushAudioBreadcrumb("togglePause:resume");
       // F2: focus-denied start never opened the native session — retry start.
       if (!audioSession.isStarted()) {
         const ok = await audioSession.start({
@@ -494,9 +502,11 @@ export class ExploringRuntime {
         busyHint: undefined,
       });
     } else {
+      // Optimistic UI before await — keeps Pause→Resume snappy if focus work lags.
+      pushAudioBreadcrumb("togglePause:pause");
+      useSessionStore.getState().setOverlay({ ...overlay, paused: true });
       await this.dispatch({ type: "narrationPaused", at: Date.now() });
       await audioSession.userPause();
-      useSessionStore.getState().setOverlay({ ...overlay, paused: true });
     }
   }
 
@@ -581,6 +591,12 @@ export class ExploringRuntime {
     const result = stepSession(this.session, enriched, world);
     this.session = result.state;
     useSessionStore.getState().setSession(this.session, result.story);
+
+    // Shared only emits stopNarration on session end — clear the playing
+    // overlay on every narration end so Pause can't linger as a no-op.
+    if (event.type === "narrationEnded") {
+      useSessionStore.getState().setOverlay(null);
+    }
 
     for (const effect of result.effects) {
       if (effect.type === "sessionStarted") {
