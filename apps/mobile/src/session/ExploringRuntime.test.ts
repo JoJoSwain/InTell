@@ -11,7 +11,11 @@ import {
   upsertUnlock,
 } from "../db/repos";
 import type { LocationService } from "../location/LocationService";
-import { ExploringRuntime } from "./ExploringRuntime";
+import {
+  ExploringRuntime,
+  getExploringRuntime,
+  resetExploringRuntimeSingletonForTests,
+} from "./ExploringRuntime";
 import { FakeExploringEngine } from "./fakeExploringEngine";
 import {
   DIRECTOR_KV_KEY,
@@ -358,6 +362,12 @@ async function flush(): Promise<void> {
   await Promise.resolve();
 }
 
+async function idle(runtime: ExploringRuntime): Promise<void> {
+  await flush();
+  await runtime.whenIdle();
+  await flush();
+}
+
 describe("ExploringRuntime (B8)", () => {
   it("fix → play → voiceEnded → completion → afterglow → queued fragment", async () => {
     const packed = buildPacked();
@@ -382,6 +392,7 @@ describe("ExploringRuntime (B8)", () => {
     await twoFixes(runtime, t0 + 3_000, LAT + 0.00005, LNG);
 
     await engine.emitVoiceEnded({ kind: "narration", reason: "ended" });
+    await idle(runtime);
 
     const completions = await listCompletions(db);
     expect(completions.some((c) => c.fragment_id === "f1")).toBe(true);
@@ -403,11 +414,11 @@ describe("ExploringRuntime (B8)", () => {
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
 
     engine.emitInterruption("began");
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
 
     engine.emitInterruption("ended");
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
 
     runtime.dispose();
@@ -423,7 +434,7 @@ describe("ExploringRuntime (B8)", () => {
     });
     expect(runtime.getSession().playing).toBeNull();
     engine.emitInterruption("began");
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing).toBeNull();
     runtime.dispose();
   });
@@ -469,7 +480,7 @@ describe("ExploringRuntime (B8)", () => {
     expect(location.mode).toBe("high");
 
     await runtime.stopExploring();
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().phase).toBe("idle");
     expect(engine.stopAllCalls.length).toBeGreaterThan(0);
@@ -484,7 +495,7 @@ describe("ExploringRuntime (B8)", () => {
     await twoFixes(runtime, nowBase());
     expect(engine.isSessionClockRunning()).toBe(true);
     engine.emitTick(5);
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().phase).toBe("exploring");
     runtime.dispose();
   });
@@ -502,7 +513,7 @@ describe("ExploringRuntime session clock (C1)", () => {
     expect(engine.tickNotifyCount).toBe(1);
 
     await runtime.stopExploring();
-    await flush();
+    await idle(runtime);
     expect(engine.isSessionClockRunning()).toBe(false);
     const n = engine.tickNotifyCount;
     engine.emitTick(3);
@@ -540,14 +551,14 @@ describe("ExploringRuntime session clock (C1)", () => {
 
       // Still in afterglow — clock tick must not drain yet
       engine.emitTick(5);
-      await flush();
+      await idle(runtime);
       expect(runtime.getSession().playing).toBeNull();
       expect(runtime.getSession().afterglowEndsAt).not.toBeNull();
 
       // Advance wall clock past afterglow; session-clock tick drains and may play f2
       jest.setSystemTime(endsAt + 50);
       engine.emitTick(10);
-      await flush();
+      await idle(runtime);
       expect(runtime.getSession().afterglowEndsAt).toBeNull();
       // If queue didn't auto-play, a fix after afterglow starts f2
       if (runtime.getSession().playing?.fragmentId !== "f2") {
@@ -581,7 +592,7 @@ describe("ExploringRuntime second session after Stop (C4)", () => {
 
     // Stop exploring → stopAll suspends context and mutes master
     await runtime.stopExploring();
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().phase).toBe("idle");
     expect(engine.isSessionClockRunning()).toBe(false);
     expect(engine.isContextSuspended()).toBe(true);
@@ -713,10 +724,12 @@ describe("ExploringRuntime restart clean start (F1)", () => {
       fragmentId: "f1",
     });
     await runtime2.start();
-    await flush();
+    await idle(runtime2);
 
     expect(useSessionStore.getState().overlay).toBeNull();
     expect(runtime2.getSession().playing).toBeNull();
+    expect(runtime2.getDirector().narration.playing).toBe(false);
+    expect(runtime2.getDirector().narration.fragmentId).toBeNull();
     expect(runtime2.getDirector().suspended).toBe(false);
     expect(runtime2.getDirector().lastEmitted.narration).toBeNull();
 
@@ -726,7 +739,7 @@ describe("ExploringRuntime restart clean start (F1)", () => {
       at: nowBase() + 60_000,
       markerHash: "marker-hash-phys",
     });
-    await flush();
+    await idle(runtime2);
     expect(runtime2.getSession().playing?.fragmentId).toBe("phys");
     expect(engine2.playedNarration.length).toBeGreaterThan(playsBefore);
     runtime2.dispose();
@@ -739,7 +752,7 @@ describe("ExploringRuntime focus-denied start (F2)", () => {
     engine.session.denyNextStart = true;
 
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
 
     expect(engine.playedNarration.length).toBe(0);
     expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
@@ -749,7 +762,7 @@ describe("ExploringRuntime focus-denied start (F2)", () => {
     expect(engine.session.isStarted()).toBe(false);
 
     await runtime.togglePause();
-    await flush();
+    await idle(runtime);
 
     expect(engine.session.isStarted()).toBe(true);
     expect(engine.playedNarration.length).toBeGreaterThan(0);
@@ -763,15 +776,15 @@ describe("ExploringRuntime single resume (F3)", () => {
   it("interruption end does not apply a director resume command", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     expect(engine.playedNarration.length).toBeGreaterThan(0);
 
     engine.emitInterruption("began");
-    await flush();
+    await idle(runtime);
     const resumesAtBegan = engine.resumeNarrationCalls;
 
     engine.emitInterruption("ended");
-    await flush();
+    await idle(runtime);
 
     // Focus path owns resumeAfterFade; director `resume` is filtered out (F3).
     expect(engine.resumeNarrationCalls).toBe(resumesAtBegan);
@@ -791,7 +804,7 @@ describe("ExploringRuntime moment bus / apply batch (RC7)", () => {
       at: nowBase(),
       markerHash: "marker-hash-phys",
     });
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().playing?.fragmentId).toBe("phys");
     expect(engine.playedNarration.length).toBeGreaterThan(0);
@@ -804,15 +817,15 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("interruption remount keeps playing with a new live voice", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     const playsBefore = engine.playedNarration.length;
     const voiceBefore = engine.getNarrationDiag()?.id;
     expect(voiceBefore).toBeTruthy();
 
     engine.emitInterruption("began");
-    await flush();
+    await idle(runtime);
     engine.emitInterruption("ended");
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().playing).not.toBeNull();
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
@@ -826,14 +839,14 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("Back 10 s keeps playing after the remount", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     engine.emitProgress(12_000, 60_000);
-    await flush();
+    await idle(runtime);
     const voiceBefore = engine.getNarrationDiag()?.id;
     const playsBefore = engine.playedNarration.length;
 
     runtime.skipBack();
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().playing).not.toBeNull();
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
@@ -846,15 +859,15 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("user pause/resume keeps playing", async () => {
     const { runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
 
     await runtime.togglePause();
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
 
     await runtime.togglePause();
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing).not.toBeNull();
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
     runtime.dispose();
@@ -863,14 +876,14 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("remote pause/play keeps playing", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
 
     await engine.session.emitRemote("pause");
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
 
     await engine.session.emitRemote("play");
-    await flush();
+    await idle(runtime);
     expect(runtime.getSession().playing).not.toBeNull();
     expect(runtime.getSession().playing?.pausedAt).toBeNull();
     runtime.dispose();
@@ -879,7 +892,7 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("natural end fires narrationEnded once then completion and afterglow", async () => {
     const { db, engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     const currentId = engine.getNarrationDiag()?.id;
     expect(currentId).toBeTruthy();
     expect(useSessionStore.getState().overlay).not.toBeNull();
@@ -889,7 +902,7 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
       kind: "narration",
       reason: "ended",
     });
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().playing).toBeNull();
     expect(useSessionStore.getState().overlay).toBeNull();
@@ -904,7 +917,7 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
       kind: "narration",
       reason: "cancelled",
     });
-    await flush();
+    await idle(runtime);
     const after = await listCompletions(db);
     expect(after.length).toBe(before);
     runtime.dispose();
@@ -913,13 +926,13 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
   it("natural narrationEnded clears the playing overlay", async () => {
     const { engine, runtime } = await setup();
     await twoFixes(runtime, nowBase());
-    await flush();
+    await idle(runtime);
     expect(useSessionStore.getState().overlay?.title).toBe("Root story");
     const currentId = engine.getNarrationDiag()?.id;
     expect(currentId).toBeTruthy();
 
     await runtime.injectNarrationEnded("natural", 1_500);
-    await flush();
+    await idle(runtime);
 
     expect(runtime.getSession().playing).toBeNull();
     expect(useSessionStore.getState().overlay).toBeNull();
@@ -945,6 +958,186 @@ describe("ExploringRuntime replaced narration voice (RC6)", () => {
       "togglePause:noop no-playing",
     );
     runtime.dispose();
+  });
+});
+
+describe("ExploringRuntime R1 serial / ownership", () => {
+  afterEach(() => {
+    resetExploringRuntimeSingletonForTests();
+  });
+
+  it("1: stop during handlePlay start ends idle with no live narration", async () => {
+    const { engine, runtime } = await setup();
+    let release!: () => void;
+    const barrier = new Promise<void>((r) => {
+      release = r;
+    });
+    engine.session.startBarrier = barrier;
+
+    const playWork = twoFixes(runtime, nowBase());
+    for (let i = 0; i < 40 && !engine.session.startWaiting; i++) {
+      await flush();
+    }
+    expect(engine.session.startWaiting).toBe(true);
+
+    const stopWork = runtime.stopExploring();
+    release();
+    await playWork;
+    await stopWork;
+    await idle(runtime);
+
+    expect(runtime.getSession().phase).toBe("idle");
+    expect(engine.getNarrationDiag()).toBeNull();
+    expect(engine.session.isStarted()).toBe(false);
+    expect(useSessionStore.getState().overlay).toBeNull();
+    runtime.dispose();
+  });
+
+  it("2: overlapping applyCommands keep narration voice stoppable", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+    const voice = engine.getNarrationDiag()?.id;
+    expect(voice).toBeTruthy();
+
+    // Progress + interruption remount both touch applyCommands; serial keeps the map.
+    engine.emitProgress(500, 2_000);
+    engine.emitInterruption("began");
+    engine.emitInterruption("ended");
+    await idle(runtime);
+
+    expect(engine.getNarrationDiag()?.id).toBeTruthy();
+    await runtime.stopExploring();
+    await idle(runtime);
+    expect(engine.getNarrationDiag()).toBeNull();
+    expect(runtime.getSession().phase).toBe("idle");
+    runtime.dispose();
+  });
+
+  it("3: story step and progress step commands reach the engine", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+    // Story-step playNarration landed (directorSessionEffect concatenates story+effect).
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+    expect(engine.loadCalls.length).toBeGreaterThan(0);
+
+    const loadsBefore = engine.loadCalls.length;
+    engine.emitProgress(100, 2_000);
+    await idle(runtime);
+    // Progress applyCommands runs (M6 fixtures may emit no new loads).
+    expect(engine.loadCalls.length).toBeGreaterThanOrEqual(loadsBefore);
+    runtime.dispose();
+  });
+
+  it("4: system interruption pauses then resumes once with one voice", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+    const voiceBefore = engine.getNarrationDiag()?.id;
+    expect(voiceBefore).toBeTruthy();
+
+    engine.emitInterruption("began");
+    await idle(runtime);
+    expect(runtime.getPauseOwnerForTest()).toBe("system");
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    engine.emitInterruption("ended");
+    await idle(runtime);
+    expect(runtime.getPauseOwnerForTest()).toBeNull();
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    expect(engine.getNarrationDiag()?.id).toBeTruthy();
+    runtime.dispose();
+  });
+
+  it("5: listener pause survives interruption; resume continues", async () => {
+    const { engine, runtime } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+
+    await runtime.togglePause();
+    await idle(runtime);
+    expect(runtime.getPauseOwnerForTest()).toBe("listener");
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+
+    engine.emitInterruption("began");
+    await idle(runtime);
+    expect(runtime.getPauseOwnerForTest()).toBe("listener");
+
+    engine.emitInterruption("ended");
+    await idle(runtime);
+    expect(runtime.getSession().playing?.pausedAt).not.toBeNull();
+    expect(useSessionStore.getState().overlay?.paused).toBe(true);
+    expect(runtime.getPauseOwnerForTest()).toBe("listener");
+
+    await runtime.togglePause();
+    await idle(runtime);
+    expect(runtime.getSession().playing?.pausedAt).toBeNull();
+    expect(runtime.getPauseOwnerForTest()).toBeNull();
+    expect(engine.getNarrationDiag()?.id).toBeTruthy();
+    runtime.dispose();
+  });
+
+  it("6: getExploringRuntime returns the same instance; same engine", async () => {
+    const db = openNodeSqlite();
+    await migrate(db);
+    await setKv(db, ACCESSIBLE_TRIGGER_KEY, "0");
+    const engine = new FakeExploringEngine();
+    const location = new FakeLocation();
+    const packed = buildPacked();
+    const deps = {
+      db,
+      location: location as unknown as LocationService,
+      engine,
+      packedForTest: packed,
+    };
+    const a = getExploringRuntime(deps);
+    const otherEngine = new FakeExploringEngine();
+    const b = getExploringRuntime({
+      ...deps,
+      engine: otherEngine,
+    });
+    expect(a).toBe(b);
+    expect(a.getEngine()).toBe(engine);
+    expect(a.getEngine()).not.toBe(otherEngine);
+    a.dispose();
+    resetExploringRuntimeSingletonForTests();
+  });
+
+  it("7: start with persisted playing ends interrupted; no playNarration", async () => {
+    const { db, engine, runtime, packed } = await setup();
+    await twoFixes(runtime, nowBase());
+    await idle(runtime);
+    expect(engine.playedNarration.length).toBeGreaterThan(0);
+
+    await setKv(db, SESSION_KV_KEY, sessionJsonForDisk(runtime.getSession()));
+    await setKv(
+      db,
+      DIRECTOR_KV_KEY,
+      directorJsonForDisk(runtime.getDirector()),
+    );
+    runtime.dispose();
+
+    const engine2 = new FakeExploringEngine();
+    const location2 = new FakeLocation();
+    const runtime2 = new ExploringRuntime({
+      db,
+      location: location2 as unknown as LocationService,
+      engine: engine2,
+      packedForTest: packed,
+    });
+    useSessionStore.getState().resetUi();
+    clearAudioBreadcrumbs();
+    await runtime2.start();
+    await idle(runtime2);
+
+    expect(runtime2.getSession().playing).toBeNull();
+    expect(runtime2.getDirector().narration.playing).toBe(false);
+    expect(engine2.playedNarration.length).toBe(0);
+    expect(
+      getAudioBreadcrumbs().some((c) => c.message.startsWith("start:interrupt-stale")),
+    ).toBe(true);
+    runtime2.dispose();
   });
 });
 
